@@ -431,12 +431,23 @@ jobs:
           set -euo pipefail
           CLOUDFRONT_ID="$CF_CloudFrontDistributionId"
 
+          WAF_ARN=$(aws ssm get-parameter \
+            --name "/urgd/waf/web_acl_arn" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region us-east-1)
+
+          if [ -z "$WAF_ARN" ] || [ "$WAF_ARN" = "None" ]; then
+            echo "❌ WAF ARN not found in SSM: /urgd/waf/web_acl_arn"
+            exit 1
+          fi
+
           aws cloudfront get-distribution-config \
             --id "$CLOUDFRONT_ID" --output json > /tmp/cf-dist-response.json
 
           ETAG=$(jq -r '.ETag' /tmp/cf-dist-response.json)
           jq '.DistributionConfig' /tmp/cf-dist-response.json > /tmp/cf-dist-config.json
-          jq --arg arn "${{ secrets.WAF_WEB_ACL_ARN }}" '.WebACLId = $arn' \
+          jq --arg arn "$WAF_ARN" '.WebACLId = $arn' \
             /tmp/cf-dist-config.json > /tmp/cf-dist-config-updated.json
 
           aws cloudfront update-distribution \
@@ -444,7 +455,7 @@ jobs:
             --distribution-config file:///tmp/cf-dist-config-updated.json \
             --if-match "$ETAG" >/dev/null
 
-          echo "✅ WAF associated with CloudFront"
+          echo "✅ WAF associated with CloudFront ($WAF_ARN)"
 
       - name: Register Shield callback
         run: |
