@@ -20,8 +20,8 @@ Parameters:
 
   AcmCertArnApiRegion:
     Type: String
-    Default: arn:aws:acm:us-west-2:198919428218:certificate/da575b1c-0554-47fb-94b2-973727dd7fc3
-    Description: ACM certificate ARN for api.pulse.urgdstudios.com (us-west-2, API Gateway)
+    Default: arn:aws:acm:us-west-2:198919428218:certificate/a82eae05-299b-4aaf-afe7-3514717b6c72
+    Description: ACM certificate ARN for *.pulse.urgdstudios.com (us-west-2, API Gateway)
 
   AcmCertArnCloudFront:
     Type: String
