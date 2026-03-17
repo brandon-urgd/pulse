@@ -62,7 +62,7 @@ runs:
         echo "🔍 Verifying Lambda ZIPs for version $VERSION..."
         count=$(aws s3 ls "s3://${ARTIFACT_BUCKET}/lambda-packages/" \
           --recursive --region "$AWS_REGION" \
-          | grep "${VERSION}.zip" | wc -l | tr -d ' ')
+          | grep "${VERSION}.zip" | wc -l | tr -d ' ' || echo "0")
         echo "✅ Found $count Lambda ZIP(s) for version $VERSION"
 
     # ── Step 3: Deploy CloudFormation stack ───────────────────────────────────
