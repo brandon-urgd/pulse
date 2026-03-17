@@ -358,7 +358,7 @@ jobs:
               --output text
           }
 
-          for key in CloudFrontDistributionId ApiGatewayId S3BucketName UserPoolId UserPoolClientId ApiBaseUrl; do
+          for key in CloudFrontDistributionId ApiGatewayId S3BucketName FrontendBucketName UserPoolId UserPoolClientId ApiBaseUrl; do
             val=$(get_output "$key")
             if [ -z "$val" ] || [ "$val" = "None" ]; then
               echo "❌ Missing required output: $key"
@@ -399,14 +399,14 @@ jobs:
           chmod +x scripts/deploy-frontend.sh
 
           DIST_DIR=/tmp/frontend-dist/admin-ui S3_PREFIX=admin \
-            ./scripts/deploy-frontend.sh "$CF_S3BucketName"
+            ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
           DIST_DIR=/tmp/frontend-dist/session-ui S3_PREFIX=s \
-            ./scripts/deploy-frontend.sh "$CF_S3BucketName"
+            ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
           if [ -f apps/landing/index.html ]; then
             aws s3 cp apps/landing/index.html \
-              "s3://${CF_S3BucketName}/index.html" \
+              "s3://${CF_FrontendBucketName}/index.html" \
               --cache-control "no-cache, max-age=0, must-revalidate" \
               --region ${{ env.AWS_REGION }}
             echo "✅ Landing page deployed"
