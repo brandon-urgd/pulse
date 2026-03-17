@@ -41,6 +41,11 @@ Parameters:
     Default: pulse-urgd
     Description: Cognito hosted UI domain prefix
 
+  PlaceholderCodeKey:
+    Type: String
+    Default: pulse/lambdas/placeholder/placeholder.zip
+    Description: S3 key for placeholder Lambda ZIP (used for S0 skeleton functions)
+
   AppleClientId:
     Type: String
     Default: ''
@@ -1137,8 +1142,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt PulseHealthFunctionRole.Arn
       Code:
-        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
-        S3Key: placeholder.zip
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PlaceholderCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, Health]
@@ -1180,8 +1185,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt PulseBedrockHealthFunctionRole.Arn
       Code:
-        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
-        S3Key: placeholder.zip
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PlaceholderCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, BedrockHealth]
@@ -1224,8 +1229,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt PulseCognitoAuthFunctionRole.Arn
       Code:
-        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
-        S3Key: placeholder.zip
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PlaceholderCodeKey
       Timeout: 10
       MemorySize: 256
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CognitoAuth]
@@ -1266,8 +1271,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt PulseSessionAuthFunctionRole.Arn
       Code:
-        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
-        S3Key: placeholder.zip
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PlaceholderCodeKey
       Timeout: 10
       MemorySize: 256
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SessionAuth]

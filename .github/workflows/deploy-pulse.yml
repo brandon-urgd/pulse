@@ -137,6 +137,20 @@ jobs:
       - name: Build session-ui
         run: npm run build --workspace=apps/session-ui
 
+      - name: Create and upload placeholder Lambda ZIP
+        run: |
+          set -euo pipefail
+          # Minimal valid Node.js handler — satisfies Lambda runtime, returns 200
+          mkdir -p /tmp/placeholder
+          cat > /tmp/placeholder/index.mjs << 'HANDLER'
+export const handler = async () => ({ statusCode: 200, body: '{"status":"placeholder"}' });
+HANDLER
+          cd /tmp/placeholder && zip placeholder.zip index.mjs
+          aws s3 cp /tmp/placeholder/placeholder.zip \
+            "s3://${{ env.ARTIFACT_BUCKET }}/pulse/lambdas/placeholder/placeholder.zip" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Placeholder ZIP uploaded"
+
       - name: Generate parameter files
         run: |
           set -euo pipefail
