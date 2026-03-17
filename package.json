@@ -8,9 +8,9 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace=apps/shared",
-    "build:admin-console": "npm run build --workspace=apps/admin-console",
+    "build:admin-ui": "npm run build --workspace=apps/admin-ui",
     "build:session-ui": "npm run build --workspace=apps/session-ui",
-    "dev:admin-console": "npm run dev --workspace=apps/admin-console",
+    "dev:admin-ui": "npm run dev --workspace=apps/admin-ui",
     "dev:session-ui": "npm run dev --workspace=apps/session-ui"
   },
   "engines": {
