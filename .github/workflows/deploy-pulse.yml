@@ -140,11 +140,8 @@ jobs:
       - name: Create and upload placeholder Lambda ZIP
         run: |
           set -euo pipefail
-          # Minimal valid Node.js handler — satisfies Lambda runtime, returns 200
           mkdir -p /tmp/placeholder
-          cat > /tmp/placeholder/index.mjs << 'HANDLER'
-export const handler = async () => ({ statusCode: 200, body: '{"status":"placeholder"}' });
-HANDLER
+          printf 'export const handler = async () => ({ statusCode: 200, body: JSON.stringify({ status: "placeholder" }) });\n' > /tmp/placeholder/index.mjs
           cd /tmp/placeholder && zip placeholder.zip index.mjs
           aws s3 cp /tmp/placeholder/placeholder.zip \
             "s3://${{ env.ARTIFACT_BUCKET }}/pulse/lambdas/placeholder/placeholder.zip" \
