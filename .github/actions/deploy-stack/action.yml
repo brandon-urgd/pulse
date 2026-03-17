@@ -19,6 +19,9 @@ inputs:
     description: "AWS region"
     required: true
     default: "us-west-2"
+  aws-account-id:
+    description: "AWS account ID (used to construct the deploy role ARN)"
+    required: true
   waf-web-acl-arn:
     description: "WAF Web ACL ARN to associate with CloudFront"
     required: true
@@ -279,7 +282,7 @@ runs:
     - name: "9 · Configure AWS credentials (us-east-1 for WAF)"
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/urgd-pulse-deploy
         aws-region: us-east-1
         audience: sts.amazonaws.com
 

@@ -14,13 +14,19 @@ on:
         required: true
         type: choice
         options:
+          - dev
           - staging
           - prod
+      confirm_prod:
+        description: "For PROD only: type DEPLOY to confirm"
+        required: false
+        type: string
 
 # ── Shared env ────────────────────────────────────────────────────────────────
 env:
   APP_NAME: pulse
   AWS_REGION: us-west-2
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
   ARTIFACT_BUCKET: urgd-applicationdata
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -100,7 +106,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/urgd-pulse-deploy
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
@@ -149,28 +155,45 @@ jobs:
             --region ${{ env.AWS_REGION }} --no-progress
           echo "✅ Frontend artifacts uploaded"
 
-  # ── 3. Deploy to dev ─────────────────────────────────────────────────────────
-  # Auto on push to main (Req 1.10, 10.8)
-  deploy-dev:
-    name: Deploy — dev
+  # ── 3. Deploy ────────────────────────────────────────────────────────────────
+  # push to main → dev (auto); workflow_dispatch → staging or prod (manual gate)
+  deploy:
+    name: Deploy
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: dev
     permissions:
       id-token: write
       contents: read
     env:
-      ENVIRONMENT: dev
       VERSION: ${{ needs.build.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (us-west-2)
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          else
+            ENVIRONMENT="dev"
+          fi
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+          echo "Deploying to: $ENVIRONMENT"
+
+      - name: Validate prod confirmation
+        if: github.event.inputs.environment == 'prod'
+        run: |
+          if [ "${{ github.event.inputs.confirm_prod }}" != "DEPLOY" ]; then
+            echo "❌ Production deployment requires confirm_prod = 'DEPLOY'"
+            exit 1
+          fi
+          echo "✅ Production deployment confirmed"
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/urgd-pulse-deploy
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
@@ -182,88 +205,6 @@ jobs:
           app-name: ${{ env.APP_NAME }}
           artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
           aws-region: ${{ env.AWS_REGION }}
-          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
-          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
-
-  # ── 4. Deploy to staging ──────────────────────────────────────────────────────
-  # Manual approval gate via GitHub Environment protection rules (Req 10.9)
-  deploy-staging:
-    name: Deploy — staging
-    runs-on: ubuntu-latest
-    needs: [build, deploy-dev]
-    if: |
-      always() &&
-      needs.build.result == 'success' &&
-      (
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
-      )
-    environment: staging
-    permissions:
-      id-token: write
-      contents: read
-    env:
-      ENVIRONMENT: staging
-      VERSION: ${{ needs.build.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (us-west-2)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
-
-      - name: Deploy stack
-        uses: ./.github/actions/deploy-stack
-        with:
-          environment: ${{ env.ENVIRONMENT }}
-          version: ${{ env.VERSION }}
-          app-name: ${{ env.APP_NAME }}
-          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
-          aws-region: ${{ env.AWS_REGION }}
-          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
-          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
-
-  # ── 5. Deploy to prod ─────────────────────────────────────────────────────────
-  # Manual approval gate via GitHub Environment protection rules (Req 10.10)
-  deploy-prod:
-    name: Deploy — prod
-    runs-on: ubuntu-latest
-    needs: [build, deploy-staging]
-    if: |
-      always() &&
-      needs.build.result == 'success' &&
-      needs.deploy-staging.result == 'success' &&
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.environment == 'prod'
-    environment: prod
-    permissions:
-      id-token: write
-      contents: read
-    env:
-      ENVIRONMENT: prod
-      VERSION: ${{ needs.build.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (us-west-2)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
-
-      - name: Deploy stack
-        uses: ./.github/actions/deploy-stack
-        with:
-          environment: ${{ env.ENVIRONMENT }}
-          version: ${{ env.VERSION }}
-          app-name: ${{ env.APP_NAME }}
-          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-account-id: ${{ env.AWS_ACCOUNT_ID }}
           waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
           shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
