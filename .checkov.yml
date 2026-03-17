@@ -1,0 +1,23 @@
+skip-check:
+  # Lambda DLQ — not required for synchronous request/response Lambdas
+  - CKV_AWS_116
+  # Lambda VPC — not required; Lambdas access DynamoDB/S3 via AWS service endpoints
+  - CKV_AWS_117
+  # DynamoDB KMS CMK — AWS-managed SSE (AES-256) is sufficient; CMK adds cost and operational overhead for this stage
+  - CKV_AWS_119
+  # S3 frontend bucket versioning — static asset bucket; assets are immutable hashed files, versioning adds no value
+  - CKV_AWS_21
+  # S3 access logging (data + frontend buckets) — deferred to prod; a dedicated logging bucket adds infra overhead at S0
+  - CKV_AWS_18
+  # API Gateway caching — cost/performance decision, not a security control
+  - CKV_AWS_120
+  # API Gateway open access on health endpoints — /v1/health and /v1/bedrock/health are intentionally public
+  - CKV_AWS_59
+  # CloudFront access logging — deferred to prod; logging bucket adds infra overhead at S0
+  - CKV_AWS_86
+  # CloudFront WAF — WAF Web ACL is associated at deploy time by the CI/CD pipeline; ARN is managed by the shield stack
+  - CKV_AWS_68
+  # CloudWatch log group KMS — AWS-managed encryption is sufficient for Lambda logs at this stage
+  - CKV_AWS_158
+  # Lambda env var KMS — AWS-managed encryption applied by default; CMK not required for non-secret config values
+  - CKV_AWS_173

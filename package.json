@@ -1,0 +1,20 @@
+{
+  "name": "pulse-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace=apps/shared",
+    "build:admin-console": "npm run build --workspace=apps/admin-console",
+    "build:session-ui": "npm run build --workspace=apps/session-ui",
+    "dev:admin-console": "npm run dev --workspace=apps/admin-console",
+    "dev:session-ui": "npm run dev --workspace=apps/session-ui"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=9.0.0"
+  }
+}

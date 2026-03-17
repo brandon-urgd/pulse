@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "🔍 Running pre-commit security checks..."
+
+# CloudFormation lint
+if ls cloudformation/*.yaml 1>/dev/null 2>&1; then
+  echo "Running cfn-lint..."
+  cfn-lint cloudformation/*.yaml --ignore-checks W3045 || { echo "❌ cfn-lint failed"; exit 1; }
+  echo "✅ cfn-lint passed"
+fi
+
+# Checkov
+if ls cloudformation/*.yaml 1>/dev/null 2>&1; then
+  echo "Running Checkov..."
+  checkov -d cloudformation/ --framework cloudformation --quiet || { echo "❌ Checkov failed"; exit 1; }
+  echo "✅ Checkov passed"
+fi
+
+# Semgrep
+echo "Running Semgrep..."
+semgrep --config=auto --quiet . || { echo "❌ Semgrep failed"; exit 1; }
+echo "✅ Semgrep passed"
+
+echo "✅ All pre-commit checks passed"

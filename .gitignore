@@ -1,0 +1,93 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+apps/*/dist/
+apps/*/build/
+
+# ── Lambda build artifacts (CI/CD only) ──────────────────────────────────────
+artifacts/
+parameter-files/
+lambdas/**/*.zip
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Vitest / test cache ───────────────────────────────────────────────────────
+.vitest-cache/
+vitest.config.*.timestamp*
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Runtime data ──────────────────────────────────────────────────────────────
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── npm / yarn ────────────────────────────────────────────────────────────────
+.npm
+*.tgz
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.pnp.*
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+.cache
+.parcel-cache
+.turbo
+
+# ── Security scan results (local runs) ───────────────────────────────────────
+checkov-*.json
+checkov-results/
+semgrep-results.json
+semgrep-results/
+cfn-lint-results/
+
+# ── Test results ──────────────────────────────────────────────────────────────
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ── DynamoDB Local ────────────────────────────────────────────────────────────
+.dynamodb/
+
+# ── Serverless ────────────────────────────────────────────────────────────────
+.serverless/
+
+# ── Temp ──────────────────────────────────────────────────────────────────────
+tmp/
+temp/

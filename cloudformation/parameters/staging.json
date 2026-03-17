@@ -1,0 +1,17 @@
+[
+  { "ParameterKey": "Environment",                "ParameterValue": "staging" },
+  { "ParameterKey": "ApiDomainName",              "ParameterValue": "api-staging.pulse.urgdstudios.com" },
+  { "ParameterKey": "FrontendDomainName",         "ParameterValue": "staging.pulse.urgdstudios.com" },
+  { "ParameterKey": "CertificateArn",             "ParameterValue": "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID" },
+  { "ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "https://staging.pulse.urgdstudios.com/admin/login" },
+  { "ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "https://staging.pulse.urgdstudios.com/admin/login" },
+  { "ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "pulse-urgd-staging" },
+  { "ParameterKey": "AppleClientId",              "ParameterValue": "com.urgdstudios.pulse.staging" },
+  { "ParameterKey": "AppleTeamId",                "ParameterValue": "APPLE_TEAM_ID" },
+  { "ParameterKey": "AppleKeyId",                 "ParameterValue": "APPLE_KEY_ID" },
+  { "ParameterKey": "ApplePrivateKey",            "ParameterValue": "APPLE_PRIVATE_KEY_PLACEHOLDER" },
+  { "ParameterKey": "GoogleClientId",             "ParameterValue": "GOOGLE_CLIENT_ID_STAGING.apps.googleusercontent.com" },
+  { "ParameterKey": "GoogleClientSecret",         "ParameterValue": "GOOGLE_CLIENT_SECRET_STAGING" },
+  { "ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev" },
+  { "ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev" }
+]

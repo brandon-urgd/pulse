@@ -1,0 +1,387 @@
+name: "Deploy Pulse Stack"
+description: "Full deploy sequence: CF template → Lambda ZIPs → stack → API GW → frontend → WAF → Shield → invalidate → smoke tests → metadata"
+
+inputs:
+  environment:
+    description: "Target environment (dev, staging, prod)"
+    required: true
+  version:
+    description: "Artifact version (git SHA or VERSION file)"
+    required: true
+  app-name:
+    description: "Application name"
+    required: true
+    default: "pulse"
+  artifact-bucket:
+    description: "S3 bucket holding build artifacts"
+    required: true
+  aws-region:
+    description: "AWS region"
+    required: true
+    default: "us-west-2"
+  waf-web-acl-arn:
+    description: "WAF Web ACL ARN to associate with CloudFront"
+    required: true
+  shield-registration-url:
+    description: "Shield service registration endpoint URL"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    # ── Step 1: Upload CloudFormation template to S3 ──────────────────────────
+    - name: "1 · Upload CloudFormation template"
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        APP_NAME: ${{ inputs.app-name }}
+        ARTIFACT_BUCKET: ${{ inputs.artifact-bucket }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        aws s3 cp cloudformation/pulse-stack.yaml \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/cloudformation/${VERSION}/pulse-stack.yaml" \
+          --region "$AWS_REGION"
+        echo "✅ CloudFormation template at s3://${ARTIFACT_BUCKET}/${APP_NAME}/cloudformation/${VERSION}/pulse-stack.yaml"
+
+    # ── Step 2: Upload Lambda ZIPs to S3 ─────────────────────────────────────
+    # ZIPs were built in the build job and are already in S3 under
+    # lambda-packages/urgd-pulse-{fn}/{version}.zip — nothing to do here.
+    # (build-lambdas.sh uploads directly to S3 during the build job)
+    - name: "2 · Verify Lambda ZIPs in S3"
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        APP_NAME: ${{ inputs.app-name }}
+        ARTIFACT_BUCKET: ${{ inputs.artifact-bucket }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        echo "🔍 Verifying Lambda ZIPs for version $VERSION..."
+        count=$(aws s3 ls "s3://${ARTIFACT_BUCKET}/lambda-packages/" \
+          --recursive --region "$AWS_REGION" \
+          | grep "${VERSION}.zip" | wc -l | tr -d ' ')
+        echo "✅ Found $count Lambda ZIP(s) for version $VERSION"
+
+    # ── Step 3: Deploy CloudFormation stack ───────────────────────────────────
+    - name: "3 · Deploy CloudFormation stack"
+      id: deploy-cf
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+        APP_NAME: ${{ inputs.app-name }}
+        ARTIFACT_BUCKET: ${{ inputs.artifact-bucket }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        STACK_NAME="urgd-${APP_NAME}-${ENVIRONMENT}"
+        TEMPLATE_URL="https://${ARTIFACT_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${APP_NAME}/cloudformation/${VERSION}/pulse-stack.yaml"
+
+        echo "🚀 Deploying stack: $STACK_NAME"
+        echo "   Template: $TEMPLATE_URL"
+
+        # Load environment parameter file from S3
+        PARAM_FILE="/tmp/cf-params-${ENVIRONMENT}-$$.json"
+        aws s3 cp \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/cloudformation/${VERSION}/${ENVIRONMENT}.json" \
+          "$PARAM_FILE" --region "$AWS_REGION" 2>/dev/null || \
+        aws s3 cp \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/cloudformation/${VERSION}/dev.json" \
+          "$PARAM_FILE" --region "$AWS_REGION"
+
+        if aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" >/dev/null 2>&1; then
+          echo "Stack exists — updating..."
+          UPDATE_OUTPUT=$(aws cloudformation update-stack \
+            --stack-name "$STACK_NAME" \
+            --template-url "$TEMPLATE_URL" \
+            --parameters "file://$PARAM_FILE" \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --region "$AWS_REGION" 2>&1) || {
+            if echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
+              echo "✅ Stack already up to date — skipping poll"
+              echo "SKIP_POLL=true" >> $GITHUB_ENV
+            else
+              echo "❌ Stack update failed: $UPDATE_OUTPUT"
+              exit 1
+            fi
+          }
+        else
+          echo "Stack does not exist — creating..."
+          aws cloudformation create-stack \
+            --stack-name "$STACK_NAME" \
+            --template-url "$TEMPLATE_URL" \
+            --parameters "file://$PARAM_FILE" \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --region "$AWS_REGION"
+        fi
+
+        rm -f "$PARAM_FILE"
+        echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
+
+    # ── Step 4: Poll for UPDATE_COMPLETE ─────────────────────────────────────
+    - name: "4 · Poll for stack completion"
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        if [ "${SKIP_POLL:-false}" = "true" ]; then
+          echo "⏭️  Skipping poll (no stack changes)"
+          exit 0
+        fi
+
+        TIMEOUT=1800   # 30 minutes
+        ELAPSED=0
+        INTERVAL=30
+
+        echo "⏳ Polling stack: $STACK_NAME"
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null)
+
+          echo "   Status: $STATUS (${ELAPSED}s elapsed)"
+
+          case "$STATUS" in
+            CREATE_COMPLETE|UPDATE_COMPLETE)
+              echo "✅ Stack deployment complete"
+              exit 0
+              ;;
+            *FAILED*|*ROLLBACK*)
+              echo "❌ Stack deployment failed: $STATUS"
+              aws cloudformation describe-stack-events \
+                --stack-name "$STACK_NAME" \
+                --region "$AWS_REGION" \
+                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+                --output table 2>/dev/null || true
+              exit 1
+              ;;
+          esac
+
+          sleep $INTERVAL
+          ELAPSED=$((ELAPSED + INTERVAL))
+        done
+
+        echo "❌ Stack deployment timed out after ${TIMEOUT}s"
+        exit 1
+
+    # ── Step 5: Validate CloudFormation outputs ───────────────────────────────
+    - name: "5 · Validate CloudFormation outputs"
+      id: cf-outputs
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        echo "🔍 Validating CloudFormation outputs..."
+
+        get_output() {
+          aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey==\`$1\`].OutputValue" \
+            --output text
+        }
+
+        REQUIRED_OUTPUTS=(
+          CloudFrontDistributionId
+          ApiGatewayId
+          S3BucketName
+          UserPoolId
+          UserPoolClientId
+          ApiBaseUrl
+        )
+
+        for key in "${REQUIRED_OUTPUTS[@]}"; do
+          val=$(get_output "$key")
+          if [ -z "$val" ] || [ "$val" = "None" ]; then
+            echo "❌ Missing required output: $key"
+            exit 1
+          fi
+          echo "   ✅ $key = $val"
+          echo "CF_${key}=$val" >> $GITHUB_ENV
+        done
+
+        echo "✅ All required outputs present"
+
+    # ── Step 6: Activate API Gateway deployment ───────────────────────────────
+    - name: "6 · Activate API Gateway deployment"
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        DEPLOYMENT_ID=$(aws apigateway create-deployment \
+          --rest-api-id "$CF_ApiGatewayId" \
+          --stage-name "$ENVIRONMENT" \
+          --description "Deploy $STACK_NAME @ $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --region "$AWS_REGION" \
+          --query 'id' \
+          --output text)
+        echo "✅ API Gateway deployment activated: $DEPLOYMENT_ID"
+
+    # ── Step 7: Build frontend apps ───────────────────────────────────────────
+    # admin-ui and session-ui were already built and uploaded to S3 in the
+    # build job. Download them here for the S3 sync step.
+    - name: "7 · Download frontend build artifacts"
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        APP_NAME: ${{ inputs.app-name }}
+        ARTIFACT_BUCKET: ${{ inputs.artifact-bucket }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        mkdir -p /tmp/frontend-dist/admin-ui /tmp/frontend-dist/session-ui
+
+        aws s3 sync \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/frontend/${VERSION}/admin-ui/" \
+          /tmp/frontend-dist/admin-ui/ \
+          --region "$AWS_REGION" --no-progress
+
+        aws s3 sync \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/frontend/${VERSION}/session-ui/" \
+          /tmp/frontend-dist/session-ui/ \
+          --region "$AWS_REGION" --no-progress
+
+        echo "✅ Frontend artifacts downloaded"
+
+    # ── Step 8: Two-pass S3 sync (deploy-frontend.sh) ────────────────────────
+    - name: "8 · Deploy frontend assets (two-pass sync)"
+      shell: bash
+      env:
+        BUCKET_NAME: ${{ env.CF_S3BucketName }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        chmod +x scripts/deploy-frontend.sh
+
+        echo "── admin-ui ──"
+        DIST_DIR=/tmp/frontend-dist/admin-ui \
+          S3_PREFIX=admin \
+          ./scripts/deploy-frontend.sh "$BUCKET_NAME"
+
+        echo "── session-ui ──"
+        DIST_DIR=/tmp/frontend-dist/session-ui \
+          S3_PREFIX=s \
+          ./scripts/deploy-frontend.sh "$BUCKET_NAME"
+
+        echo "── landing page ──"
+        if [ -f apps/landing/index.html ]; then
+          aws s3 cp apps/landing/index.html \
+            "s3://${BUCKET_NAME}/index.html" \
+            --cache-control "no-cache, max-age=0, must-revalidate" \
+            --region "$AWS_REGION"
+          echo "✅ Landing page deployed"
+        fi
+
+    # ── Step 9: Associate WAF Web ACL with CloudFront ─────────────────────────
+    # WAF + CloudFront require us-east-1
+    - name: "9 · Configure AWS credentials (us-east-1 for WAF)"
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: us-east-1
+        audience: sts.amazonaws.com
+
+    - name: "9 · Associate WAF Web ACL with CloudFront"
+      shell: bash
+      env:
+        WAF_WEB_ACL_ARN: ${{ inputs.waf-web-acl-arn }}
+      run: |
+        CLOUDFRONT_ID="$CF_CloudFrontDistributionId"
+
+        echo "🔗 Associating WAF with CloudFront distribution: $CLOUDFRONT_ID"
+
+        aws cloudfront get-distribution-config \
+          --id "$CLOUDFRONT_ID" \
+          --output json > /tmp/cf-dist-response.json
+
+        ETAG=$(jq -r '.ETag' /tmp/cf-dist-response.json)
+        jq '.DistributionConfig' /tmp/cf-dist-response.json > /tmp/cf-dist-config.json
+        jq --arg arn "$WAF_WEB_ACL_ARN" '.WebACLId = $arn' \
+          /tmp/cf-dist-config.json > /tmp/cf-dist-config-updated.json
+
+        aws cloudfront update-distribution \
+          --id "$CLOUDFRONT_ID" \
+          --distribution-config file:///tmp/cf-dist-config-updated.json \
+          --if-match "$ETAG" >/dev/null
+
+        echo "✅ WAF associated with CloudFront"
+
+    # ── Step 10: Register Shield callback ────────────────────────────────────
+    - name: "10 · Register Shield callback"
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        SHIELD_REGISTRATION_URL: ${{ inputs.shield-registration-url }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        # Get quarantine bucket name from stack outputs
+        QUARANTINE_BUCKET=$(aws cloudformation describe-stacks \
+          --stack-name "$STACK_NAME" \
+          --region "$AWS_REGION" \
+          --query 'Stacks[0].Outputs[?OutputKey==`ShieldQuarantineBucketName`].OutputValue' \
+          --output text 2>/dev/null || echo "")
+
+        if [ -z "$QUARANTINE_BUCKET" ] || [ "$QUARANTINE_BUCKET" = "None" ]; then
+          echo "⚠️  ShieldQuarantineBucketName output not found — skipping Shield registration"
+          exit 0
+        fi
+
+        python3 scripts/register-with-shield.py \
+          --lambda-arn "$CF_ShieldCallbackLambdaArn" \
+          --bucket-name "$QUARANTINE_BUCKET" \
+          --environment "$ENVIRONMENT"
+
+    # ── Step 11: Invalidate CloudFront cache ──────────────────────────────────
+    - name: "11 · Invalidate CloudFront cache"
+      shell: bash
+      run: |
+        aws cloudfront create-invalidation \
+          --distribution-id "$CF_CloudFrontDistributionId" \
+          --paths "/*" \
+          --region us-east-1 >/dev/null
+        echo "✅ CloudFront cache invalidated"
+
+    # ── Step 12: Run smoke tests ──────────────────────────────────────────────
+    - name: "12 · Run smoke tests"
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        chmod +x scripts/smoke.sh
+        ./scripts/smoke.sh "$CF_ApiBaseUrl"
+
+    # ── Step 13: Write metadata.json ──────────────────────────────────────────
+    - name: "13 · Write metadata.json"
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+        APP_NAME: ${{ inputs.app-name }}
+        ARTIFACT_BUCKET: ${{ inputs.artifact-bucket }}
+        AWS_REGION: ${{ inputs.aws-region }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        cat > metadata.json <<EOF
+        {
+          "commit_sha": "$GITHUB_SHA",
+          "version": "$VERSION",
+          "stack_name": "urgd-${APP_NAME}-${ENVIRONMENT}",
+          "environment": "$ENVIRONMENT",
+          "cloudfront_distribution_id": "$CF_CloudFrontDistributionId",
+          "api_base_url": "$CF_ApiBaseUrl",
+          "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "deployed_by": "$GITHUB_ACTOR",
+          "workflow_run": "$GITHUB_RUN_ID"
+        }
+        EOF
+
+        aws s3 cp metadata.json \
+          "s3://${ARTIFACT_BUCKET}/${APP_NAME}/deployments/${ENVIRONMENT}/metadata.json" \
+          --region "$AWS_REGION"
+
+        echo "✅ metadata.json written"
+        cat metadata.json

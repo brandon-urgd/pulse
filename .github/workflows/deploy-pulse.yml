@@ -1,0 +1,269 @@
+name: Deploy Pulse
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+# push to main  → auto-deploy to dev
+# workflow_dispatch → manual deploy to staging or prod (requires approval gate)
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+
+# ── Shared env ────────────────────────────────────────────────────────────────
+env:
+  APP_NAME: pulse
+  AWS_REGION: us-west-2
+  ARTIFACT_BUCKET: urgd-applicationdata
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. Security scan ────────────────────────────────────────────────────────
+  # cfn-lint, Checkov, Semgrep — fail on critical findings (Req 10.7)
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install security tools
+        run: |
+          pip install --quiet cfn-lint checkov semgrep
+
+      - name: cfn-lint
+        run: |
+          echo "🔍 cfn-lint..."
+          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045
+          echo "✅ cfn-lint passed"
+
+      - name: Checkov
+        run: |
+          echo "🔍 Checkov..."
+          checkov \
+            --file cloudformation/pulse-stack.yaml \
+            --framework cloudformation \
+            --config-file .checkov.yml \
+            --compact \
+            --quiet
+          echo "✅ Checkov passed"
+
+      - name: Semgrep
+        run: |
+          echo "🔍 Semgrep..."
+          # .semgrepignore at repo root is auto-discovered; excludes scripts/register-with-shield.py
+          # nosemgrep inline comments suppress false positives in test files
+          semgrep \
+            --config=auto \
+            --severity=ERROR \
+            --error \
+            --quiet \
+            lambdas/ apps/ scripts/
+          echo "✅ Semgrep passed"
+
+  # ── 2. Build ─────────────────────────────────────────────────────────────────
+  # Lambda ZIPs + frontend bundles (admin-ui, session-ui)
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: security-scan
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -f VERSION ]; then
+            VERSION=$(cat VERSION | tr -d '\n\r')
+          else
+            VERSION=$(git rev-parse --short HEAD)
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version: $VERSION"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Build Lambda ZIPs
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          ARTIFACT_BUCKET: ${{ env.ARTIFACT_BUCKET }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          chmod +x scripts/build-lambdas.sh
+          ./scripts/build-lambdas.sh "$VERSION"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build admin-ui
+        run: npm run build --workspace=apps/admin-ui
+
+      - name: Build session-ui
+        run: npm run build --workspace=apps/session-ui
+
+      - name: Upload CloudFormation template to S3
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          aws s3 cp cloudformation/pulse-stack.yaml \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/$VERSION/pulse-stack.yaml" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ CloudFormation template uploaded"
+
+      - name: Upload frontend build artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          aws s3 sync apps/admin-ui/dist \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/admin-ui/" \
+            --region ${{ env.AWS_REGION }} --no-progress
+          aws s3 sync apps/session-ui/dist \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/session-ui/" \
+            --region ${{ env.AWS_REGION }} --no-progress
+          echo "✅ Frontend artifacts uploaded"
+
+  # ── 3. Deploy to dev ─────────────────────────────────────────────────────────
+  # Auto on push to main (Req 1.10, 10.8)
+  deploy-dev:
+    name: Deploy — dev
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ENVIRONMENT: dev
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (us-west-2)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Deploy stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ env.ENVIRONMENT }}
+          version: ${{ env.VERSION }}
+          app-name: ${{ env.APP_NAME }}
+          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
+          aws-region: ${{ env.AWS_REGION }}
+          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
+          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
+
+  # ── 4. Deploy to staging ──────────────────────────────────────────────────────
+  # Manual approval gate via GitHub Environment protection rules (Req 10.9)
+  deploy-staging:
+    name: Deploy — staging
+    runs-on: ubuntu-latest
+    needs: [build, deploy-dev]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+      )
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ENVIRONMENT: staging
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (us-west-2)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Deploy stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ env.ENVIRONMENT }}
+          version: ${{ env.VERSION }}
+          app-name: ${{ env.APP_NAME }}
+          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
+          aws-region: ${{ env.AWS_REGION }}
+          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
+          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
+
+  # ── 5. Deploy to prod ─────────────────────────────────────────────────────────
+  # Manual approval gate via GitHub Environment protection rules (Req 10.10)
+  deploy-prod:
+    name: Deploy — prod
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging]
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      needs.deploy-staging.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'prod'
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ENVIRONMENT: prod
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (us-west-2)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Deploy stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ env.ENVIRONMENT }}
+          version: ${{ env.VERSION }}
+          app-name: ${{ env.APP_NAME }}
+          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
+          aws-region: ${{ env.AWS_REGION }}
+          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
+          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}

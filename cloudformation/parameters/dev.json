@@ -1,0 +1,17 @@
+[
+  { "ParameterKey": "Environment",                "ParameterValue": "dev" },
+  { "ParameterKey": "ApiDomainName",              "ParameterValue": "api-dev.pulse.urgdstudios.com" },
+  { "ParameterKey": "FrontendDomainName",         "ParameterValue": "dev.pulse.urgdstudios.com" },
+  { "ParameterKey": "CertificateArn",             "ParameterValue": "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID" },
+  { "ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login" },
+  { "ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login" },
+  { "ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "pulse-urgd-dev" },
+  { "ParameterKey": "AppleClientId",              "ParameterValue": "com.urgdstudios.pulse.dev" },
+  { "ParameterKey": "AppleTeamId",                "ParameterValue": "APPLE_TEAM_ID" },
+  { "ParameterKey": "AppleKeyId",                 "ParameterValue": "APPLE_KEY_ID" },
+  { "ParameterKey": "ApplePrivateKey",            "ParameterValue": "APPLE_PRIVATE_KEY_PLACEHOLDER" },
+  { "ParameterKey": "GoogleClientId",             "ParameterValue": "GOOGLE_CLIENT_ID_DEV.apps.googleusercontent.com" },
+  { "ParameterKey": "GoogleClientSecret",         "ParameterValue": "GOOGLE_CLIENT_SECRET_DEV" },
+  { "ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev" },
+  { "ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev" }
+]

@@ -1,0 +1,12 @@
+node_modules/
+apps/*/dist/
+apps/*/build/
+artifacts/
+parameter-files/
+coverage/
+.vitest-cache/
+tmp/
+temp/
+# register-with-shield.py uses urllib with a URL from SHIELD_REGISTRATION_URL env var (not user input)
+# This is a deploy-time script, not a web-facing handler — false positive
+scripts/register-with-shield.py

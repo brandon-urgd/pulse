@@ -1,0 +1,26 @@
+{
+  "dev": {
+    "api_latency_ms_p95_max": 2500,
+    "api_5xx_sum_max": 5,
+    "require_waf": true,
+    "require_smoke_passed": true,
+    "allow_active_alarms": false,
+    "window_minutes": 15
+  },
+  "staging": {
+    "api_latency_ms_p95_max": 2000,
+    "api_5xx_sum_max": 2,
+    "require_waf": true,
+    "require_smoke_passed": true,
+    "allow_active_alarms": false,
+    "window_minutes": 15
+  },
+  "prod": {
+    "api_latency_ms_p95_max": 1500,
+    "api_5xx_sum_max": 1,
+    "require_waf": true,
+    "require_smoke_passed": true,
+    "allow_active_alarms": false,
+    "window_minutes": 15
+  }
+}

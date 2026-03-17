@@ -1,0 +1,1321 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ur/gd Pulse — AI-guided feedback platform (S0 base resources)'
+
+# ─── Parameters ───────────────────────────────────────────────────────────────
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment
+
+  ApiDomainName:
+    Type: String
+    Default: api.pulse.urgdstudios.com
+    Description: Custom domain for API Gateway
+
+  FrontendDomainName:
+    Type: String
+    Default: pulse.urgdstudios.com
+    Description: Custom domain for CloudFront distribution
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN (us-east-1) for custom domains
+
+  CognitoCallbackUrls:
+    Type: CommaDelimitedList
+    Description: Cognito OAuth callback URLs (comma-separated)
+
+  CognitoLogoutUrls:
+    Type: CommaDelimitedList
+    Description: Cognito OAuth logout URLs (comma-separated)
+
+  CognitoUserPoolDomainPrefix:
+    Type: String
+    Default: pulse-urgd
+    Description: Cognito hosted UI domain prefix
+
+  AppleClientId:
+    Type: String
+    Description: Apple Sign In client ID (bundle ID)
+
+  AppleTeamId:
+    Type: String
+    Description: Apple developer team ID
+
+  AppleKeyId:
+    Type: String
+    Description: Apple Sign In key ID
+
+  ApplePrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Apple Sign In private key (PEM)
+
+  GoogleClientId:
+    Type: String
+    Description: Google OAuth client ID
+
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+    Description: Google OAuth client secret
+
+  MonitoringEmail:
+    Type: String
+    Default: alerts@urgd.dev
+    Description: Email for P0 alert notifications
+
+  CriticalAlertsEmail:
+    Type: String
+    Default: critical@urgd.dev
+    Description: Email for critical alert notifications
+
+# ─── Mappings ─────────────────────────────────────────────────────────────────
+Mappings:
+  EnvConfig:
+    dev:
+      LogRetentionDays: 7
+    staging:
+      LogRetentionDays: 14
+    prod:
+      LogRetentionDays: 30
+
+  # ReservedConcurrentExecutions per function per environment
+  # dev: 3 flat, staging: 5 flat, prod: tiered
+  Concurrency:
+    dev:
+      Health: 3
+      BedrockHealth: 3
+      CognitoAuth: 3
+      SessionAuth: 3
+    staging:
+      Health: 5
+      BedrockHealth: 5
+      CognitoAuth: 5
+      SessionAuth: 5
+    prod:
+      Health: 5
+      BedrockHealth: 5
+      CognitoAuth: 25
+      SessionAuth: 15
+
+# ─── Resources ────────────────────────────────────────────────────────────────
+Resources:
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # DynamoDB Tables (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseTenantsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-tenants-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseItemsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-items-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+        - AttributeName: itemId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+        - AttributeName: itemId
+          KeyType: RANGE
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseSessionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-sessions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: itemId
+          AttributeType: S
+        - AttributeName: pulseCode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+        - AttributeName: sessionId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: item-index
+          KeySchema:
+            - AttributeName: itemId
+              KeyType: HASH
+            - AttributeName: sessionId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: pulseCode-index
+          KeySchema:
+            - AttributeName: pulseCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseTranscriptsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-transcripts-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: messageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+        - AttributeName: messageId
+          KeyType: RANGE
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseReportsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-reports-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: itemId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+        - AttributeName: sessionId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: item-index
+          KeySchema:
+            - AttributeName: itemId
+              KeyType: HASH
+            - AttributeName: sessionId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulsePulseChecksTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'urgd-pulse-pulsechecks-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+        - AttributeName: itemId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+        - AttributeName: itemId
+          KeyType: RANGE
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3 Buckets (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'urgd-pulse-data-${Environment}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseFrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'urgd-pulse-frontend-${Environment}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseFrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PulseFrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${PulseFrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${PulseCloudFrontDistribution}'
+
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Cognito (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseUserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub 'urgd-pulse-userpool-${Environment}'
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        project: pulse
+        brand: urgd
+        studio: urgd-studios
+        environment: !Ref Environment
+        cfn-stack-name: !Ref AWS::StackName
+        license: proprietary
+
+  PulseAppleIdProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref PulseUserPool
+      ProviderName: SignInWithApple
+      ProviderType: SignInWithApple
+      ProviderDetails:
+        client_id: !Ref AppleClientId
+        team_id: !Ref AppleTeamId
+        key_id: !Ref AppleKeyId
+        private_key: !Ref ApplePrivateKey
+        authorize_scopes: 'name email'
+      AttributeMapping:
+        email: email
+        name: name
+
+  PulseGoogleIdProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref PulseUserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: 'profile email openid'
+      AttributeMapping:
+        email: email
+        name: name
+
+  PulseUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn:
+      - PulseAppleIdProvider
+      - PulseGoogleIdProvider
+    Properties:
+      ClientName: !Sub 'urgd-pulse-client-${Environment}'
+      UserPoolId: !Ref PulseUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - COGNITO
+        - SignInWithApple
+        - Google
+      CallbackURLs: !Ref CognitoCallbackUrls
+      LogoutURLs: !Ref CognitoLogoutUrls
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+
+  PulseUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoUserPoolDomainPrefix
+      UserPoolId: !Ref PulseUserPool
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # API Gateway (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'urgd-pulse-api-${Environment}'
+      Description: Pulse REST API
+      EndpointConfiguration:
+        Types: [REGIONAL]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PulseHealthMethod
+      - PulseBedrockHealthMethod
+      - PulseOptionsMethod
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+
+  PulseApiGatewayAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/urgd-pulse-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+
+  PulseApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      DeploymentId: !Ref PulseApiGatewayDeployment
+      StageName: !Ref Environment
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt PulseApiGatewayAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","integrationLatency":"$context.integrationLatency"}'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: false
+
+  PulseApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref ApiDomainName
+      RegionalCertificateArn: !Ref CertificateArn
+      EndpointConfiguration:
+        Types: [REGIONAL]
+      SecurityPolicy: TLS_1_2
+
+  PulseApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    DependsOn: PulseApiGatewayStage
+    Properties:
+      DomainName: !Ref PulseApiDomainName
+      RestApiId: !Ref PulseApiGateway
+      Stage: !Ref Environment
+
+  PulseCognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: urgd-pulse-cognitoAuth
+      RestApiId: !Ref PulseApiGateway
+      Type: TOKEN
+      AuthorizerUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCognitoAuthFunction.Arn}/invocations'
+      AuthorizerResultTtlInSeconds: 300
+      IdentitySource: method.request.header.Authorization
+
+  PulseSessionAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: urgd-pulse-sessionAuth
+      RestApiId: !Ref PulseApiGateway
+      Type: TOKEN
+      AuthorizerUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSessionAuthFunction.Arn}/invocations'
+      AuthorizerResultTtlInSeconds: 0
+      IdentitySource: method.request.header.Authorization
+
+  # ── API Gateway Resources and Methods (minimal S0 skeleton) ──────────────────
+
+  # /v1
+  PulseV1Resource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !GetAtt PulseApiGateway.RootResourceId
+      PathPart: v1
+
+  # /v1/health
+  PulseHealthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseV1Resource
+      PathPart: health
+
+  PulseHealthMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseHealthResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseHealthFunction.Arn}/invocations'
+
+  # /v1/bedrock
+  PulseBedrockResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseV1Resource
+      PathPart: bedrock
+
+  # /v1/bedrock/health
+  PulseBedrockHealthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseBedrockResource
+      PathPart: health
+
+  PulseBedrockHealthMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseBedrockHealthResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseBedrockHealthFunction.Arn}/invocations'
+
+  # OPTIONS /* (CORS mock integration — root level proxy)
+  PulseProxyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !GetAtt PulseApiGateway.RootResourceId
+      PathPart: '{proxy+}'
+
+  PulseOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseProxyResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 204}'
+        IntegrationResponses:
+          - StatusCode: '204'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '204'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # CloudFront (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseCloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'urgd-pulse-oac-${Environment}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  PulseSpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub 'urgd-pulse-spa-rewrite-${Environment}'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Rewrites extensionless paths under /admin/* and /s/* to their index.html
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          if ((uri.startsWith('/admin/') || uri.startsWith('/s/')) && !uri.includes('.')) {
+            if (uri.startsWith('/admin/')) {
+              request.uri = '/admin/index.html';
+            } else {
+              request.uri = '/s/index.html';
+            }
+          }
+          return request;
+        }
+
+  PulseResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub 'urgd-pulse-security-headers-${Environment}'
+        Comment: Security headers for Pulse CloudFront distribution
+        SecurityHeadersConfig:
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://cognito-idp.us-west-2.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none';"
+            Override: true
+
+  PulseCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'urgd-pulse-${Environment}'
+        Aliases:
+          - !Ref FrontendDomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3FrontendOrigin
+            DomainName: !GetAtt PulseFrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !Ref PulseCloudFrontOAC
+          - Id: ApiGatewayOrigin
+            DomainName: !Ref ApiDomainName
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        CacheBehaviors:
+          # /api/* — API Gateway, no cache, all methods
+          - PathPattern: '/api/*'
+            TargetOriginId: ApiGatewayOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref PulseResponseHeadersPolicy
+          # /admin/* — S3, SPA rewrite, standard cache
+          - PathPattern: '/admin/*'
+            TargetOriginId: S3FrontendOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt PulseSpaRewriteFunction.FunctionARN
+            ResponseHeadersPolicyId: !Ref PulseResponseHeadersPolicy
+          # /s/* — S3, SPA rewrite, standard cache
+          - PathPattern: '/s/*'
+            TargetOriginId: S3FrontendOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt PulseSpaRewriteFunction.FunctionARN
+            ResponseHeadersPolicyId: !Ref PulseResponseHeadersPolicy
+          # /assets/* — S3, long TTL (hashed filenames)
+          - PathPattern: '/assets/*'
+            TargetOriginId: S3FrontendOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+            ResponseHeadersPolicyId: !Ref PulseResponseHeadersPolicy
+        # Default /* — S3, landing page, no rewrite
+        DefaultCacheBehavior:
+          TargetOriginId: S3FrontendOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+          ResponseHeadersPolicyId: !Ref PulseResponseHeadersPolicy
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Observability (S0)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'urgd-pulse-alerts-${Environment}'
+      KmsMasterKeyId: alias/aws/sns
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref MonitoringEmail
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCriticalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'urgd-pulse-critical-${Environment}'
+      KmsMasterKeyId: alias/aws/sns
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref CriticalAlertsEmail
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseApi5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-api-5xx'
+      AlarmDescription: API Gateway 5xx error rate exceeded threshold
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'urgd-pulse-api-${Environment}'
+        - Name: Stage
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  PulseLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-lambda-errors'
+      AlarmDescription: Lambda error rate exceeded threshold
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'urgd-pulse-health-${Environment}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  # ── CloudWatch Log Groups (one per Lambda) ────────────────────────────────────
+
+  PulseHealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-health-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseBedrockHealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-bedrockHealth-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseCognitoAuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-cognitoAuth-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSessionAuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-sessionAuth-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # IAM Execution Roles (one per Lambda, least-privilege)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseHealthFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-health-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+
+  PulseBedrockHealthFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-bedrockHealth-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndBedrock
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0'
+
+  PulseCognitoAuthFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-cognitoAuth-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndCognito
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:GetUser
+                Resource: !GetAtt PulseUserPool.Arn
+
+  PulseSessionAuthFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-sessionAuth-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Lambda Functions — S0 Placeholders (3.7: ReservedConcurrentExecutions)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseHealthFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseHealthLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-health-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseHealthFunctionRole.Arn
+      Code:
+        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
+        S3Key: placeholder.zip
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, Health]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseHealthFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseHealthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseBedrockHealthFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseBedrockHealthLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-bedrockHealth-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseBedrockHealthFunctionRole.Arn
+      Code:
+        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
+        S3Key: placeholder.zip
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, BedrockHealth]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseBedrockHealthFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseBedrockHealthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseCognitoAuthFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCognitoAuthLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-cognitoAuth-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCognitoAuthFunctionRole.Arn
+      Code:
+        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
+        S3Key: placeholder.zip
+      Timeout: 10
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CognitoAuth]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref PulseUserPool
+          USER_POOL_CLIENT_ID: !Ref PulseUserPoolClient
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCognitoAuthFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCognitoAuthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseSessionAuthFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSessionAuthLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-sessionAuth-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseSessionAuthFunctionRole.Arn
+      Code:
+        S3Bucket: !Sub 'urgd-pulse-lambda-packages-${Environment}'
+        S3Key: placeholder.zip
+      Timeout: 10
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SessionAuth]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseSessionAuthFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseSessionAuthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+Outputs:
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID
+    Value: !Ref PulseCloudFrontDistribution
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-cf-distribution-id'
+
+  ApiGatewayId:
+    Description: API Gateway REST API ID
+    Value: !Ref PulseApiGateway
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-api-id'
+
+  S3BucketName:
+    Description: S3 data bucket name
+    Value: !Ref PulseDataBucket
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-data-bucket'
+
+  FrontendBucketName:
+    Description: S3 frontend bucket name
+    Value: !Ref PulseFrontendBucket
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-frontend-bucket'
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref PulseUserPool
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-user-pool-id'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref PulseUserPoolClient
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-user-pool-client-id'
+
+  ApiBaseUrl:
+    Description: API Gateway base URL (custom domain)
+    Value: !Sub 'https://${ApiDomainName}'
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-api-base-url'
