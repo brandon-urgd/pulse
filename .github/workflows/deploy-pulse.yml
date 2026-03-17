@@ -484,6 +484,39 @@ jobs:
           chmod +x scripts/smoke.sh
           ./scripts/smoke.sh "$CF_ApiBaseUrl"
 
+      - name: Cleanup old artifacts
+        run: |
+          set -euo pipefail
+          echo "🧹 Cleaning up old artifacts (keeping last 5 versions)..."
+
+          # Lambda packages — one prefix per function
+          for fn in urgd-pulse-health urgd-pulse-bedrockHealth urgd-pulse-cognitoAuth urgd-pulse-sessionAuth; do
+            aws s3 ls "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/" \
+              --region ${{ env.AWS_REGION }} 2>/dev/null | \
+              sort -r | tail -n +6 | awk '{print $4}' | \
+              while read -r key; do
+                if [ -n "$key" ]; then
+                  echo "🗑️  Deleting s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/${key}"
+                  aws s3 rm "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/${key}" \
+                    --region ${{ env.AWS_REGION }}
+                fi
+              done
+          done
+
+          # CloudFormation templates + parameter files
+          aws s3 ls "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | \
+            sort -r | tail -n +6 | awk '{print $2}' | \
+            while read -r version_dir; do
+              if [ -n "$version_dir" ]; then
+                echo "🗑️  Deleting s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/${version_dir}"
+                aws s3 rm "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/${version_dir}" \
+                  --recursive --region ${{ env.AWS_REGION }}
+              fi
+            done
+
+          echo "✅ Cleanup complete"
+
       - name: Write deployment metadata
         run: |
           set -euo pipefail
