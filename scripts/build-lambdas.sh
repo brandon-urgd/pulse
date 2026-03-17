@@ -108,3 +108,8 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
 done
 
 echo "✅ Build complete — $built Lambda(s) built and uploaded (version: $VERSION)"
+
+if [ $built -eq 0 ]; then
+  echo "❌ No Lambda functions found to build — check lambdas/ directory" >&2
+  exit 1
+fi

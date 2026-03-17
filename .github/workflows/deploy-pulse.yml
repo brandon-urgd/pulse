@@ -137,17 +137,6 @@ jobs:
       - name: Build session-ui
         run: npm run build --workspace=apps/session-ui
 
-      - name: Create and upload placeholder Lambda ZIP
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/placeholder
-          printf 'export const handler = async () => ({ statusCode: 200, body: JSON.stringify({ status: "placeholder" }) });\n' > /tmp/placeholder/index.mjs
-          cd /tmp/placeholder && zip placeholder.zip index.mjs
-          aws s3 cp /tmp/placeholder/placeholder.zip \
-            "s3://${{ env.ARTIFACT_BUCKET }}/pulse/lambdas/placeholder/placeholder.zip" \
-            --region ${{ env.AWS_REGION }}
-          echo "✅ Placeholder ZIP uploaded"
-
       - name: Generate parameter files
         run: |
           set -euo pipefail
@@ -187,7 +176,11 @@ jobs:
             {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
             {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
             {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
-            {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"}
+            {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
+            {"ParameterKey": "HealthCodeKey",              "ParameterValue": "lambda-packages/urgd-pulse-health/$VERSION.zip"},
+            {"ParameterKey": "BedrockHealthCodeKey",       "ParameterValue": "lambda-packages/urgd-pulse-bedrockHealth/$VERSION.zip"},
+            {"ParameterKey": "CognitoAuthCodeKey",         "ParameterValue": "lambda-packages/urgd-pulse-cognitoAuth/$VERSION.zip"},
+            {"ParameterKey": "SessionAuthCodeKey",         "ParameterValue": "lambda-packages/urgd-pulse-sessionAuth/$VERSION.zip"}
           ]
           EOF
           done

@@ -52,15 +52,23 @@ check_post() {
   fi
 }
 
-# Public health check
-check "Health check" "$BASE_URL/v1/health" 200
+# S0 gate: /v1/health → 200 { "status": "healthy" }
+echo "Testing Health endpoint..."
+if retry_check "Health" "curl -f -s --max-time 10 '$BASE_URL/v1/health' | jq -e '.status == \"healthy\"'"; then
+  echo "✅ GET /v1/health → healthy"
+else
+  echo "❌ GET /v1/health FAILED (expected 200 { status: healthy })"
+  fail=1
+fi
 
-# TODO: Add Lambda health endpoints
-# check_health "management health" "$BASE_URL/v1/management/health"
-# check_health "session health" "$BASE_URL/v1/session/health"
-
-# TODO: Add endpoint smoke tests
-# check_post "Create item (no auth)" "$BASE_URL/v1/items" "403" '{}'
+# S0 gate: /v1/bedrock/health → 200 { "status": "degraded" }
+echo "Testing Bedrock health endpoint..."
+if retry_check "BedrockHealth" "curl -f -s --max-time 10 '$BASE_URL/v1/bedrock/health' | jq -e '.status == \"degraded\"'"; then
+  echo "✅ GET /v1/bedrock/health → degraded"
+else
+  echo "❌ GET /v1/bedrock/health FAILED (expected 200 { status: degraded })"
+  fail=1
+fi
 
 # Summary
 echo ""
@@ -82,5 +90,5 @@ elif [ $fail -eq 0 ]; then
   exit 0
 else
   echo "💥 Smoke tests failed!"
-  exit 0  # Non-blocking per CI/CD standards
+  exit 1
 fi
