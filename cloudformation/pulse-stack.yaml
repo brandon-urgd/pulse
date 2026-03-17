@@ -43,29 +43,35 @@ Parameters:
 
   AppleClientId:
     Type: String
-    Description: Apple Sign In client ID (bundle ID)
+    Default: ''
+    Description: Apple Sign In client ID (bundle ID) — leave empty to skip Apple IdP
 
   AppleTeamId:
     Type: String
-    Description: Apple developer team ID
+    Default: ''
+    Description: Apple developer team ID — leave empty to skip Apple IdP
 
   AppleKeyId:
     Type: String
-    Description: Apple Sign In key ID
+    Default: ''
+    Description: Apple Sign In key ID — leave empty to skip Apple IdP
 
   ApplePrivateKey:
     Type: String
+    Default: ''
     NoEcho: true
-    Description: Apple Sign In private key (PEM)
+    Description: Apple Sign In private key (PEM) — leave empty to skip Apple IdP
 
   GoogleClientId:
     Type: String
-    Description: Google OAuth client ID
+    Default: ''
+    Description: Google OAuth client ID — leave empty to skip Google IdP
 
   GoogleClientSecret:
     Type: String
+    Default: ''
     NoEcho: true
-    Description: Google OAuth client secret
+    Description: Google OAuth client secret — leave empty to skip Google IdP
 
   MonitoringEmail:
     Type: String
@@ -80,6 +86,8 @@ Parameters:
 # ─── Conditions ───────────────────────────────────────────────────────────────
 Conditions:
   IsProduction: !Equals [!Ref Environment, prod]
+  HasAppleCreds: !Not [!Equals [!Ref AppleClientId, '']]
+  HasGoogleCreds: !Not [!Equals [!Ref GoogleClientId, '']]
 
 # ─── Mappings ─────────────────────────────────────────────────────────────────
 Mappings:
@@ -455,6 +463,7 @@ Resources:
 
   PulseAppleIdProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasAppleCreds
     Properties:
       UserPoolId: !Ref PulseUserPool
       ProviderName: SignInWithApple
@@ -471,6 +480,7 @@ Resources:
 
   PulseGoogleIdProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogleCreds
     Properties:
       UserPoolId: !Ref PulseUserPool
       ProviderName: Google
@@ -485,9 +495,6 @@ Resources:
 
   PulseUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
-    DependsOn:
-      - PulseAppleIdProvider
-      - PulseGoogleIdProvider
     Properties:
       ClientName: !Sub 'urgd-pulse-client-${Environment}'
       UserPoolId: !Ref PulseUserPool
@@ -496,10 +503,16 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
-      SupportedIdentityProviders:
-        - COGNITO
-        - SignInWithApple
-        - Google
+      SupportedIdentityProviders: !If
+        - HasAppleCreds
+        - !If
+          - HasGoogleCreds
+          - [COGNITO, SignInWithApple, Google]
+          - [COGNITO, SignInWithApple]
+        - !If
+          - HasGoogleCreds
+          - [COGNITO, Google]
+          - [COGNITO]
       CallbackURLs: !Ref CognitoCallbackUrls
       LogoutURLs: !Ref CognitoLogoutUrls
       AllowedOAuthFlows:

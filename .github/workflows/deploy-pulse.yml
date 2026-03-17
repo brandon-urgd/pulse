@@ -175,12 +175,6 @@ jobs:
             {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
             {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
             {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
-            {"ParameterKey": "AppleClientId",              "ParameterValue": "${{ secrets.APPLE_CLIENT_ID }}"},
-            {"ParameterKey": "AppleTeamId",                "ParameterValue": "${{ secrets.APPLE_TEAM_ID }}"},
-            {"ParameterKey": "AppleKeyId",                 "ParameterValue": "${{ secrets.APPLE_KEY_ID }}"},
-            {"ParameterKey": "ApplePrivateKey",            "ParameterValue": "${{ secrets.APPLE_PRIVATE_KEY }}"},
-            {"ParameterKey": "GoogleClientId",             "ParameterValue": "${{ secrets.GOOGLE_CLIENT_ID }}"},
-            {"ParameterKey": "GoogleClientSecret",         "ParameterValue": "${{ secrets.GOOGLE_CLIENT_SECRET }}"},
             {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
             {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"}
           ]
