@@ -172,7 +172,6 @@ jobs:
             {"ParameterKey": "Environment",                "ParameterValue": "$env"},
             {"ParameterKey": "ApiDomainName",              "ParameterValue": "$API_DOMAIN"},
             {"ParameterKey": "FrontendDomainName",         "ParameterValue": "$FRONTEND_DOMAIN"},
-            {"ParameterKey": "CertificateArn",             "ParameterValue": "${{ secrets.CERTIFICATE_ARN }}"},
             {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
             {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
             {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},

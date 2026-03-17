@@ -18,9 +18,15 @@ Parameters:
     Default: pulse.urgdstudios.com
     Description: Custom domain for CloudFront distribution
 
-  CertificateArn:
+  AcmCertArnApiRegion:
     Type: String
-    Description: ACM certificate ARN (us-east-1) for custom domains
+    Default: arn:aws:acm:us-west-2:198919428218:certificate/da575b1c-0554-47fb-94b2-973727dd7fc3
+    Description: ACM certificate ARN for api.pulse.urgdstudios.com (us-west-2, API Gateway)
+
+  AcmCertArnCloudFront:
+    Type: String
+    Default: arn:aws:acm:us-east-1:198919428218:certificate/22185b8c-9f73-406a-971e-1c7fd4d523ec
+    Description: ACM certificate ARN for pulse.urgdstudios.com (us-east-1, CloudFront)
 
   CognitoCallbackUrls:
     Type: CommaDelimitedList
@@ -566,7 +572,7 @@ Resources:
     Type: AWS::ApiGateway::DomainName
     Properties:
       DomainName: !Ref ApiDomainName
-      RegionalCertificateArn: !Ref CertificateArn
+      RegionalCertificateArn: !Ref AcmCertArnApiRegion
       EndpointConfiguration:
         Types: [REGIONAL]
       SecurityPolicy: TLS_1_2
@@ -755,7 +761,7 @@ Resources:
         Aliases:
           - !Ref FrontendDomainName
         ViewerCertificate:
-          AcmCertificateArn: !Ref CertificateArn
+          AcmCertificateArn: !Ref AcmCertArnCloudFront
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
         HttpVersion: http2
