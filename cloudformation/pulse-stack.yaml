@@ -77,6 +77,10 @@ Parameters:
     Default: critical@urgd.dev
     Description: Email for critical alert notifications
 
+# ─── Conditions ───────────────────────────────────────────────────────────────
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod]
+
 # ─── Mappings ─────────────────────────────────────────────────────────────────
 Mappings:
   EnvConfig:
@@ -115,8 +119,8 @@ Resources:
 
   PulseTenantsTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-tenants-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -144,8 +148,8 @@ Resources:
 
   PulseItemsTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-items-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -177,8 +181,8 @@ Resources:
 
   PulseSessionsTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-sessions-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -229,8 +233,8 @@ Resources:
 
   PulseTranscriptsTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-transcripts-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -262,8 +266,8 @@ Resources:
 
   PulseReportsTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-reports-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -306,8 +310,8 @@ Resources:
 
   PulsePulseChecksTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       TableName: !Sub 'urgd-pulse-pulsechecks-${Environment}'
       BillingMode: PAY_PER_REQUEST
@@ -343,8 +347,8 @@ Resources:
 
   PulseDataBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       BucketName: !Sub 'urgd-pulse-data-${Environment}'
       VersioningConfiguration:
@@ -374,8 +378,8 @@ Resources:
 
   PulseFrontendBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       BucketName: !Sub 'urgd-pulse-frontend-${Environment}'
       WebsiteConfiguration:
@@ -424,8 +428,8 @@ Resources:
 
   PulseUserPool:
     Type: AWS::Cognito::UserPool
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
     Properties:
       UserPoolName: !Sub 'urgd-pulse-userpool-${Environment}'
       UsernameAttributes: [email]
