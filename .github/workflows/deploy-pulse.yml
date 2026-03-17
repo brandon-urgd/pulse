@@ -1,8 +1,5 @@
 name: Deploy Pulse
 
-# ── Triggers ──────────────────────────────────────────────────────────────────
-# push to main  → auto-deploy to dev
-# workflow_dispatch → manual deploy to staging or prod (requires approval gate)
 on:
   push:
     branches:
@@ -22,7 +19,6 @@ on:
         required: false
         type: string
 
-# ── Shared env ────────────────────────────────────────────────────────────────
 env:
   APP_NAME: pulse
   AWS_REGION: us-west-2
@@ -30,61 +26,12 @@ env:
   ARTIFACT_BUCKET: urgd-applicationdata
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# ── Jobs ──────────────────────────────────────────────────────────────────────
 jobs:
 
-  # ── 1. Security scan ────────────────────────────────────────────────────────
-  # cfn-lint, Checkov, Semgrep — fail on critical findings (Req 10.7)
-  security-scan:
-    name: Security Scan
+  # ── 1. Version ───────────────────────────────────────────────────────────────
+  version:
+    name: Version
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install security tools
-        run: |
-          pip install --quiet cfn-lint checkov semgrep
-
-      - name: cfn-lint
-        run: |
-          echo "🔍 cfn-lint..."
-          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045
-          echo "✅ cfn-lint passed"
-
-      - name: Checkov
-        run: |
-          echo "🔍 Checkov..."
-          checkov \
-            --file cloudformation/pulse-stack.yaml \
-            --framework cloudformation \
-            --config-file .checkov.yml \
-            --compact \
-            --quiet
-          echo "✅ Checkov passed"
-
-      - name: Semgrep
-        run: |
-          echo "🔍 Semgrep..."
-          # .semgrepignore at repo root is auto-discovered; excludes scripts/register-with-shield.py
-          # nosemgrep inline comments suppress false positives in test files
-          semgrep \
-            --config=auto \
-            --severity=ERROR \
-            --error \
-            --quiet \
-            lambdas/ apps/ scripts/
-          echo "✅ Semgrep passed"
-
-  # ── 2. Build ─────────────────────────────────────────────────────────────────
-  # Lambda ZIPs + frontend bundles (admin-ui, session-ui)
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: security-scan
-    permissions:
-      id-token: write
-      contents: read
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
     steps:
@@ -96,6 +43,7 @@ jobs:
       - name: Resolve version
         id: version
         run: |
+          set -euo pipefail
           if [ -f VERSION ]; then
             VERSION=$(cat VERSION | tr -d '\n\r')
           else
@@ -103,6 +51,64 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "✅ Version: $VERSION"
+
+  # ── 2. Security scan ─────────────────────────────────────────────────────────
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install security tools
+        run: pip install --quiet cfn-lint checkov semgrep
+
+      - name: cfn-lint
+        run: |
+          set -euo pipefail
+          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045
+          echo "✅ cfn-lint passed"
+
+      - name: Checkov
+        run: |
+          set -euo pipefail
+          checkov \
+            --file cloudformation/pulse-stack.yaml \
+            --framework cloudformation \
+            --config-file .checkov.yml \
+            --compact \
+            --quiet
+          echo "✅ Checkov passed"
+
+      - name: Semgrep
+        run: |
+          set -euo pipefail
+          # .semgrepignore at repo root is auto-discovered
+          # nosemgrep inline comments suppress false positives in test files
+          semgrep \
+            --config=auto \
+            --severity=ERROR \
+            --error \
+            --quiet \
+            lambdas/ apps/ scripts/
+          echo "✅ Semgrep passed"
+
+  # ── 3. Build ──────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [version, security-scan]
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -117,11 +123,8 @@ jobs:
           node-version: "22"
 
       - name: Build Lambda ZIPs
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
-          ARTIFACT_BUCKET: ${{ env.ARTIFACT_BUCKET }}
-          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
+          set -euo pipefail
           chmod +x scripts/build-lambdas.sh
           ./scripts/build-lambdas.sh "$VERSION"
 
@@ -134,19 +137,73 @@ jobs:
       - name: Build session-ui
         run: npm run build --workspace=apps/session-ui
 
-      - name: Upload CloudFormation template to S3
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
+      - name: Generate parameter files
         run: |
+          set -euo pipefail
+          mkdir -p parameter-files
+
+          for env in dev staging prod; do
+            case "$env" in
+              dev)
+                API_DOMAIN="api-dev.pulse.urgdstudios.com"
+                FRONTEND_DOMAIN="dev.pulse.urgdstudios.com"
+                COGNITO_CALLBACKS="https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login"
+                COGNITO_LOGOUTS="https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login"
+                COGNITO_DOMAIN_PREFIX="pulse-urgd-dev"
+                ;;
+              staging)
+                API_DOMAIN="api-staging.pulse.urgdstudios.com"
+                FRONTEND_DOMAIN="staging.pulse.urgdstudios.com"
+                COGNITO_CALLBACKS="https://staging.pulse.urgdstudios.com/admin/login"
+                COGNITO_LOGOUTS="https://staging.pulse.urgdstudios.com/admin/login"
+                COGNITO_DOMAIN_PREFIX="pulse-urgd-staging"
+                ;;
+              prod)
+                API_DOMAIN="api.pulse.urgdstudios.com"
+                FRONTEND_DOMAIN="pulse.urgdstudios.com"
+                COGNITO_CALLBACKS="https://pulse.urgdstudios.com/admin/login"
+                COGNITO_LOGOUTS="https://pulse.urgdstudios.com/admin/login"
+                COGNITO_DOMAIN_PREFIX="pulse-urgd"
+                ;;
+            esac
+
+            cat > "parameter-files/$env.json" << EOF
+          [
+            {"ParameterKey": "Environment",                "ParameterValue": "$env"},
+            {"ParameterKey": "ApiDomainName",              "ParameterValue": "$API_DOMAIN"},
+            {"ParameterKey": "FrontendDomainName",         "ParameterValue": "$FRONTEND_DOMAIN"},
+            {"ParameterKey": "CertificateArn",             "ParameterValue": "${{ secrets.CERTIFICATE_ARN }}"},
+            {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
+            {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
+            {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
+            {"ParameterKey": "AppleClientId",              "ParameterValue": "${{ secrets.APPLE_CLIENT_ID }}"},
+            {"ParameterKey": "AppleTeamId",                "ParameterValue": "${{ secrets.APPLE_TEAM_ID }}"},
+            {"ParameterKey": "AppleKeyId",                 "ParameterValue": "${{ secrets.APPLE_KEY_ID }}"},
+            {"ParameterKey": "ApplePrivateKey",            "ParameterValue": "${{ secrets.APPLE_PRIVATE_KEY }}"},
+            {"ParameterKey": "GoogleClientId",             "ParameterValue": "${{ secrets.GOOGLE_CLIENT_ID }}"},
+            {"ParameterKey": "GoogleClientSecret",         "ParameterValue": "${{ secrets.GOOGLE_CLIENT_SECRET }}"},
+            {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
+            {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"}
+          ]
+          EOF
+          done
+
+      - name: Upload CloudFormation template and parameter files
+        run: |
+          set -euo pipefail
           aws s3 cp cloudformation/pulse-stack.yaml \
             "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/$VERSION/pulse-stack.yaml" \
             --region ${{ env.AWS_REGION }}
-          echo "✅ CloudFormation template uploaded"
+
+          aws s3 cp parameter-files/ \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/$VERSION/" \
+            --recursive --region ${{ env.AWS_REGION }}
+
+          echo "✅ CloudFormation template and parameter files uploaded for version $VERSION"
 
       - name: Upload frontend build artifacts
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
+          set -euo pipefail
           aws s3 sync apps/admin-ui/dist \
             "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/admin-ui/" \
             --region ${{ env.AWS_REGION }} --no-progress
@@ -155,28 +212,30 @@ jobs:
             --region ${{ env.AWS_REGION }} --no-progress
           echo "✅ Frontend artifacts uploaded"
 
-  # ── 3. Deploy ────────────────────────────────────────────────────────────────
-  # push to main → dev (auto); workflow_dispatch → staging or prod (manual gate)
+  # ── 4. Deploy ─────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: build
+    needs: [version, build]
     permissions:
       id-token: write
       contents: read
     env:
-      VERSION: ${{ needs.build.outputs.version }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Determine environment
-        id: env
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.environment }}" ]; then
             ENVIRONMENT="${{ github.event.inputs.environment }}"
-          else
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             ENVIRONMENT="dev"
+          else
+            echo "❌ Invalid trigger"
+            exit 1
           fi
           echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
           echo "Deploying to: $ENVIRONMENT"
@@ -197,14 +256,246 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      - name: Deploy stack
-        uses: ./.github/actions/deploy-stack
+      - name: Deploy CloudFormation stack
+        run: |
+          set -euo pipefail
+          STACK_NAME="urgd-${{ env.APP_NAME }}-${ENVIRONMENT}"
+          TEMPLATE_URL="https://${{ env.ARTIFACT_BUCKET }}.s3.${{ env.AWS_REGION }}.amazonaws.com/${{ env.APP_NAME }}/cloudformation/$VERSION/pulse-stack.yaml"
+          PARAM_FILE="/tmp/cf-params-${ENVIRONMENT}.json"
+
+          echo "🚀 Deploying stack: $STACK_NAME"
+          echo "   Template: $TEMPLATE_URL"
+
+          # Download parameter file from S3 (generated and uploaded in build job)
+          aws s3 cp \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/$VERSION/${ENVIRONMENT}.json" \
+            "$PARAM_FILE" \
+            --region ${{ env.AWS_REGION }}
+
+          SKIP_POLL=false
+          if aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" \
+              --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "Stack exists — updating..."
+            UPDATE_OUTPUT=$(aws cloudformation update-stack \
+              --stack-name "$STACK_NAME" \
+              --template-url "$TEMPLATE_URL" \
+              --parameters "file://$PARAM_FILE" \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --region ${{ env.AWS_REGION }} 2>&1) || {
+              if echo "$UPDATE_OUTPUT" | grep -q "No updates are to be performed"; then
+                echo "✅ Stack already up to date — skipping poll"
+                SKIP_POLL=true
+              else
+                echo "❌ Stack update failed: $UPDATE_OUTPUT"
+                exit 1
+              fi
+            }
+          else
+            echo "Stack does not exist — creating..."
+            aws cloudformation create-stack \
+              --stack-name "$STACK_NAME" \
+              --template-url "$TEMPLATE_URL" \
+              --parameters "file://$PARAM_FILE" \
+              --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --region ${{ env.AWS_REGION }}
+          fi
+
+          rm -f "$PARAM_FILE"
+          echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
+          echo "SKIP_POLL=$SKIP_POLL" >> $GITHUB_ENV
+
+      - name: Poll for stack completion
+        run: |
+          set -euo pipefail
+          if [ "${SKIP_POLL}" = "true" ]; then
+            echo "⏭️  Skipping poll (no stack changes)"
+            exit 0
+          fi
+
+          TIMEOUT=1800
+          ELAPSED=0
+          INTERVAL=30
+
+          echo "⏳ Polling stack: $STACK_NAME"
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            STATUS=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Stacks[0].StackStatus' \
+              --output text 2>/dev/null)
+
+            echo "   Status: $STATUS (${ELAPSED}s elapsed)"
+
+            case "$STATUS" in
+              CREATE_COMPLETE|UPDATE_COMPLETE)
+                echo "✅ Stack deployment complete"
+                exit 0
+                ;;
+              *FAILED*|*ROLLBACK*)
+                echo "❌ Stack deployment failed: $STATUS"
+                aws cloudformation describe-stack-events \
+                  --stack-name "$STACK_NAME" \
+                  --region ${{ env.AWS_REGION }} \
+                  --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+                  --output table 2>/dev/null || true
+                exit 1
+                ;;
+            esac
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          echo "❌ Stack deployment timed out after ${TIMEOUT}s"
+          exit 1
+
+      - name: Validate CloudFormation outputs
+        run: |
+          set -euo pipefail
+          get_output() {
+            aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" \
+              --region ${{ env.AWS_REGION }} \
+              --query "Stacks[0].Outputs[?OutputKey==\`$1\`].OutputValue" \
+              --output text
+          }
+
+          for key in CloudFrontDistributionId ApiGatewayId S3BucketName UserPoolId UserPoolClientId ApiBaseUrl; do
+            val=$(get_output "$key")
+            if [ -z "$val" ] || [ "$val" = "None" ]; then
+              echo "❌ Missing required output: $key"
+              exit 1
+            fi
+            echo "   ✅ $key = $val"
+            echo "CF_${key}=$val" >> $GITHUB_ENV
+          done
+          echo "✅ All required outputs present"
+
+      - name: Activate API Gateway deployment
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_ID=$(aws apigateway create-deployment \
+            --rest-api-id "$CF_ApiGatewayId" \
+            --stage-name "$ENVIRONMENT" \
+            --description "Deploy $STACK_NAME @ $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'id' \
+            --output text)
+          echo "✅ API Gateway deployment activated: $DEPLOYMENT_ID"
+
+      - name: Download and deploy frontend assets
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/frontend-dist/admin-ui /tmp/frontend-dist/session-ui
+
+          aws s3 sync \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/admin-ui/" \
+            /tmp/frontend-dist/admin-ui/ \
+            --region ${{ env.AWS_REGION }} --no-progress
+
+          aws s3 sync \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/session-ui/" \
+            /tmp/frontend-dist/session-ui/ \
+            --region ${{ env.AWS_REGION }} --no-progress
+
+          chmod +x scripts/deploy-frontend.sh
+
+          DIST_DIR=/tmp/frontend-dist/admin-ui S3_PREFIX=admin \
+            ./scripts/deploy-frontend.sh "$CF_S3BucketName"
+
+          DIST_DIR=/tmp/frontend-dist/session-ui S3_PREFIX=s \
+            ./scripts/deploy-frontend.sh "$CF_S3BucketName"
+
+          if [ -f apps/landing/index.html ]; then
+            aws s3 cp apps/landing/index.html \
+              "s3://${CF_S3BucketName}/index.html" \
+              --cache-control "no-cache, max-age=0, must-revalidate" \
+              --region ${{ env.AWS_REGION }}
+            echo "✅ Landing page deployed"
+          fi
+
+      - name: Configure AWS credentials (us-east-1 for WAF + CloudFront)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          environment: ${{ env.ENVIRONMENT }}
-          version: ${{ env.VERSION }}
-          app-name: ${{ env.APP_NAME }}
-          artifact-bucket: ${{ env.ARTIFACT_BUCKET }}
-          aws-region: ${{ env.AWS_REGION }}
-          aws-account-id: ${{ env.AWS_ACCOUNT_ID }}
-          waf-web-acl-arn: ${{ secrets.WAF_WEB_ACL_ARN }}
-          shield-registration-url: ${{ secrets.SHIELD_REGISTRATION_URL }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/urgd-pulse-deploy
+          aws-region: us-east-1
+          audience: sts.amazonaws.com
+
+      - name: Associate WAF Web ACL with CloudFront
+        run: |
+          set -euo pipefail
+          CLOUDFRONT_ID="$CF_CloudFrontDistributionId"
+
+          aws cloudfront get-distribution-config \
+            --id "$CLOUDFRONT_ID" --output json > /tmp/cf-dist-response.json
+
+          ETAG=$(jq -r '.ETag' /tmp/cf-dist-response.json)
+          jq '.DistributionConfig' /tmp/cf-dist-response.json > /tmp/cf-dist-config.json
+          jq --arg arn "${{ secrets.WAF_WEB_ACL_ARN }}" '.WebACLId = $arn' \
+            /tmp/cf-dist-config.json > /tmp/cf-dist-config-updated.json
+
+          aws cloudfront update-distribution \
+            --id "$CLOUDFRONT_ID" \
+            --distribution-config file:///tmp/cf-dist-config-updated.json \
+            --if-match "$ETAG" >/dev/null
+
+          echo "✅ WAF associated with CloudFront"
+
+      - name: Register Shield callback
+        run: |
+          set -euo pipefail
+          QUARANTINE_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ShieldQuarantineBucketName`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$QUARANTINE_BUCKET" ] || [ "$QUARANTINE_BUCKET" = "None" ]; then
+            echo "⚠️  ShieldQuarantineBucketName not in outputs — skipping Shield registration"
+            exit 0
+          fi
+
+          python3 scripts/register-with-shield.py \
+            --lambda-arn "$CF_ShieldCallbackLambdaArn" \
+            --bucket-name "$QUARANTINE_BUCKET" \
+            --environment "$ENVIRONMENT"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_CloudFrontDistributionId" \
+            --paths "/*" \
+            --region us-east-1 >/dev/null
+          echo "✅ CloudFront cache invalidated"
+
+      - name: Run smoke tests
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke.sh
+          ./scripts/smoke.sh "$CF_ApiBaseUrl"
+
+      - name: Write deployment metadata
+        run: |
+          set -euo pipefail
+          cat > metadata.json << EOF
+          {
+            "commit_sha": "${{ github.sha }}",
+            "version": "$VERSION",
+            "stack_name": "$STACK_NAME",
+            "environment": "$ENVIRONMENT",
+            "cloudfront_distribution_id": "$CF_CloudFrontDistributionId",
+            "api_base_url": "$CF_ApiBaseUrl",
+            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "deployed_by": "${{ github.actor }}",
+            "workflow_run": "${{ github.run_id }}"
+          }
+          EOF
+
+          aws s3 cp metadata.json \
+            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/deployments/${ENVIRONMENT}/metadata.json" \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ Deployment metadata written"
+          cat metadata.json
