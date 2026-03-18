@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
@@ -9,6 +9,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/settings': 'Settings — Pulse',
   '/admin/pulse-check': 'Pulse Check — Pulse',
 };
+
+const logoUrl = `${window.location.origin}/logo.svg`;
 
 /**
  * Persistent admin shell — top bar with logo, wordmark, nav, theme toggle, avatar.
@@ -43,11 +45,24 @@ export default function AdminLayout() {
           zIndex: 100,
         }}
       >
-        {/* ur/gd logo + pulse wordmark */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginRight: 'var(--space-4)' }}>
-          <span style={{ fontWeight: 700, fontSize: 'var(--font-size-sm)', letterSpacing: '0.05em' }}>
-            {labels.layout.logoAlt}
-          </span>
+        {/* ur/gd logo + pulse wordmark — links to /admin/items */}
+        <Link
+          to="/admin/items"
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginRight: 'var(--space-4)', textDecoration: 'none' }}
+          aria-label="ur/gd pulse — go to items"
+        >
+          <img
+            src={logoUrl}
+            alt="ur/gd Studios logo"
+            style={{
+              height: 'clamp(2.5rem, 2rem + 2vw, 3rem)',
+              width: 'auto',
+              objectFit: 'contain',
+              marginTop: 'clamp(-1.25rem, -1rem + -1vw, -1.5rem)',
+              marginBottom: 'clamp(-1.25rem, -1rem + -1vw, -1.5rem)',
+              flexShrink: 0,
+            }}
+          />
           {/* Pulse wordmark — sage accent, branding only */}
           <span
             style={{
@@ -59,7 +74,7 @@ export default function AdminLayout() {
           >
             {labels.layout.wordmark}
           </span>
-        </div>
+        </Link>
 
         {/* Tab navigation */}
         <nav style={{ display: 'flex', gap: 'var(--space-1)', flex: 1 }}>
@@ -134,6 +149,46 @@ export default function AdminLayout() {
       <main style={{ flex: 1, background: 'var(--color-bg)' }}>
         <Outlet />
       </main>
+
+      {/* Footer */}
+      <footer
+        style={{
+          marginTop: 'auto',
+          padding: 'var(--space-8) var(--space-6)',
+          borderTop: '1px solid var(--color-border)',
+          background: 'var(--color-surface)',
+        }}
+      >
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-6)' }}>
+          <div
+            role="img"
+            aria-label="ur/gd Studios logo"
+            style={{
+              height: 'clamp(8.4375rem, 15.8203125vw, 12.65625rem)',
+              width: 'clamp(8.4375rem, 15.8203125vw, 12.65625rem)',
+              backgroundImage: `url(${logoUrl})`,
+              backgroundSize: 'contain',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center',
+              marginTop: '-5rem',
+              marginBottom: '-6rem',
+            }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+            <p style={{ margin: 0 }}>
+              Quietly powerful, by{' '}
+              <a href="https://www.urgdstudios.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent-pulse)', textDecoration: 'none' }}>
+                ur/gd Studios
+              </a>
+            </p>
+            <p style={{ margin: 0 }}>
+              <a href="https://www.urgdstudios.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
+                Privacy Policy
+              </a>
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

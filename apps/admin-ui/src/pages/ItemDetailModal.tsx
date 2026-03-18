@@ -353,7 +353,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
               <form onSubmit={handleSubmit} noValidate className={styles.form}>
                 <div className={styles.field}>
                   <label htmlFor="itemName" className={styles.label}>
-                    {labels.itemDetail.fieldName}
+                    {labels.itemDetail.fieldName} <span className={styles.required} aria-hidden="true">*</span>
                   </label>
                   <input
                     id="itemName"
@@ -370,7 +370,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
                 <div className={styles.field}>
                   <label htmlFor="description" className={styles.label}>
-                    {labels.itemDetail.fieldDescription}
+                    {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
                   </label>
                   <textarea
                     id="description"
@@ -387,7 +387,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
                 <div className={styles.field}>
                   <label htmlFor="closeDate" className={styles.label}>
-                    {labels.itemDetail.fieldCloseDate}
+                    {labels.itemDetail.fieldCloseDate} <span className={styles.required} aria-hidden="true">*</span>
                   </label>
                   <input
                     id="closeDate"
