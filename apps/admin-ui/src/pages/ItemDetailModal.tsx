@@ -216,6 +216,15 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
     if (isEditMode) {
       updateMutation.mutate(payload);
+    } else if (savedItemId.current) {
+      // Item was auto-created during file upload — update it instead of creating a duplicate
+      authedMutate(`/api/manage/items/${savedItemId.current}`, 'PUT', payload, navigate)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['items'] });
+          queryClient.invalidateQueries({ queryKey: ['item', savedItemId.current] });
+          onClose();
+        })
+        .catch(() => setFormError(labels.itemDetail.saveError));
     } else {
       createMutation.mutate(payload);
     }
