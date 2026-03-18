@@ -126,6 +126,10 @@ Parameters:
     Default: ''
     Description: Shield quarantine bucket name (from Shield stack SSM parameter /urgd/shield/quarantine_bucket_name)
 
+  ShieldEventBridgeRuleArn:
+    Type: String
+    Description: Shield EventBridge rule ARN (from SSM parameter /urgd/shield/eventbridge_rule_arn)
+
   PublicSignup:
     Type: String
     Default: 'false'
@@ -2333,6 +2337,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:GetObjectTagging
                   - s3:DeleteObject
                 Resource: !Sub 'arn:aws:s3:::${QuarantineBucketName}/*'
               - Effect: Allow
@@ -2676,36 +2681,14 @@ Resources:
         - Key: license
           Value: proprietary
 
-  # EventBridge permission and rule for Shield callback
+  # EventBridge permission for Shield-managed rule to invoke callback Lambda
   PulseShieldCallbackPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref PulseShieldCallbackFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt PulseShieldCallbackRule.Arn
-
-  PulseShieldCallbackRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub 'urgd-pulse-shield-callback-${Environment}'
-      Description: Triggers shieldCallback Lambda when GuardDuty scan result tag is set on quarantine bucket objects
-      EventPattern:
-        source:
-          - aws.s3
-        detail-type:
-          - Object Tags Added
-        detail:
-          bucket:
-            name:
-              - !Ref QuarantineBucketName
-          object:
-            key:
-              - prefix: pulse/
-      State: ENABLED
-      Targets:
-        - Id: PulseShieldCallbackTarget
-          Arn: !GetAtt PulseShieldCallbackFunction.Arn
+      SourceArn: !Ref ShieldEventBridgeRuleArn
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S2: API Gateway Resources — item CRUD + upload URL

@@ -2,7 +2,7 @@
 // Triggered by EventBridge on S3 object tag change (GuardDuty scan result)
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { S3Client, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 
@@ -67,15 +67,26 @@ async function updateDocumentStatus(tenantId, itemId, status, extraAttrs = {}) {
 export const handler = async (event) => {
   const bucketName = event?.detail?.bucket?.name
   const objectKey = event?.detail?.object?.key
-  const tags = event?.detail?.tags ?? {}
 
   if (!bucketName || !objectKey) {
     log('error', 'ShieldCallback: missing bucket or key in event', { bucketName, objectKey })
     return
   }
 
-  // Read scan result from tags
-  const scanResult = tags['GuardDutyMalwareScanStatus'] ?? tags['scan-result'] ?? ''
+  // Fetch tags from S3 — the EventBridge "Object Tags Added" event does NOT include
+  // tag values in the payload. We must call GetObjectTagging to read the scan result.
+  let scanResult = ''
+  try {
+    const tagsResp = await s3.send(new GetObjectTaggingCommand({
+      Bucket: bucketName,
+      Key: objectKey,
+    }))
+    const tags = Object.fromEntries(tagsResp.TagSet.map(t => [t.Key, t.Value]))
+    scanResult = tags['GuardDutyMalwareScanStatus'] ?? ''
+  } catch (err) {
+    log('error', 'ShieldCallback: failed to fetch object tags', { bucketName, objectKey, errorName: err.name })
+    throw err
+  }
 
   const { tenantId, itemId } = extractIdsFromKey(objectKey)
 

@@ -139,6 +139,13 @@ jobs:
             --region ${{ env.AWS_REGION }})
           echo "QUARANTINE_BUCKET_NAME=$QUARANTINE_BUCKET_NAME" >> $GITHUB_ENV
 
+          SHIELD_EVENTBRIDGE_RULE_ARN=$(aws ssm get-parameter \
+            --name "/urgd/shield/eventbridge_rule_arn" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "SHIELD_EVENTBRIDGE_RULE_ARN=$SHIELD_EVENTBRIDGE_RULE_ARN" >> $GITHUB_ENV
+
           GOOGLE_CLIENT_ID=$(aws ssm get-parameter \
             --name "/pulse/google/client-id" \
             --query 'Parameter.Value' \
@@ -252,6 +259,7 @@ jobs:
               {"ParameterKey": "ApplePrivateKey",            "ParameterValue": os.environ["APPLE_PRIVATE_KEY"]},
               {"ParameterKey": "PublicSignup",               "ParameterValue": "true" if "$env" == "dev" else "false"},
               {"ParameterKey": "QuarantineBucketName",       "ParameterValue": os.environ["QUARANTINE_BUCKET_NAME"]},
+              {"ParameterKey": "ShieldEventBridgeRuleArn",   "ParameterValue": os.environ["SHIELD_EVENTBRIDGE_RULE_ARN"]},
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
               {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
           ]
