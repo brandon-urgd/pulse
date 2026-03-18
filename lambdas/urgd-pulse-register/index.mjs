@@ -26,7 +26,7 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { name, email, password } = body
+  const { name, email } = body
 
   // Validate required fields
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -35,14 +35,13 @@ export const handler = async (event) => {
   if (!email || !isValidEmail(email)) {
     return errorResponse(400, 'A valid email is required', {}, origin)
   }
-  if (!password || typeof password !== 'string' || password.length < 8) {
-    return errorResponse(400, 'password must be at least 8 characters', {}, origin)
-  }
 
   log('info', 'Register: creating user', { requestId })
 
   try {
-    // Create user in Cognito — Cognito sends a verification email automatically
+    // Create user in Cognito — Cognito generates a secure temporary password and
+    // emails it automatically. User must change password on first login.
+    // We do NOT accept or store a user-supplied password here.
     await cognito.send(new AdminCreateUserCommand({
       UserPoolId: process.env.USER_POOL_ID,
       Username: email,
@@ -50,8 +49,8 @@ export const handler = async (event) => {
         { Name: 'email', Value: email },
         { Name: 'name', Value: name },
       ],
-      TemporaryPassword: password,
-      // No MessageAction: SUPPRESS — let Cognito send the verification email
+      // No TemporaryPassword — Cognito generates a secure one
+      // No MessageAction: SUPPRESS — let Cognito send the welcome email
     }))
 
     log('info', 'Register: user created, verification email sent', { requestId })

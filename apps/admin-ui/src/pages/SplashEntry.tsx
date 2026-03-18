@@ -106,7 +106,7 @@ export default function SplashEntry() {
       const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) {
@@ -334,18 +334,6 @@ export default function SplashEntry() {
                   onChange={e => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                />
-              </div>
-              <div>
-                <label htmlFor="reg-password" style={{ display: 'block', fontSize: 'var(--font-size-sm)', marginBottom: 4 }}>{labels.register.passwordLabel}</label>
-                <input
-                  id="reg-password"
-                  className="pulse-input"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
                 />
               </div>
               <button type="submit" className="pulse-btn pulse-btn-primary" disabled={submitting}>
