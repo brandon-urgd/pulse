@@ -142,8 +142,6 @@ Parameters:
 # ─── Conditions ───────────────────────────────────────────────────────────────
 Conditions:
   IsProduction: !Equals [!Ref Environment, prod]
-  HasAppleCreds: !Not [!Equals [!Ref AppleClientId, '']]
-  HasGoogleCreds: !Not [!Equals [!Ref GoogleClientId, '']]
 
 # ─── Mappings ─────────────────────────────────────────────────────────────────
 Mappings:
@@ -534,7 +532,6 @@ Resources:
 
   PulseAppleIdProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
-    Condition: HasAppleCreds
     Properties:
       UserPoolId: !Ref PulseUserPool
       ProviderName: SignInWithApple
@@ -551,7 +548,6 @@ Resources:
 
   PulseGoogleIdProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
-    Condition: HasGoogleCreds
     Properties:
       UserPoolId: !Ref PulseUserPool
       ProviderName: Google
@@ -577,16 +573,10 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
-      SupportedIdentityProviders: !If
-        - HasAppleCreds
-        - !If
-          - HasGoogleCreds
-          - [COGNITO, SignInWithApple, Google]
-          - [COGNITO, SignInWithApple]
-        - !If
-          - HasGoogleCreds
-          - [COGNITO, Google]
-          - [COGNITO]
+      SupportedIdentityProviders:
+        - COGNITO
+        - SignInWithApple
+        - Google
       CallbackURLs: !Ref CognitoCallbackUrls
       LogoutURLs: !Ref CognitoLogoutUrls
       AllowedOAuthFlows:
