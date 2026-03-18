@@ -140,6 +140,16 @@ jobs:
       - name: Generate parameter files
         run: |
           set -euo pipefail
+
+          # Download the manifest written by build-lambdas.sh
+          aws s3 cp \
+            "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/manifest-${VERSION}.json" \
+            /tmp/lambda-manifest.json \
+            --region ${{ env.AWS_REGION }}
+
+          echo "📋 Lambda manifest:"
+          cat /tmp/lambda-manifest.json
+
           mkdir -p parameter-files
 
           for env in dev staging prod; do
@@ -167,22 +177,39 @@ jobs:
                 ;;
             esac
 
-            cat > "parameter-files/$env.json" << EOF
-          [
-            {"ParameterKey": "Environment",                "ParameterValue": "$env"},
-            {"ParameterKey": "ApiDomainName",              "ParameterValue": "$API_DOMAIN"},
-            {"ParameterKey": "FrontendDomainName",         "ParameterValue": "$FRONTEND_DOMAIN"},
-            {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
-            {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
-            {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
-            {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
-            {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
-            {"ParameterKey": "HealthCodeKey",              "ParameterValue": "lambda-packages/urgd-pulse-health/$VERSION.zip"},
-            {"ParameterKey": "BedrockHealthCodeKey",       "ParameterValue": "lambda-packages/urgd-pulse-bedrockHealth/$VERSION.zip"},
-            {"ParameterKey": "CognitoAuthCodeKey",         "ParameterValue": "lambda-packages/urgd-pulse-cognitoAuth/$VERSION.zip"},
-            {"ParameterKey": "SessionAuthCodeKey",         "ParameterValue": "lambda-packages/urgd-pulse-sessionAuth/$VERSION.zip"}
+            # Build static params, then append one CodeKey entry per Lambda from manifest
+            python3 - <<PYEOF
+          import json, re
+
+          with open('/tmp/lambda-manifest.json') as f:
+              manifest = json.load(f)
+
+          static_params = [
+              {"ParameterKey": "Environment",                "ParameterValue": "$env"},
+              {"ParameterKey": "ApiDomainName",              "ParameterValue": "$API_DOMAIN"},
+              {"ParameterKey": "FrontendDomainName",         "ParameterValue": "$FRONTEND_DOMAIN"},
+              {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
+              {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
+              {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
+              {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
+              {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
           ]
-          EOF
+
+          # Derive CF parameter key from function name:
+          # urgd-pulse-getSettings -> strip "urgd-pulse-" -> "getSettings" -> "GetSettings" -> "GetSettingsCodeKey"
+          code_params = []
+          for fn in manifest['functions']:
+              short = re.sub(r'^urgd-pulse-', '', fn)
+              param_key = short[0].upper() + short[1:] + 'CodeKey'
+              s3_key = manifest['s3_keys'][fn]
+              code_params.append({"ParameterKey": param_key, "ParameterValue": s3_key})
+
+          all_params = static_params + code_params
+          with open('parameter-files/$env.json', 'w') as f:
+              json.dump(all_params, f, indent=2)
+
+          print(f"  ✅ $env.json — {len(code_params)} Lambda code keys")
+          PYEOF
           done
 
       - name: Upload CloudFormation template and parameter files
@@ -489,8 +516,15 @@ jobs:
           set -euo pipefail
           echo "🧹 Cleaning up old artifacts (keeping last 5 versions)..."
 
-          # Lambda packages — one prefix per function
-          for fn in urgd-pulse-health urgd-pulse-bedrockHealth urgd-pulse-cognitoAuth urgd-pulse-sessionAuth; do
+          # Download manifest to get the list of functions that were built
+          aws s3 cp \
+            "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/manifest-${VERSION}.json" \
+            /tmp/lambda-manifest.json \
+            --region ${{ env.AWS_REGION }}
+
+          FUNCTIONS=$(python3 -c "import json; m=json.load(open('/tmp/lambda-manifest.json')); print(' '.join(m['functions']))")
+
+          for fn in $FUNCTIONS; do
             aws s3 ls "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/" \
               --region ${{ env.AWS_REGION }} 2>/dev/null | \
               sort -r | tail -n +6 | awk '{print $4}' | \

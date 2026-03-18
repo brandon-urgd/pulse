@@ -52,6 +52,7 @@ echo ""
 
 built=0
 failed=0
+MANIFEST_FUNCTIONS="[]"
 
 for lambda_dir in "$LAMBDAS_DIR"/*/; do
   lambda_name=$(basename "$lambda_dir")
@@ -103,6 +104,10 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
     --no-progress
   echo "   ✅ Uploaded → s3://${ARTIFACT_BUCKET}/${S3_KEY}"
 
+  # Accumulate manifest entry
+  MANIFEST_FUNCTIONS=$(echo "$MANIFEST_FUNCTIONS" | \
+    python3 -c "import sys,json; lst=json.load(sys.stdin); lst.append('${lambda_name}'); print(json.dumps(lst))")
+
   built=$((built + 1))
   echo ""
 done
@@ -113,3 +118,22 @@ if [ $built -eq 0 ]; then
   echo "❌ No Lambda functions found to build — check lambdas/ directory" >&2
   exit 1
 fi
+
+# ── Write and upload manifest ─────────────────────────────────────────────────
+MANIFEST_FILE="$BUILD_BASE/lambda-manifest.json"
+python3 -c "
+import json, sys
+functions = $MANIFEST_FUNCTIONS
+manifest = {
+    'version': '${VERSION}',
+    'functions': functions,
+    's3_keys': {fn: 'lambda-packages/' + fn + '/${VERSION}.zip' for fn in functions}
+}
+print(json.dumps(manifest, indent=2))
+" > "$MANIFEST_FILE"
+
+aws s3 cp "$MANIFEST_FILE" \
+  "s3://${ARTIFACT_BUCKET}/lambda-packages/manifest-${VERSION}.json" \
+  --region "$AWS_REGION" \
+  --no-progress
+echo "✅ Manifest uploaded → s3://${ARTIFACT_BUCKET}/lambda-packages/manifest-${VERSION}.json"
