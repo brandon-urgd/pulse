@@ -2,7 +2,8 @@ import { Amplify } from 'aws-amplify';
 
 const userPoolId = import.meta.env.VITE_USER_POOL_ID as string;
 const userPoolClientId = import.meta.env.VITE_USER_POOL_CLIENT_ID as string;
-const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN as string;
+// Strip https:// prefix — Amplify's oauth.domain expects hostname only
+const cognitoDomain = (import.meta.env.VITE_COGNITO_DOMAIN as string).replace(/^https?:\/\//, '');
 
 export function configureAmplify(): void {
   Amplify.configure({
