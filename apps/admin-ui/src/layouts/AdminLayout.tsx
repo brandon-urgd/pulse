@@ -182,8 +182,19 @@ export default function AdminLayout() {
               </a>
             </p>
             <p style={{ margin: 0 }}>
+              &copy; {new Date().getFullYear()}{' '}
+              <a href="https://www.urgdstudios.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
+                ur/gd Studios LLC
+              </a>
+              {' · '}Seattle, WA
+            </p>
+            <p style={{ margin: 0, display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
               <a href="https://www.urgdstudios.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
                 Privacy Policy
+              </a>
+              <span aria-hidden="true"> · </span>
+              <a href="https://www.urgdstudios.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none' }}>
+                Terms
               </a>
             </p>
           </div>
