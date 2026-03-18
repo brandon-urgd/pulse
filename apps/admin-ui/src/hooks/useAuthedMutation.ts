@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 type HttpMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-async function authedMutate(
+export async function authedMutate(
   url: string,
   method: HttpMethod,
   body: unknown,

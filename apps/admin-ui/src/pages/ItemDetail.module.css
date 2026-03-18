@@ -85,6 +85,21 @@
   justify-content: space-between;
 }
 
+.contentHint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.subLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--space-2);
+}
+
 .contentToggle {
   display: flex;
   gap: var(--space-1);
@@ -146,6 +161,12 @@
 
 .fileLabel:hover {
   background: var(--color-interactive-hover);
+}
+
+.fileLabelDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .docStatus {

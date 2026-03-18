@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
-import { useAuthedMutation } from '../hooks/useAuthedMutation';
+import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import styles from './ItemDetail.module.css';
 
@@ -41,11 +41,6 @@ interface UpdateItemPayload {
   description: string;
   closeDate: string;
   content?: string;
-}
-
-interface UploadUrlPayload {
-  fileName: string;
-  fileSize: number;
 }
 
 interface UploadUrlResponse {
@@ -91,7 +86,6 @@ export default function ItemDetail() {
   const [description, setDescription] = useState('');
   const [closeDate, setCloseDate] = useState('');
   const [content, setContent] = useState('');
-  const [contentMode, setContentMode] = useState<'textarea' | 'upload'>('textarea');
 
   // UI state
   const [formError, setFormError] = useState('');
@@ -104,6 +98,8 @@ export default function ItemDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const isPolling = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // After auto-save in create mode, we get a real itemId to upload against
+  const savedItemId = useRef<string | null>(itemId ?? null);
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemData, isLoading: itemLoading } = useAuthedQuery<Item>(
@@ -147,6 +143,7 @@ export default function ItemDetail() {
     'POST',
     {
       onSuccess: (created) => {
+        savedItemId.current = created.itemId;
         queryClient.invalidateQueries({ queryKey: ['items'] });
         navigate(`/admin/items/${created.itemId}`);
       },
@@ -192,11 +189,6 @@ export default function ItemDetail() {
     }
   );
 
-  const uploadUrlMutation = useAuthedMutation<UploadUrlResponse, UploadUrlPayload>(
-    `/api/manage/items/${itemId}/upload-url`,
-    'POST'
-  );
-
   // ── Form submit ─────────────────────────────────────────────────────────────
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -232,51 +224,72 @@ export default function ItemDetail() {
   // ── File upload ─────────────────────────────────────────────────────────────
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !itemId) return;
+    if (!file) return;
 
     setFormError('');
+
+    // In create mode, validate required fields before auto-saving
+    if (!savedItemId.current) {
+      if (!itemName.trim() || !description.trim() || !closeDate || closeDate <= todayIso()) {
+        setFormError('Please fill in the item name, description, and close date before uploading.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsUploading(true);
     setUploadDocStatus('scanning');
 
     try {
-      // 1. Get presigned URL — Lambda returns { data: { uploadUrl, key } }
-      const response = await uploadUrlMutation.mutateAsync({
-        fileName: file.name,
-        fileSize: file.size,
-      });
-      const uploadUrl = response.data.uploadUrl;;
+      // Auto-save in create mode to get an itemId
+      let targetItemId = savedItemId.current;
+      if (!targetItemId) {
+        const created = await createMutation.mutateAsync({
+          itemName: itemName.trim(),
+          description: description.trim(),
+          closeDate,
+          ...(content.trim() ? { content: content.trim() } : {}),
+        });
+        targetItemId = created.itemId;
+        // savedItemId.current is set in createMutation.onSuccess
+      }
 
-      // 2. Upload directly to S3 (no auth header — presigned)
+      // 1. Get presigned URL via authed fetch with the real itemId
+      const urlResp = await authedMutate(
+        `/api/manage/items/${targetItemId}/upload-url`,
+        'POST',
+        { fileName: file.name, fileSize: file.size },
+        navigate
+      ) as UploadUrlResponse;
+      const uploadUrl = urlResp.data.uploadUrl;
+
+      // 2. Upload directly to S3 (presigned — no auth header)
       const putRes = await fetch(uploadUrl, {
         method: 'PUT',
         body: file,
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
       });
-
-      if (!putRes.ok) {
-        throw new Error('Upload failed');
-      }
+      if (!putRes.ok) throw new Error('Upload failed');
 
       // 3. Poll for documentStatus
-      startPolling();
+      startPolling(targetItemId);
     } catch {
       setFormError(labels.itemDetail.saveError);
       setUploadDocStatus('none');
     } finally {
       setIsUploading(false);
-      // Reset file input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
-  function startPolling() {
+  function startPolling(targetItemId: string) {
     isPolling.current = true;
 
     async function poll() {
       if (!isPolling.current) return;
 
-      await queryClient.invalidateQueries({ queryKey: ['item', itemId] });
-      const refreshed = queryClient.getQueryData<Item>(['item', itemId]);
+      await queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
+      const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
       const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
       setUploadDocStatus(status);
 
@@ -373,77 +386,56 @@ export default function ItemDetail() {
 
         {/* Content */}
         <div className={styles.field}>
-          <div className={styles.contentHeader}>
-            <label className={styles.label}>{labels.itemDetail.fieldContent}</label>
-            {isEditMode && !isLocked && (
-              <div className={styles.contentToggle} role="group" aria-label="Content input mode">
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${contentMode === 'textarea' ? styles.toggleActive : ''}`}
-                  onClick={() => setContentMode('textarea')}
-                >
-                  {labels.itemDetail.contentModeTextarea}
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${contentMode === 'upload' ? styles.toggleActive : ''}`}
-                  onClick={() => setContentMode('upload')}
-                >
-                  {labels.itemDetail.contentModeUpload}
-                </button>
-              </div>
+          <label className={styles.label}>{labels.itemDetail.fieldContent}</label>
+          <p className={styles.contentHint}>{labels.itemDetail.fieldContentHint}</p>
+
+          {/* Paste area */}
+          <label htmlFor="content" className={styles.subLabel}>
+            {labels.itemDetail.contentPasteLabel}
+          </label>
+          <textarea
+            id="content"
+            className={styles.contentTextarea}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={10}
+            disabled={isLocked}
+            placeholder={labels.itemDetail.fieldContentPlaceholder}
+          />
+
+          {/* Upload area */}
+          <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
+          <div className={styles.uploadArea}>
+            <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              id="fileUpload"
+              className={styles.fileInput}
+              accept=".md,.txt,.pdf,.docx"
+              onChange={handleFileChange}
+              disabled={isUploading || isLocked}
+              aria-label={labels.itemDetail.uploadChooseFile}
+            />
+            <label htmlFor="fileUpload" className={`${styles.fileLabel} ${(isUploading || isLocked) ? styles.fileLabelDisabled : ''}`}>
+              {isUploading ? labels.itemDetail.uploadStatusScanning : labels.itemDetail.uploadChooseFile}
+            </label>
+
+            {uploadDocStatus !== 'none' && (
+              <p
+                className={`${styles.docStatus} ${
+                  uploadDocStatus === 'ready'
+                    ? styles.docStatusReady
+                    : uploadDocStatus === 'rejected' || uploadDocStatus === 'extraction_failed'
+                    ? styles.docStatusError
+                    : styles.docStatusPending
+                }`}
+                aria-live="polite"
+              >
+                {docStatusMessage(uploadDocStatus)}
+              </p>
             )}
           </div>
-
-          {contentMode === 'textarea' || !isEditMode ? (
-            <textarea
-              id="content"
-              className={styles.contentTextarea}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={10}
-              disabled={isLocked}
-              placeholder={labels.itemDetail.fieldContentPlaceholder}
-            />
-          ) : (
-            <div className={styles.uploadArea}>
-              {!isEditMode ? (
-                <p className={styles.uploadHint}>{labels.itemDetail.uploadOnlyEditMode}</p>
-              ) : (
-                <>
-                  <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    id="fileUpload"
-                    className={styles.fileInput}
-                    accept=".md,.txt,.pdf,.docx"
-                    onChange={handleFileChange}
-                    disabled={isUploading || isLocked}
-                    aria-label={labels.itemDetail.uploadChooseFile}
-                  />
-                  <label htmlFor="fileUpload" className={styles.fileLabel}>
-                    {labels.itemDetail.uploadChooseFile}
-                  </label>
-
-                  {uploadDocStatus !== 'none' && (
-                    <p
-                      className={`${styles.docStatus} ${
-                        uploadDocStatus === 'ready'
-                          ? styles.docStatusReady
-                          : uploadDocStatus === 'rejected' || uploadDocStatus === 'extraction_failed'
-                          ? styles.docStatusError
-                          : styles.docStatusPending
-                      }`}
-                      aria-live="polite"
-                    >
-                      {docStatusMessage(uploadDocStatus)}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Error */}
