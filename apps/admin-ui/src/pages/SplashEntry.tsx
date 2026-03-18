@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signInWithRedirect, Hub } from 'aws-amplify/auth';
+import { signInWithRedirect } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
 import '../styles/glass.css';
@@ -42,7 +43,7 @@ export default function SplashEntry() {
 
   // Handle OAuth redirect callback (Apple / Google)
   useEffect(() => {
-    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+    const unsubscribe = Hub.listen('auth', ({ payload }: { payload: { event: string } }) => {
       if (payload.event === 'signInWithRedirect') {
         // Amplify has exchanged the code — redirectAfterLogin will pick up the session
         redirectAfterLogin();
