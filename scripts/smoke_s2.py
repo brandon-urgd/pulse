@@ -215,12 +215,13 @@ upload_item_id = upload_item.get("itemId")
 ok(f"Upload test item created: {upload_item_id}")
 
 # Get presigned URL for a PDF
-r = requests.post(f"{API}/api/manage/items/upload-url", headers=headers,
-                  json={"itemId": upload_item_id, "fileName": "test.pdf", "fileSize": 1024 * 100})
+r = requests.post(f"{API}/api/manage/items/{upload_item_id}/upload-url", headers=headers,
+                  json={"fileName": "test.pdf", "fileSize": 1024 * 100})
 if r.status_code != 200:
     fail(f"POST /upload-url returned {r.status_code}: {r.text}")
 url_resp = r.json()
-presigned_url = url_resp.get("uploadUrl") or url_resp.get("url") or url_resp.get("presignedUrl")
+url_data = url_resp.get("data", url_resp)
+presigned_url = url_data.get("uploadUrl") or url_data.get("url") or url_data.get("presignedUrl")
 if not presigned_url:
     fail(f"No presigned URL in response: {url_resp}")
 ok(f"Presigned URL received (length={len(presigned_url)})")
@@ -236,15 +237,15 @@ if doc_status != "scanning":
 ok(f"documentStatus = 'scanning' confirmed in DynamoDB")
 
 # Verify unsupported file type rejected
-r = requests.post(f"{API}/api/manage/items/upload-url", headers=headers,
-                  json={"itemId": upload_item_id, "fileName": "malware.exe", "fileSize": 1024})
+r = requests.post(f"{API}/api/manage/items/{upload_item_id}/upload-url", headers=headers,
+                  json={"fileName": "malware.exe", "fileSize": 1024})
 if r.status_code != 400:
     fail(f"Expected 400 for .exe, got {r.status_code}: {r.text}")
 ok("Unsupported file type (.exe) correctly rejected with 400")
 
 # Verify oversized file rejected
-r = requests.post(f"{API}/api/manage/items/upload-url", headers=headers,
-                  json={"itemId": upload_item_id, "fileName": "big.pdf", "fileSize": 11 * 1024 * 1024})
+r = requests.post(f"{API}/api/manage/items/{upload_item_id}/upload-url", headers=headers,
+                  json={"fileName": "big.pdf", "fileSize": 11 * 1024 * 1024})
 if r.status_code != 400:
     fail(f"Expected 400 for oversized file, got {r.status_code}: {r.text}")
 ok("Oversized file (>10MB) correctly rejected with 400")
