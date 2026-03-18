@@ -137,6 +137,61 @@ jobs:
       - name: Build session-ui
         run: npm run build --workspace=apps/session-ui
 
+      - name: Fetch secrets from SSM
+        run: |
+          set -euo pipefail
+
+          GOOGLE_CLIENT_ID=$(aws ssm get-parameter \
+            --name "/pulse/google/client-id" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          GOOGLE_CLIENT_SECRET=$(aws ssm get-parameter \
+            --name "/pulse/google/client-secret" \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          APPLE_TEAM_ID=$(aws ssm get-parameter \
+            --name "/pulse/apple/team-id" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          APPLE_KEY_ID=$(aws ssm get-parameter \
+            --name "/pulse/apple/key-id" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          APPLE_CLIENT_ID=$(aws ssm get-parameter \
+            --name "/pulse/apple/client-id" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          APPLE_PRIVATE_KEY=$(aws ssm get-parameter \
+            --name "/pulse/apple/private-key" \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> $GITHUB_ENV
+          echo "::add-mask::$GOOGLE_CLIENT_SECRET"
+          echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> $GITHUB_ENV
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> $GITHUB_ENV
+          echo "APPLE_KEY_ID=$APPLE_KEY_ID" >> $GITHUB_ENV
+          echo "APPLE_CLIENT_ID=$APPLE_CLIENT_ID" >> $GITHUB_ENV
+          echo "::add-mask::$APPLE_PRIVATE_KEY"
+          echo "APPLE_PRIVATE_KEY<<EOF" >> $GITHUB_ENV
+          echo "$APPLE_PRIVATE_KEY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "✅ Secrets fetched from SSM"
+
       - name: Generate parameter files
         run: |
           set -euo pipefail
@@ -179,7 +234,7 @@ jobs:
 
             # Build static params, then append one CodeKey entry per Lambda from manifest
             python3 - <<PYEOF
-          import json, re
+          import json, re, os
 
           with open('/tmp/lambda-manifest.json') as f:
               manifest = json.load(f)
@@ -191,6 +246,12 @@ jobs:
               {"ParameterKey": "CognitoCallbackUrls",        "ParameterValue": "$COGNITO_CALLBACKS"},
               {"ParameterKey": "CognitoLogoutUrls",          "ParameterValue": "$COGNITO_LOGOUTS"},
               {"ParameterKey": "CognitoUserPoolDomainPrefix","ParameterValue": "$COGNITO_DOMAIN_PREFIX"},
+              {"ParameterKey": "GoogleClientId",             "ParameterValue": os.environ["GOOGLE_CLIENT_ID"]},
+              {"ParameterKey": "GoogleClientSecret",         "ParameterValue": os.environ["GOOGLE_CLIENT_SECRET"]},
+              {"ParameterKey": "AppleTeamId",                "ParameterValue": os.environ["APPLE_TEAM_ID"]},
+              {"ParameterKey": "AppleKeyId",                 "ParameterValue": os.environ["APPLE_KEY_ID"]},
+              {"ParameterKey": "AppleClientId",              "ParameterValue": os.environ["APPLE_CLIENT_ID"]},
+              {"ParameterKey": "ApplePrivateKey",            "ParameterValue": os.environ["APPLE_PRIVATE_KEY"]},
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
               {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
           ]
