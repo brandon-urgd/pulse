@@ -70,9 +70,10 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
   # Copy Lambda source files
   cp -r "$lambda_dir"/* "$BUILD_DIR/"
 
-  # Copy shared/utils.mjs into the Lambda directory (Requirement 2.5)
-  cp "$SHARED_UTILS" "$BUILD_DIR/utils.mjs"
-  echo "   ✅ Copied shared/utils.mjs"
+  # Copy shared/utils.mjs into a shared/ subdirectory (matches import path ../shared/utils.mjs)
+  mkdir -p "$BUILD_DIR/shared"
+  cp "$SHARED_UTILS" "$BUILD_DIR/shared/utils.mjs"
+  echo "   ✅ Copied shared/utils.mjs → shared/utils.mjs"
 
   # Install npm dependencies if package.json is present
   if [ -f "$BUILD_DIR/package.json" ]; then
