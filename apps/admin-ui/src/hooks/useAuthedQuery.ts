@@ -16,8 +16,8 @@ async function authedFetch(url: string, navigate: ReturnType<typeof useNavigate>
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (res.status === 401) {
-    // Silent refresh
+  if (res.status === 401 || res.status === 403) {
+    // Silent refresh — API Gateway Lambda authorizers return 403 on expired tokens
     try {
       const refreshed = await fetchAuthSession({ forceRefresh: true });
       const newToken = refreshed.tokens?.accessToken?.toString();
@@ -25,6 +25,7 @@ async function authedFetch(url: string, navigate: ReturnType<typeof useNavigate>
       res = await fetch(`${API_BASE}${url}`, {
         headers: { Authorization: `Bearer ${newToken}` },
       });
+      // If still 403 after refresh, it's a real permission error — let it fall through
     } catch {
       navigate('/admin/login');
       throw new Error('Session expired');

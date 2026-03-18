@@ -17,6 +17,13 @@ type DocumentStatus =
   | 'rejected'
   | 'extraction_failed';
 
+type FileUploadStatus = 'uploading' | 'scanning' | 'extracting' | 'ready' | 'rejected' | 'extraction_failed' | 'error';
+
+interface FileUploadState {
+  status: FileUploadStatus;
+  error?: string;
+}
+
 interface Item {
   itemId: string;
   itemName: string;
@@ -56,20 +63,15 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function docStatusMessage(status: DocumentStatus): string {
+function fileStatusLabel(status: FileUploadStatus): string {
   switch (status) {
-    case 'scanning':
-      return labels.itemDetail.uploadStatusScanning;
-    case 'extracting':
-      return labels.itemDetail.uploadStatusExtracting;
-    case 'ready':
-      return labels.itemDetail.uploadStatusReady;
-    case 'rejected':
-      return labels.itemDetail.uploadStatusRejected;
-    case 'extraction_failed':
-      return labels.itemDetail.uploadStatusExtractionFailed;
-    default:
-      return '';
+    case 'uploading': return labels.itemDetail.uploadStatusUploading;
+    case 'scanning': return labels.itemDetail.uploadStatusScanning;
+    case 'extracting': return labels.itemDetail.uploadStatusExtracting;
+    case 'ready': return labels.itemDetail.uploadStatusReady;
+    case 'rejected': return labels.itemDetail.uploadStatusRejected;
+    case 'extraction_failed': return labels.itemDetail.uploadStatusExtractionFailed;
+    case 'error': return labels.itemDetail.uploadStatusError;
   }
 }
 
@@ -93,13 +95,14 @@ export default function ItemDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  // Upload state
-  const [uploadDocStatus, setUploadDocStatus] = useState<DocumentStatus>('none');
+  // Upload state — per-file map: filename → { status, error }
+  const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
   const [isUploading, setIsUploading] = useState(false);
-  const isPolling = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // After auto-save in create mode, we get a real itemId to upload against
   const savedItemId = useRef<string | null>(itemId ?? null);
+  // Track whether the item was auto-saved (so cancel can clean it up)
+  const autoSaved = useRef(false);
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemData, isLoading: itemLoading } = useAuthedQuery<Item>(
@@ -116,7 +119,7 @@ export default function ItemDetail() {
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
-        setUploadDocStatus(itemData.documentStatus);
+        setFileStatuses({ _loaded: { status: itemData.documentStatus as FileUploadStatus } });
       }
     }
   }, [itemData]);
@@ -132,20 +135,25 @@ export default function ItemDetail() {
 
   // ── Cleanup poll on unmount ─────────────────────────────────────────────────
   useEffect(() => {
-    return () => {
-      isPolling.current = false;
-    };
+    return () => { /* polling is promise-based, no cleanup needed */ };
   }, []);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
+  // Whether the current create is triggered by a file upload (suppress navigate)
+  const uploadingCreate = useRef(false);
+
   const createMutation = useAuthedMutation<Item, CreateItemPayload>(
     '/api/manage/items',
     'POST',
     {
       onSuccess: (created) => {
         savedItemId.current = created.itemId;
+        autoSaved.current = true;
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        navigate(`/admin/items/${created.itemId}`);
+        // Only navigate if this wasn't triggered by an upload auto-save
+        if (!uploadingCreate.current) {
+          navigate(`/admin/items/${created.itemId}`);
+        }
       },
       onError: (err) => {
         setFormError(labels.itemDetail.saveError);
@@ -223,85 +231,94 @@ export default function ItemDetail() {
 
   // ── File upload ─────────────────────────────────────────────────────────────
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
 
     setFormError('');
-
-    // In create mode, validate required fields before auto-saving
-    if (!savedItemId.current) {
-      if (!itemName.trim() || !description.trim() || !closeDate || closeDate <= todayIso()) {
-        setFormError('Please fill in the item name, description, and close date before uploading.');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-    }
-
     setIsUploading(true);
-    setUploadDocStatus('scanning');
+
+    // Initialise all files as 'uploading'
+    setFileStatuses((prev) => {
+      const next = { ...prev };
+      for (const f of files) next[f.name] = { status: 'uploading' };
+      return next;
+    });
 
     try {
-      // Auto-save in create mode to get an itemId
+      // Auto-save in create mode to get an itemId — suppress the navigate in onSuccess
       let targetItemId = savedItemId.current;
       if (!targetItemId) {
+        uploadingCreate.current = true;
         const created = await createMutation.mutateAsync({
-          itemName: itemName.trim(),
-          description: description.trim(),
-          closeDate,
+          itemName: itemName.trim() || 'Untitled',
+          description: description.trim() || '(no description)',
+          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
+        uploadingCreate.current = false;
         targetItemId = created.itemId;
-        // savedItemId.current is set in createMutation.onSuccess
       }
 
-      // 1. Get presigned URL via authed fetch with the real itemId
-      const urlResp = await authedMutate(
-        `/api/manage/items/${targetItemId}/upload-url`,
-        'POST',
-        { fileName: file.name, fileSize: file.size },
-        navigate
-      ) as UploadUrlResponse;
-      const uploadUrl = urlResp.data.uploadUrl;
+      // Upload files sequentially
+      for (const file of files) {
+        try {
+          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'uploading' } }));
 
-      // 2. Upload directly to S3 (presigned — no auth header)
-      const putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
-      if (!putRes.ok) throw new Error('Upload failed');
+          const urlResp = await authedMutate(
+            `/api/manage/items/${targetItemId}/upload-url`,
+            'POST',
+            { fileName: file.name, fileSize: file.size },
+            navigate
+          ) as UploadUrlResponse;
 
-      // 3. Poll for documentStatus
-      startPolling(targetItemId);
+          const putRes = await fetch(urlResp.data.uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          });
+          if (!putRes.ok) throw new Error('Upload failed');
+
+          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'scanning' } }));
+          await pollFileStatus(targetItemId, file.name);
+        } catch {
+          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'error' } }));
+        }
+      }
+
+      // Navigate to edit mode after all uploads complete (if we were in create mode)
+      if (!itemId && targetItemId) {
+        navigate(`/admin/items/${targetItemId}`, { replace: true });
+      }
     } catch {
+      uploadingCreate.current = false;
       setFormError(labels.itemDetail.saveError);
-      setUploadDocStatus('none');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
-  function startPolling(targetItemId: string) {
-    isPolling.current = true;
+  async function pollFileStatus(targetItemId: string, fileName: string): Promise<void> {
+    return new Promise((resolve) => {
+      async function poll() {
+        await queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
+        const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
+        const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
 
-    async function poll() {
-      if (!isPolling.current) return;
+        if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
+          setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
+          resolve();
+          return;
+        }
 
-      await queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
-      const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
-      const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
-      setUploadDocStatus(status);
+        if (status === 'extracting') {
+          setFileStatuses((prev) => ({ ...prev, [fileName]: { status: 'extracting' } }));
+        }
 
-      if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
-        isPolling.current = false;
-        return;
+        setTimeout(poll, 2000);
       }
-
       setTimeout(poll, 2000);
-    }
-
-    setTimeout(poll, 2000);
+    });
   }
 
   // ── Delete ──────────────────────────────────────────────────────────────────
@@ -413,26 +430,39 @@ export default function ItemDetail() {
               id="fileUpload"
               className={styles.fileInput}
               accept=".md,.txt,.pdf,.docx"
+              multiple
               onChange={handleFileChange}
               disabled={isUploading || isLocked}
               aria-label={labels.itemDetail.uploadChooseFile}
             />
             <label htmlFor="fileUpload" className={`${styles.fileLabel} ${(isUploading || isLocked) ? styles.fileLabelDisabled : ''}`}>
-              {isUploading ? labels.itemDetail.uploadStatusScanning : labels.itemDetail.uploadChooseFile}
+              {isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
             </label>
 
-            {uploadDocStatus !== 'none' && (
+            {Object.entries(fileStatuses).filter(([name]) => name !== '_loaded').map(([name, state]) => (
+              <div key={name} className={styles.fileStatusRow} aria-live="polite">
+                <span className={styles.fileName}>{name}</span>
+                <span className={`${styles.fileStatusBadge} ${
+                  state.status === 'ready' ? styles.docStatusReady
+                  : state.status === 'rejected' || state.status === 'extraction_failed' || state.status === 'error' ? styles.docStatusError
+                  : styles.docStatusPending
+                }`}>
+                  {fileStatusLabel(state.status)}
+                </span>
+              </div>
+            ))}
+
+            {/* Show loaded status for edit mode when no new uploads */}
+            {fileStatuses['_loaded'] && Object.keys(fileStatuses).length === 1 && (
               <p
                 className={`${styles.docStatus} ${
-                  uploadDocStatus === 'ready'
-                    ? styles.docStatusReady
-                    : uploadDocStatus === 'rejected' || uploadDocStatus === 'extraction_failed'
-                    ? styles.docStatusError
-                    : styles.docStatusPending
+                  fileStatuses['_loaded'].status === 'ready' ? styles.docStatusReady
+                  : fileStatuses['_loaded'].status === 'rejected' || fileStatuses['_loaded'].status === 'extraction_failed' ? styles.docStatusError
+                  : styles.docStatusPending
                 }`}
                 aria-live="polite"
               >
-                {docStatusMessage(uploadDocStatus)}
+                {fileStatusLabel(fileStatuses['_loaded'].status)}
               </p>
             )}
           </div>
@@ -451,7 +481,16 @@ export default function ItemDetail() {
             <button
               type="button"
               className={styles.cancelButton}
-              onClick={() => navigate('/admin/items')}
+              onClick={async () => {
+                // If auto-saved in create mode but user cancels, clean up the item
+                if (!isEditMode && autoSaved.current && savedItemId.current) {
+                  try {
+                    await authedMutate(`/api/manage/items/${savedItemId.current}`, 'DELETE', undefined, navigate);
+                    queryClient.invalidateQueries({ queryKey: ['items'] });
+                  } catch { /* best-effort */ }
+                }
+                navigate('/admin/items');
+              }}
             >
               {labels.itemDetail.cancelButton}
             </button>

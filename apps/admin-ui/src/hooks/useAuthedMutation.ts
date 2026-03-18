@@ -30,7 +30,7 @@ export async function authedMutate(
 
   let res = await fetch(`${API_BASE}${url}`, init);
 
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     try {
       const refreshed = await fetchAuthSession({ forceRefresh: true });
       const newToken = refreshed.tokens?.accessToken?.toString();
@@ -39,6 +39,7 @@ export async function authedMutate(
         ...init,
         headers: { ...init.headers as Record<string, string>, Authorization: `Bearer ${newToken}` },
       });
+      // If still 403 after refresh, it's a real permission error — let it fall through
     } catch {
       navigate('/admin/login');
       throw new Error('Session expired');
