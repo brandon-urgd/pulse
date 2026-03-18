@@ -506,6 +506,42 @@ jobs:
 
           echo "✅ Frontend deployed"
 
+      - name: Register Shield callback
+        run: |
+          set -euo pipefail
+
+          SHIELD_REGISTRATION_ARN=$(aws ssm get-parameter \
+            --name "/urgd/shield/registration_function_arn" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          if [ -z "$SHIELD_REGISTRATION_ARN" ] || [ "$SHIELD_REGISTRATION_ARN" = "None" ]; then
+            echo "❌ Shield registration Lambda ARN not found in SSM (/urgd/shield/registration_function_arn)"
+            exit 1
+          fi
+
+          CALLBACK_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ShieldCallbackLambdaArn`].OutputValue' \
+            --output text)
+
+          if [ -z "$CALLBACK_ARN" ] || [ "$CALLBACK_ARN" = "None" ]; then
+            echo "❌ ShieldCallbackLambdaArn not found in CloudFormation outputs"
+            exit 1
+          fi
+
+          pip3 install boto3 --quiet --disable-pip-version-check
+
+          export CALLBACK_ARN
+          export SHIELD_REGISTRATION_ARN
+          export APP_NAME="pulse"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+
+          python3 scripts/register-with-shield.py
+          echo "✅ Shield registration complete"
+
       - name: Configure AWS credentials (us-east-1 for WAF + CloudFront)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -543,44 +579,6 @@ jobs:
             --if-match "$ETAG" >/dev/null
 
           echo "✅ WAF associated with CloudFront ($WAF_ARN)"
-
-      - name: Register Shield callback
-        run: |
-          set -euo pipefail
-
-          # Fetch Shield registration Lambda ARN from SSM (set by Shield infrastructure)
-          SHIELD_REGISTRATION_ARN=$(aws ssm get-parameter \
-            --name "/urgd/shield/registration_function_arn" \
-            --query 'Parameter.Value' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-
-          if [ -z "$SHIELD_REGISTRATION_ARN" ] || [ "$SHIELD_REGISTRATION_ARN" = "None" ]; then
-            echo "❌ Shield registration Lambda ARN not found in SSM (/urgd/shield/registration_function_arn)"
-            exit 1
-          fi
-
-          # Fetch callback Lambda ARN from CloudFormation outputs (exported by pulse-stack.yaml)
-          CALLBACK_ARN=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`ShieldCallbackLambdaArn`].OutputValue' \
-            --output text)
-
-          if [ -z "$CALLBACK_ARN" ] || [ "$CALLBACK_ARN" = "None" ]; then
-            echo "❌ ShieldCallbackLambdaArn not found in CloudFormation outputs"
-            exit 1
-          fi
-
-          pip3 install boto3 --quiet --disable-pip-version-check
-
-          export CALLBACK_ARN
-          export SHIELD_REGISTRATION_ARN
-          export APP_NAME="pulse"
-          export AWS_REGION="${{ env.AWS_REGION }}"
-
-          python3 scripts/register-with-shield.py
-          echo "✅ Shield registration complete"
 
       - name: Invalidate CloudFront cache
         run: |
