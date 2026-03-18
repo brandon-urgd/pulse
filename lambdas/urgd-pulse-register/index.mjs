@@ -2,7 +2,7 @@
 // POST /api/auth/register → creates Cognito user + triggers createTenant
 
 import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider'
-import { createResponse, errorResponse, log, requireEnv, isValidEmail } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['USER_POOL_ID', 'USER_POOL_CLIENT_ID', 'PUBLIC_SIGNUP', 'CORS_ALLOWED_ORIGINS'])

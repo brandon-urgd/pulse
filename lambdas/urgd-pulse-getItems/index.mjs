@@ -1,7 +1,7 @@
 // ur/gd pulse — Get Items Lambda (S1 stub)
 // GET /api/manage/items → returns empty array (full implementation in S2)
 
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])

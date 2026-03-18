@@ -2,7 +2,7 @@
 // PUT /api/manage/settings → updates displayName and/or preferences.theme
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['TENANTS_TABLE', 'CORS_ALLOWED_ORIGINS'])

@@ -2,7 +2,7 @@
 // Called internally after successful registration to create the tenant record
 
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
