@@ -92,3 +92,4 @@ playwright/.cache/
 tmp/
 temp/
 *.tsbuildinfo
+lambdas/*/shared

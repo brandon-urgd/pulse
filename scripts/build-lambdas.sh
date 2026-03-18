@@ -71,6 +71,8 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
   cp -r "$lambda_dir"/* "$BUILD_DIR/"
 
   # Copy shared/ directory into build dir (matches ./shared/utils.mjs import path per Lambda Standards)
+  # Remove any existing shared symlink first (committed symlinks resolve incorrectly on CI runners)
+  rm -rf "$BUILD_DIR/shared"
   cp -r "$LAMBDAS_DIR/shared" "$BUILD_DIR/shared"
   echo "   ✅ Copied shared/ directory"
 
