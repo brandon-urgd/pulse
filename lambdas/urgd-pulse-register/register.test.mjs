@@ -41,15 +41,15 @@ describe('urgd-pulse-register', () => {
 
   it('returns 201 on valid registration', async () => {
     sendSpy.mockResolvedValue({})
-    const res = await handler(makeEvent({ name: 'Test User', email: 'test@example.com', password: 'Password1!' }))
+    const res = await handler(makeEvent({ name: 'Test User', email: 'test@example.com' }))
     expect(res.statusCode).toBe(201)
-    expect(JSON.parse(res.body).message).toBe('User registered successfully')
-    expect(sendSpy).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(res.body).message).toMatch(/User registered successfully/)
+    expect(sendSpy).toHaveBeenCalledTimes(1)
   })
 
   it('returns 403 when PUBLIC_SIGNUP is false', async () => {
     vi.stubEnv('PUBLIC_SIGNUP', 'false')
-    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com', password: 'Password1!' }))
+    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com' }))
     expect(res.statusCode).toBe(403)
     expect(JSON.parse(res.body).message).toMatch(/not enabled/i)
     expect(sendSpy).not.toHaveBeenCalled()
@@ -59,7 +59,7 @@ describe('urgd-pulse-register', () => {
     const err = new Error('User already exists')
     err.name = 'UsernameExistsException'
     sendSpy.mockRejectedValueOnce(err)
-    const res = await handler(makeEvent({ name: 'Test', email: 'dupe@example.com', password: 'Password1!' }))
+    const res = await handler(makeEvent({ name: 'Test', email: 'dupe@example.com' }))
     expect(res.statusCode).toBe(409)
     expect(JSON.parse(res.body).message).toMatch(/already exists/i)
   })
@@ -76,10 +76,10 @@ describe('urgd-pulse-register', () => {
     expect(JSON.parse(res.body).message).toMatch(/email/i)
   })
 
-  it('returns 400 when password is too short', async () => {
-    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com', password: 'short' }))
-    expect(res.statusCode).toBe(400)
-    expect(JSON.parse(res.body).message).toMatch(/password/i)
+  it('returns 201 when no password is provided (Cognito generates it)', async () => {
+    sendSpy.mockResolvedValue({})
+    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com' }))
+    expect(res.statusCode).toBe(201)
   })
 
   it('returns 400 on invalid JSON body', async () => {
@@ -93,13 +93,13 @@ describe('urgd-pulse-register', () => {
 
   it('returns 500 on unexpected Cognito error', async () => {
     sendSpy.mockRejectedValueOnce(new Error('Service unavailable'))
-    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com', password: 'Password1!' }))
+    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com' }))
     expect(res.statusCode).toBe(500)
   })
 
   it('response always has Content-Type application/json', async () => {
     sendSpy.mockResolvedValue({})
-    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com', password: 'Password1!' }))
+    const res = await handler(makeEvent({ name: 'Test', email: 'test@example.com' }))
     expect(res.headers['Content-Type']).toBe('application/json')
   })
 })

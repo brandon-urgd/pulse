@@ -547,21 +547,40 @@ jobs:
       - name: Register Shield callback
         run: |
           set -euo pipefail
-          QUARANTINE_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`ShieldQuarantineBucketName`].OutputValue' \
-            --output text 2>/dev/null || echo "")
 
-          if [ -z "$QUARANTINE_BUCKET" ] || [ "$QUARANTINE_BUCKET" = "None" ]; then
-            echo "⚠️  ShieldQuarantineBucketName not in outputs — skipping Shield registration"
-            exit 0
+          # Fetch Shield registration Lambda ARN from SSM (set by Shield infrastructure)
+          SHIELD_REGISTRATION_ARN=$(aws ssm get-parameter \
+            --name "/urgd/shield/registration_function_arn" \
+            --query 'Parameter.Value' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          if [ -z "$SHIELD_REGISTRATION_ARN" ] || [ "$SHIELD_REGISTRATION_ARN" = "None" ]; then
+            echo "❌ Shield registration Lambda ARN not found in SSM (/urgd/shield/registration_function_arn)"
+            exit 1
           fi
 
-          python3 scripts/register-with-shield.py \
-            --lambda-arn "$CF_ShieldCallbackLambdaArn" \
-            --bucket-name "$QUARANTINE_BUCKET" \
-            --environment "$ENVIRONMENT"
+          # Fetch callback Lambda ARN from CloudFormation outputs (exported by pulse-stack.yaml)
+          CALLBACK_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ShieldCallbackLambdaArn`].OutputValue' \
+            --output text)
+
+          if [ -z "$CALLBACK_ARN" ] || [ "$CALLBACK_ARN" = "None" ]; then
+            echo "❌ ShieldCallbackLambdaArn not found in CloudFormation outputs"
+            exit 1
+          fi
+
+          pip3 install boto3 --quiet --disable-pip-version-check
+
+          export CALLBACK_ARN
+          export SHIELD_REGISTRATION_ARN
+          export APP_NAME="pulse"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+
+          python3 scripts/register-with-shield.py
+          echo "✅ Shield registration complete"
 
       - name: Invalidate CloudFront cache
         run: |

@@ -17,35 +17,19 @@
   margin: 0;
 }
 
-.newItemWrapper {
-  position: relative;
-  display: inline-block;
-}
-
 .newItemButton {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.newItemButton:hover + .tooltip,
-.newItemButton:focus + .tooltip {
-  display: block;
-}
-
-.tooltip {
-  display: none;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  background: var(--color-text-primary);
+  cursor: pointer;
+  background: var(--color-interactive);
   color: var(--color-text-inverse);
+  border: none;
   font-size: var(--font-size-sm);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  z-index: 10;
+  font-weight: 500;
+}
+
+.newItemButton:hover {
+  background: var(--color-interactive-hover);
 }
 
 .emptyState {
@@ -80,34 +64,91 @@
   border: 1px solid var(--color-border);
   border-left-width: 4px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: var(--space-4);
   background: var(--color-surface);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.itemCard:hover {
+  box-shadow: var(--shadow-md);
 }
 
 /* Status border colors */
-.status-draft {
+.statusDraft {
   border-left-color: var(--color-status-draft);
 }
 
-.status-active {
-  border-left-color: var(--color-status-active);
+.statusActive {
+  border-left-color: var(--color-accent-pulse-subtle);
 }
 
-.status-closed {
+.statusClosed {
   border-left-color: var(--color-status-closed);
 }
 
-.status-revised {
+.statusRevised {
   border-left-color: var(--color-status-revised);
+}
+
+.itemMain {
+  flex: 1;
+  min-width: 0;
 }
 
 .itemName {
   font-weight: 500;
+  display: block;
+  margin-bottom: var(--space-1);
 }
 
-.itemStatus {
+.descriptionExcerpt {
+  margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.statusBadge.statusActive {
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse-hover);
+  border-left: none;
+}
+
+.statusBadge.statusRevised {
+  background: #e6f9ec;
+  color: #2f9e44;
+  border-left: none;
+}
+
+.sessionCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.closeDate {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }

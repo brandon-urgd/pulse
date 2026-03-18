@@ -6,6 +6,7 @@ import AdminLayout from './layouts/AdminLayout';
 import SplashEntry from './pages/SplashEntry';
 import Welcome from './pages/Welcome';
 import Items from './pages/Items';
+import ItemDetail from './pages/ItemDetail';
 import Settings from './pages/Settings';
 
 configureAmplify();
@@ -50,6 +51,8 @@ export default function App() {
           >
             <Route index element={<Navigate to="/admin/items" replace />} />
             <Route path="items" element={<Items />} />
+            <Route path="items/new" element={<ItemDetail />} />
+            <Route path="items/:itemId" element={<ItemDetail />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 

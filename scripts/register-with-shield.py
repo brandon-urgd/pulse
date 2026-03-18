@@ -2,135 +2,85 @@
 """
 register-with-shield.py — Register the Pulse Shield callback Lambda with the ur/gd Shield service.
 
-Registers the shieldCallback Lambda ARN so that the Shield malware scanning
-pipeline can invoke it when a GuardDuty scan completes on the quarantine bucket.
+Called automatically by the CI/CD pipeline (deploy-pulse.yml) after every CloudFormation
+deployment. Invokes the Shield registration Lambda via boto3 so that Shield's EventBridge
+rule routes GuardDuty scan results to the correct Pulse callback Lambda for this environment.
 
-Usage:
-    python3 scripts/register-with-shield.py \\
-        --lambda-arn arn:aws:lambda:us-west-2:123456789012:function:urgd-pulse-shieldCallback-dev \\
-        --bucket-name urgd-pulse-quarantine-dev \\
-        --environment dev
+This script must never be run manually — it is always invoked by the pipeline.
 
-Environment variables:
-    SHIELD_REGISTRATION_URL  — Shield service registration endpoint (required)
+Environment variables (set by the workflow):
+    CALLBACK_ARN             — ARN of urgd-pulse-shieldCallback-{env} (from CF output)
+    SHIELD_REGISTRATION_ARN  — ARN of urgd-shield-registration-{env} (from SSM)
+    APP_NAME                 — "pulse"
+    AWS_REGION               — "us-west-2"
 
-Requirements: 4.2
+Requirements: 4.2, 5.3
 """
 
-import argparse
 import json
 import os
 import sys
-import urllib.request
-import urllib.error
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Register the Pulse Shield callback Lambda with the ur/gd Shield service"
-    )
-    parser.add_argument(
-        "--lambda-arn",
-        required=True,
-        help="ARN of the urgd-pulse-shieldCallback Lambda function",
-    )
-    parser.add_argument(
-        "--bucket-name",
-        required=True,
-        help="Name of the Shield quarantine S3 bucket",
-    )
-    parser.add_argument(
-        "--environment",
-        required=True,
-        choices=["dev", "staging", "prod"],
-        help="Deployment environment",
-    )
-    return parser.parse_args()
-
-
-def get_registration_url() -> str:
-    url = os.environ.get("SHIELD_REGISTRATION_URL", "").strip()
-    if not url:
-        print(
-            "❌ SHIELD_REGISTRATION_URL environment variable is not set",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return url
-
-
-def register(lambda_arn: str, bucket_name: str, environment: str, registration_url: str) -> None:
-    payload = {
-        "app": "pulse",
-        "environment": environment,
-        "callbackLambdaArn": lambda_arn,
-        "quarantineBucket": bucket_name,
-    }
-
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        registration_url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "urgd-pulse-deploy/1.0",
-        },
-    )
-
-    print(f"🔗 Registering Shield callback with: {registration_url}")
-    print(f"   Lambda ARN:  {lambda_arn}")
-    print(f"   Bucket:      {bucket_name}")
-    print(f"   Environment: {environment}")
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            status = response.status
-            response_body = response.read().decode("utf-8")
-
-            if status in (200, 201, 204):
-                print(f"✅ Shield registration successful (HTTP {status})")
-                if response_body:
-                    try:
-                        data = json.loads(response_body)
-                        print(f"   Response: {json.dumps(data, indent=2)}")
-                    except json.JSONDecodeError:
-                        print(f"   Response: {response_body}")
-            else:
-                print(
-                    f"❌ Shield registration returned unexpected status: HTTP {status}",
-                    file=sys.stderr,
-                )
-                print(f"   Response: {response_body}", file=sys.stderr)
-                sys.exit(1)
-
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8") if e.fp else ""
-        print(
-            f"❌ Shield registration failed: HTTP {e.code} {e.reason}",
-            file=sys.stderr,
-        )
-        if error_body:
-            print(f"   Response: {error_body}", file=sys.stderr)
-        sys.exit(1)
-
-    except urllib.error.URLError as e:
-        print(
-            f"❌ Shield registration request failed: {e.reason}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+import boto3
 
 
 def main() -> None:
-    args = parse_args()
-    registration_url = get_registration_url()
-    register(
-        lambda_arn=args.lambda_arn,
-        bucket_name=args.bucket_name,
-        environment=args.environment,
-        registration_url=registration_url,
-    )
+    callback_arn = os.environ.get("CALLBACK_ARN", "").strip()
+    shield_registration_arn = os.environ.get("SHIELD_REGISTRATION_ARN", "").strip()
+    app_name = os.environ.get("APP_NAME", "pulse").strip()
+    region = os.environ.get("AWS_REGION", "us-west-2").strip()
+
+    if not callback_arn:
+        print("❌ CALLBACK_ARN environment variable is not set", file=sys.stderr)
+        sys.exit(1)
+
+    if not shield_registration_arn:
+        print("❌ SHIELD_REGISTRATION_ARN environment variable is not set", file=sys.stderr)
+        sys.exit(1)
+
+    payload = {
+        "action": "register",
+        "app_name": app_name,
+        "callback_lambda_arn": callback_arn,
+    }
+
+    print(f"🔗 Registering {app_name} with Shield...", file=sys.stderr)
+    print(f"   Callback ARN:  {callback_arn}", file=sys.stderr)
+    print(f"   Shield Lambda: {shield_registration_arn}", file=sys.stderr)
+
+    lambda_client = boto3.client("lambda", region_name=region)
+
+    try:
+        response = lambda_client.invoke(
+            FunctionName=shield_registration_arn,
+            InvocationType="RequestResponse",
+            Payload=json.dumps(payload).encode("utf-8"),
+        )
+    except Exception as e:
+        print(f"❌ Failed to invoke Shield registration Lambda: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    raw = response["Payload"].read()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        print(f"❌ Shield registration returned non-JSON response: {raw!r}", file=sys.stderr)
+        sys.exit(1)
+
+    # Shield registration Lambda returns { body: { registration_successful: true } }
+    body = result.get("body", {})
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except json.JSONDecodeError:
+            body = {}
+
+    if body.get("registration_successful"):
+        print("✅ Shield registration successful", file=sys.stderr)
+        sys.exit(0)
+    else:
+        print(f"❌ Shield registration failed: {json.dumps(result)}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
