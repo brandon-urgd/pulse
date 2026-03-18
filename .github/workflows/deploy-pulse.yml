@@ -252,6 +252,7 @@ jobs:
               {"ParameterKey": "AppleKeyId",                 "ParameterValue": os.environ["APPLE_KEY_ID"]},
               {"ParameterKey": "AppleClientId",              "ParameterValue": os.environ["APPLE_CLIENT_ID"]},
               {"ParameterKey": "ApplePrivateKey",            "ParameterValue": os.environ["APPLE_PRIVATE_KEY"]},
+              {"ParameterKey": "PublicSignup",               "ParameterValue": "true" if "$env" == "dev" else "false"},
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
               {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
           ]
