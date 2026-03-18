@@ -11,7 +11,14 @@
     "build:admin-ui": "npm run build --workspace=apps/admin-ui",
     "build:session-ui": "npm run build --workspace=apps/session-ui",
     "dev:admin-ui": "npm run dev --workspace=apps/admin-ui",
-    "dev:session-ui": "npm run dev --workspace=apps/session-ui"
+    "dev:session-ui": "npm run dev --workspace=apps/session-ui",
+    "test": "vitest --run",
+    "test:coverage": "vitest --run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.0",
+    "fast-check": "^4.6.0",
+    "vitest": "^4.1.0"
   },
   "engines": {
     "node": ">=22.0.0",
