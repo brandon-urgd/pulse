@@ -2642,7 +2642,6 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn:
       - PulseShieldCallbackLogGroup
-      - PulseExtractTextFunction
     Properties:
       FunctionName: !Sub 'urgd-pulse-shieldCallback-${Environment}'
       Runtime: nodejs22.x
