@@ -151,7 +151,7 @@ export const handler = async (event) => {
       expressionValues[':closeDate'] = { S: closeDate }
     }
 
-    // Handle content update — store in S3
+    // Handle content update — store in S3 and DynamoDB
     if (content !== undefined && typeof content === 'string' && content.length > 0) {
       const s3Key = `pulse/${tenantId}/items/${itemId}/document.md`
       await s3.send(new PutObjectCommand({
@@ -163,7 +163,10 @@ export const handler = async (event) => {
       updateParts.push('#documentStatus = :documentStatus')
       expressionNames['#documentStatus'] = 'documentStatus'
       expressionValues[':documentStatus'] = { S: 'ready' }
-      log('info', 'UpdateItem: stored content in S3', { requestId, tenantId, itemId })
+      updateParts.push('#content = :content')
+      expressionNames['#content'] = 'content'
+      expressionValues[':content'] = { S: content }
+      log('info', 'UpdateItem: stored content in S3 and DynamoDB', { requestId, tenantId, itemId })
     }
 
     const updateResult = await dynamo.send(new UpdateItemCommand({

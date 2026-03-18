@@ -1,6 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { labels } from '../config/labels-registry';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,7 +15,25 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
 
   if (isLoading) {
-    return <div aria-live="polite">{labels.protectedRoute.redirecting}</div>;
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--color-bg)',
+      }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          border: '3px solid var(--color-border)',
+          borderTopColor: 'var(--color-accent-pulse)',
+          animation: 'pulse-spin 0.7s linear infinite',
+        }} />
+        <style>{`@keyframes pulse-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   if (!user) {

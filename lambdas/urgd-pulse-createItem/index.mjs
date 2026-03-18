@@ -137,6 +137,10 @@ export const handler = async (event) => {
       dynamoItem.documentStatus = { NULL: true }
     }
 
+    if (content && typeof content === 'string' && content.length > 0) {
+      dynamoItem.content = { S: content }
+    }
+
     await dynamo.send(new PutItemCommand({
       TableName: process.env.ITEMS_TABLE,
       Item: dynamoItem,

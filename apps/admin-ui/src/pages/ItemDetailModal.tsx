@@ -114,7 +114,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
-        setFileStatuses({ _loaded: { status: itemData.documentStatus as FileUploadStatus } });
+        // Extract filename from documentKey if available, otherwise use a generic key
+        const fileName = itemData.documentKey
+          ? itemData.documentKey.split('/').pop() ?? '_loaded'
+          : '_loaded';
+        setFileStatuses({ [fileName]: { status: itemData.documentStatus as FileUploadStatus } });
       }
     }
   }, [itemData]);
@@ -439,7 +443,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                       {isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
                     </label>
 
-                    {Object.entries(fileStatuses).filter(([name]) => name !== '_loaded').map(([name, state]) => (
+                    {Object.entries(fileStatuses).map(([name, state]) => (
                       <div key={name} className={styles.fileStatusRow} aria-live="polite">
                         <span className={styles.fileName}>{name}</span>
                         <span className={`${styles.fileStatusBadge} ${
@@ -451,19 +455,6 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         </span>
                       </div>
                     ))}
-
-                    {fileStatuses['_loaded'] && Object.keys(fileStatuses).length === 1 && (
-                      <p
-                        className={`${styles.docStatus} ${
-                          fileStatuses['_loaded'].status === 'ready' ? styles.docStatusReady
-                          : fileStatuses['_loaded'].status === 'rejected' || fileStatuses['_loaded'].status === 'extraction_failed' ? styles.docStatusError
-                          : styles.docStatusPending
-                        }`}
-                        aria-live="polite"
-                      >
-                        {fileStatusLabel(fileStatuses['_loaded'].status)}
-                      </p>
-                    )}
                   </div>
                 </div>
 
