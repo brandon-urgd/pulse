@@ -566,6 +566,9 @@ Resources:
 
   PulseUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn:
+      - PulseAppleIdProvider
+      - PulseGoogleIdProvider
     Properties:
       ClientName: !Sub 'urgd-pulse-client-${Environment}'
       UserPoolId: !Ref PulseUserPool
