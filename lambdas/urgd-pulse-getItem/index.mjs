@@ -26,6 +26,28 @@ function unmarshal(item) {
   return result
 }
 
+/**
+ * Normalize a raw unmarshalled item to guarantee all expected fields are present.
+ */
+function normalizeItem(raw) {
+  if (!raw) return null
+  return {
+    tenantId: raw.tenantId ?? '',
+    itemId: raw.itemId ?? '',
+    itemName: raw.itemName ?? '',
+    description: raw.description ?? '',
+    closeDate: raw.closeDate ?? '',
+    status: raw.status ?? 'draft',
+    documentStatus: raw.documentStatus ?? 'none',
+    sessionCount: typeof raw.sessionCount === 'number' ? raw.sessionCount : 0,
+    createdAt: raw.createdAt ?? '',
+    updatedAt: raw.updatedAt ?? '',
+    ...(raw.content !== undefined ? { content: raw.content } : {}),
+    ...(raw.documentKey !== undefined ? { documentKey: raw.documentKey } : {}),
+    ...(raw.extractedKey !== undefined ? { extractedKey: raw.extractedKey } : {}),
+  }
+}
+
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -57,7 +79,7 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
-    const item = unmarshal(result.Item)
+    const item = normalizeItem(unmarshal(result.Item))
 
     // Verify item belongs to this tenant (belt-and-suspenders)
     if (item.tenantId !== tenantId) {

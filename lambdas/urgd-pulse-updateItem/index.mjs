@@ -29,6 +29,28 @@ function unmarshal(item) {
 }
 
 /**
+ * Normalize a raw unmarshalled item to guarantee all expected fields are present.
+ */
+function normalizeItem(raw) {
+  if (!raw) return null
+  return {
+    tenantId: raw.tenantId ?? '',
+    itemId: raw.itemId ?? '',
+    itemName: raw.itemName ?? '',
+    description: raw.description ?? '',
+    closeDate: raw.closeDate ?? '',
+    status: raw.status ?? 'draft',
+    documentStatus: raw.documentStatus ?? 'none',
+    sessionCount: typeof raw.sessionCount === 'number' ? raw.sessionCount : 0,
+    createdAt: raw.createdAt ?? '',
+    updatedAt: raw.updatedAt ?? '',
+    ...(raw.content !== undefined ? { content: raw.content } : {}),
+    ...(raw.documentKey !== undefined ? { documentKey: raw.documentKey } : {}),
+    ...(raw.extractedKey !== undefined ? { extractedKey: raw.extractedKey } : {}),
+  }
+}
+
+/**
  * Validate that a date string is a valid ISO date in the future.
  */
 function isValidFutureDate(dateStr) {
@@ -156,7 +178,7 @@ export const handler = async (event) => {
       ReturnValues: 'ALL_NEW',
     }))
 
-    const updatedItem = unmarshal(updateResult.Attributes)
+    const updatedItem = normalizeItem(unmarshal(updateResult.Attributes))
 
     log('info', 'UpdateItem: item updated', { requestId, tenantId, itemId })
 

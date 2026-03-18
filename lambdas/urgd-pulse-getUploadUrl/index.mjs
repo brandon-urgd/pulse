@@ -1,7 +1,7 @@
 // ur/gd pulse — Get Upload URL Lambda
 // POST /api/manage/items/{itemId}/upload-url → validates file type/size, returns presigned PUT URL
 
-import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client } from '@aws-sdk/client-s3'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -69,6 +69,16 @@ export const handler = async (event) => {
   }
 
   try {
+    // Verify item exists and belongs to this tenant before issuing a presigned URL
+    const itemResult = await dynamo.send(new GetItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+    }))
+    if (!itemResult.Item) {
+      log('warn', 'GetUploadUrl: item not found', { requestId, tenantId, itemId })
+      return errorResponse(404, 'Item not found', {}, origin)
+    }
+
     const key = `pulse/${tenantId}/items/${itemId}/${fileName}`
 
     // Generate presigned PUT URL

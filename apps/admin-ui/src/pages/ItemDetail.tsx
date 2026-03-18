@@ -99,6 +99,7 @@ export default function ItemDetail() {
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   // After auto-save in create mode, we get a real itemId to upload against
   const savedItemId = useRef<string | null>(itemId ?? null);
   // Track whether the item was auto-saved (so cancel can clean it up)
@@ -135,7 +136,8 @@ export default function ItemDetail() {
 
   // ── Cleanup poll on unmount ─────────────────────────────────────────────────
   useEffect(() => {
-    return () => { /* polling is promise-based, no cleanup needed */ };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
@@ -301,21 +303,31 @@ export default function ItemDetail() {
   async function pollFileStatus(targetItemId: string, fileName: string): Promise<void> {
     return new Promise((resolve) => {
       async function poll() {
-        await queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
-        const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
-        const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
+        if (!mountedRef.current) { resolve(); return; }
 
-        if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
-          setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
-          resolve();
-          return;
+        try {
+          // refetchQueries waits for the fetch to complete — no stale-read race
+          await queryClient.refetchQueries({ queryKey: ['item', targetItemId] });
+          const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
+          const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
+
+          if (!mountedRef.current) { resolve(); return; }
+
+          if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
+            setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
+            resolve();
+            return;
+          }
+
+          if (status === 'extracting') {
+            setFileStatuses((prev) => ({ ...prev, [fileName]: { status: 'extracting' } }));
+          }
+        } catch {
+          // network error during poll — keep trying while mounted
         }
 
-        if (status === 'extracting') {
-          setFileStatuses((prev) => ({ ...prev, [fileName]: { status: 'extracting' } }));
-        }
-
-        setTimeout(poll, 2000);
+        if (mountedRef.current) setTimeout(poll, 2000);
+        else resolve();
       }
       setTimeout(poll, 2000);
     });

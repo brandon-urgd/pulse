@@ -26,6 +26,29 @@ function unmarshal(item) {
   return result
 }
 
+/**
+ * Normalize a raw unmarshalled item to guarantee all expected fields are present.
+ * Prevents undefined field access on the frontend.
+ */
+function normalizeItem(raw) {
+  if (!raw) return null
+  return {
+    tenantId: raw.tenantId ?? '',
+    itemId: raw.itemId ?? '',
+    itemName: raw.itemName ?? '',
+    description: raw.description ?? '',
+    closeDate: raw.closeDate ?? '',
+    status: raw.status ?? 'draft',
+    documentStatus: raw.documentStatus ?? 'none',
+    sessionCount: typeof raw.sessionCount === 'number' ? raw.sessionCount : 0,
+    createdAt: raw.createdAt ?? '',
+    updatedAt: raw.updatedAt ?? '',
+    ...(raw.content !== undefined ? { content: raw.content } : {}),
+    ...(raw.documentKey !== undefined ? { documentKey: raw.documentKey } : {}),
+    ...(raw.extractedKey !== undefined ? { extractedKey: raw.extractedKey } : {}),
+  }
+}
+
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -47,7 +70,7 @@ export const handler = async (event) => {
       },
     }))
 
-    const items = (result.Items ?? []).map(unmarshal)
+    const items = (result.Items ?? []).map(i => normalizeItem(unmarshal(i)))
 
     // Sort by updatedAt descending
     items.sort((a, b) => {
