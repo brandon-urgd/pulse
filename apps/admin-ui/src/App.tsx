@@ -3,8 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { configureAmplify } from './config/amplify';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AdminLayout from './layouts/AdminLayout';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import SplashEntry from './pages/SplashEntry';
 import Welcome from './pages/Welcome';
 import Items from './pages/Items';
 import Settings from './pages/Settings';
@@ -25,9 +24,10 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
-          <Route path="/admin/login" element={<Login />} />
-          <Route path="/admin/register" element={<Register />} />
+          {/* Entry point — splash, login, register all in one */}
+          <Route path="/" element={<SplashEntry />} />
+          <Route path="/admin/login" element={<Navigate to="/" replace />} />
+          <Route path="/admin/register" element={<Navigate to="/" replace />} />
 
           {/* Protected — standalone (no layout shell) */}
           <Route
@@ -53,9 +53,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
           </Route>
 
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/admin/login" replace />} />
-          <Route path="*" element={<Navigate to="/admin/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

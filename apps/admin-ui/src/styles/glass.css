@@ -1,0 +1,151 @@
+/* Pulse glass card — entry point styling */
+
+.pulse-glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transition: box-shadow 0.3s ease;
+}
+
+[data-theme='dark'] .pulse-glass-card {
+  background: rgba(37, 38, 43, 0.78);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.pulse-entry-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-pulse-subtle) 0%,
+    var(--color-bg) 60%
+  );
+}
+
+[data-theme='dark'] .pulse-entry-bg {
+  background: linear-gradient(
+    135deg,
+    rgba(122, 158, 135, 0.12) 0%,
+    var(--color-bg) 60%
+  );
+}
+
+/* Input */
+.pulse-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: var(--font-size-base);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.pulse-input:focus {
+  border-color: var(--color-accent-pulse);
+  box-shadow: 0 0 0 3px rgba(122, 158, 135, 0.18);
+}
+
+.pulse-input[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+[data-theme='dark'] .pulse-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border);
+}
+
+/* Buttons */
+.pulse-btn {
+  width: 100%;
+  padding: 11px 16px;
+  font-size: var(--font-size-base);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-primary);
+}
+
+.pulse-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.pulse-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pulse-btn-primary {
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border-color: var(--color-interactive);
+}
+
+.pulse-btn-primary:hover:not(:disabled) {
+  background: var(--color-interactive-hover);
+  border-color: var(--color-interactive-hover);
+}
+
+[data-theme='dark'] .pulse-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+[data-theme='dark'] .pulse-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .pulse-btn-primary {
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+}
+
+/* Ghost back button */
+.pulse-btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  transition: color 0.2s;
+}
+
+.pulse-btn-ghost:hover {
+  color: var(--color-text-secondary);
+}
+
+/* State transitions */
+.pulse-card-inner {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.pulse-card-inner.entering {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.pulse-card-inner.entered {
+  opacity: 1;
+  transform: translateY(0);
+}

@@ -859,7 +859,7 @@ Resources:
             Preload: true
             Override: true
           ContentSecurityPolicy:
-            ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://cognito-idp.us-west-2.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none';"
+            ContentSecurityPolicy: !Sub "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://${ApiDomainName} https://cognito-idp.${AWS::Region}.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none';"
             Override: true
 
   PulseCloudFrontDistribution:

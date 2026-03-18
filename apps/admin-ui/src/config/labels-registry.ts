@@ -1,6 +1,17 @@
 // All user-facing strings — no hardcoded text in components
 
 export const labels = {
+  // Splash entry
+  splash: {
+    pulseCodeLabel: 'Pulse code',
+    pulseCodePlaceholder: 'Enter your pulse code',
+    pulseCodeError: "That code doesn\u2019t look right. Check your invitation email.",
+    joinButton: 'Join session',
+    loginButton: 'Log in',
+    signUpButton: 'Sign up',
+    backButton: 'Back',
+  },
+
   // Auth — Login
   login: {
     title: 'Sign in to Pulse',

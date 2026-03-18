@@ -455,7 +455,7 @@ jobs:
           export VITE_USER_POOL_ID="$CF_UserPoolId"
           export VITE_USER_POOL_CLIENT_ID="$CF_UserPoolClientId"
           export VITE_COGNITO_DOMAIN="$CF_CognitoDomain"
-          export VITE_API_BASE_URL="https://$CF_ApiBaseUrl"
+          export VITE_API_BASE_URL="$CF_ApiBaseUrl"
 
           npm run build --workspace=apps/admin-ui
           npm run build --workspace=apps/session-ui
@@ -481,16 +481,16 @@ jobs:
           DIST_DIR=apps/admin-ui/dist S3_PREFIX=admin \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
+          # Also serve admin-ui from root so / is the entry point
+          aws s3 cp apps/admin-ui/dist/index.html \
+            "s3://${CF_FrontendBucketName}/index.html" \
+            --cache-control "no-cache, max-age=0, must-revalidate" \
+            --region ${{ env.AWS_REGION }}
+
           DIST_DIR=apps/session-ui/dist S3_PREFIX=s \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
-          if [ -f apps/landing/index.html ]; then
-            aws s3 cp apps/landing/index.html \
-              "s3://${CF_FrontendBucketName}/index.html" \
-              --cache-control "no-cache, max-age=0, must-revalidate" \
-              --region ${{ env.AWS_REGION }}
-            echo "✅ Landing page deployed"
-          fi
+          echo "✅ Frontend deployed"
 
       - name: Configure AWS credentials (us-east-1 for WAF + CloudFront)
         uses: aws-actions/configure-aws-credentials@v4
