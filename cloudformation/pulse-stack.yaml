@@ -61,6 +61,37 @@ Parameters:
     Default: lambda-packages/urgd-pulse-sessionAuth/latest.zip
     Description: S3 key for urgd-pulse-sessionAuth Lambda ZIP
 
+  RegisterCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-register/latest.zip
+    Description: S3 key for urgd-pulse-register Lambda ZIP
+
+  CreateTenantCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-createTenant/latest.zip
+    Description: S3 key for urgd-pulse-createTenant Lambda ZIP
+
+  GetSettingsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getSettings/latest.zip
+    Description: S3 key for urgd-pulse-getSettings Lambda ZIP
+
+  UpdateSettingsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-updateSettings/latest.zip
+    Description: S3 key for urgd-pulse-updateSettings Lambda ZIP
+
+  GetItemsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getItems/latest.zip
+    Description: S3 key for urgd-pulse-getItems Lambda ZIP
+
+  PublicSignup:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether public self-registration is enabled
+
   AppleClientId:
     Type: String
     Default: ''
@@ -132,16 +163,31 @@ Mappings:
       BedrockHealth: 3
       CognitoAuth: 3
       SessionAuth: 3
+      Register: 3
+      CreateTenant: 3
+      GetSettings: 3
+      UpdateSettings: 3
+      GetItems: 3
     staging:
       Health: 5
       BedrockHealth: 5
       CognitoAuth: 5
       SessionAuth: 5
+      Register: 5
+      CreateTenant: 5
+      GetSettings: 5
+      UpdateSettings: 5
+      GetItems: 5
     prod:
       Health: 5
       BedrockHealth: 5
       CognitoAuth: 25
       SessionAuth: 15
+      Register: 5
+      CreateTenant: 5
+      GetSettings: 10
+      UpdateSettings: 10
+      GetItems: 10
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -585,6 +631,10 @@ Resources:
       - PulseHealthMethod
       - PulseBedrockHealthMethod
       - PulseOptionsMethod
+      - PulseRegisterMethod
+      - PulseGetSettingsMethod
+      - PulsePutSettingsMethod
+      - PulseGetItemsMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -1342,6 +1392,552 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S1: CloudWatch Log Groups
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseRegisterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-register-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseCreateTenantLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-createTenant-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetSettingsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getSettings-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseUpdateSettingsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-updateSettings-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetItemsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getItems-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S1: IAM Execution Roles
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseRegisterFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-register-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndCognito
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                Resource: !GetAtt PulseUserPool.Arn
+
+  PulseCreateTenantFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-createTenant-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+
+  PulseGetSettingsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getSettings-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+
+  PulseUpdateSettingsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-updateSettings-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+
+  PulseGetItemsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getItems-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt PulseItemsTable.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S1: Lambda Functions
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseRegisterFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseRegisterLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-register-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseRegisterFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref RegisterCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, Register]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref PulseUserPool
+          USER_POOL_CLIENT_ID: !Ref PulseUserPoolClient
+          PUBLIC_SIGNUP: !Ref PublicSignup
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseRegisterFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseRegisterFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseCreateTenantFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCreateTenantLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-createTenant-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCreateTenantFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CreateTenantCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CreateTenant]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetSettingsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetSettingsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getSettings-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetSettingsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetSettingsCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetSettings]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetSettingsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetSettingsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseUpdateSettingsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseUpdateSettingsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-updateSettings-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseUpdateSettingsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref UpdateSettingsCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, UpdateSettings]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseUpdateSettingsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseUpdateSettingsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetItemsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetItemsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getItems-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetItemsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetItemsCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetItems]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetItemsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetItemsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S1: API Gateway Resources — /api/auth/register, /api/manage/settings, /api/manage/items
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # /api
+  PulseApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !GetAtt PulseApiGateway.RootResourceId
+      PathPart: api
+
+  # /api/auth
+  PulseAuthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: auth
+
+  # /api/auth/register
+  PulseAuthRegisterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseAuthResource
+      PathPart: register
+
+  PulseRegisterMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseAuthRegisterResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseRegisterFunction.Arn}/invocations'
+
+  # /api/manage
+  PulseManageResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: manage
+
+  # /api/manage/settings
+  PulseManageSettingsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageResource
+      PathPart: settings
+
+  PulseGetSettingsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageSettingsResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetSettingsFunction.Arn}/invocations'
+
+  PulsePutSettingsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageSettingsResource
+      HttpMethod: PUT
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseUpdateSettingsFunction.Arn}/invocations'
+
+  # /api/manage/items
+  PulseManageItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageResource
+      PathPart: items
+
+  PulseGetItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemsResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetItemsFunction.Arn}/invocations'
 
 
 # ─── Outputs ──────────────────────────────────────────────────────────────────

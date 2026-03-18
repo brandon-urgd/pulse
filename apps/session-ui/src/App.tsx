@@ -1,8 +1,13 @@
-// S0 shell — session routing implemented in S1
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import SessionNotFound from './pages/SessionNotFound'
+
 export default function App() {
   return (
-    <main>
-      <p>We couldn't find that session.</p>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/s/*" element={<SessionNotFound />} />
+        <Route path="*" element={<SessionNotFound />} />
+      </Routes>
+    </BrowserRouter>
   )
 }

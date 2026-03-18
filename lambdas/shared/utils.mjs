@@ -101,3 +101,14 @@ export const sanitizeString = (str, maxLength = 255) => {
 
 export const isValidStringLength = (str, min = 1, max = 255) =>
   typeof str === 'string' && str.length >= min && str.length <= max
+
+/**
+ * Fail-fast env var validation — throws at module load time if any required var is missing.
+ */
+export const requireEnv = (names) => {
+  for (const key of names) {
+    if (!process.env[key]) {
+      throw new Error(`Missing required env var: ${key}`)
+    }
+  }
+}

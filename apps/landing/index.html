@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pulse — ur/gd Studios</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --color-bg: #0f0f0f;
+      --color-surface: #1a1a1a;
+      --color-border: #2a2a2a;
+      --color-text: #e8e8e8;
+      --color-text-muted: #888;
+      --color-accent: #7C9E8A;
+      --color-accent-hover: #6b8d79;
+      --color-error: #e07070;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .wordmark {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--color-accent);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+
+    .tagline {
+      color: var(--color-text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--color-text-muted);
+      font-size: 0.75rem;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--color-border);
+    }
+
+    /* Pulse code form */
+    .pulse-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .pulse-input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .pulse-input {
+      flex: 1;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      color: var(--color-text);
+      font-family: var(--font-sans);
+      font-size: 1rem;
+      padding: 0.625rem 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .pulse-input::placeholder {
+      text-transform: none;
+      letter-spacing: normal;
+      color: var(--color-text-muted);
+    }
+
+    .pulse-input:focus {
+      border-color: var(--color-accent);
+    }
+
+    .pulse-input[aria-invalid="true"] {
+      border-color: var(--color-error);
+    }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      padding: 0.625rem 1.25rem;
+      transition: background-color 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--color-accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-accent-hover);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--color-border);
+      color: var(--color-text);
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .error-message {
+      color: var(--color-error);
+      font-size: 0.8125rem;
+      min-height: 1.25rem;
+    }
+
+    .signup-link {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      color: var(--color-text-muted);
+    }
+
+    .signup-link a {
+      color: var(--color-accent);
+      text-decoration: none;
+    }
+
+    .signup-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Hidden by default; deploy script enables via data-public-signup="true" on <body> */
+    [data-public-signup] .signup-link {
+      display: none;
+    }
+
+    body[data-public-signup="true"] .signup-link {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="wordmark">pulse</div>
+    <p class="tagline">Structured feedback, powered by AI.</p>
+
+    <div class="card">
+      <!-- Path 1: Pulse code entry -->
+      <form class="pulse-form" id="pulse-form" novalidate>
+        <div class="pulse-input-row">
+          <label for="pulse-code" class="sr-only">Pulse code</label>
+          <input
+            type="text"
+            id="pulse-code"
+            name="pulseCode"
+            class="pulse-input"
+            placeholder="Enter your code"
+            maxlength="8"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-label="Pulse code"
+            aria-describedby="pulse-code-error"
+            aria-required="true"
+          />
+          <button type="submit" class="btn btn-primary">Go</button>
+        </div>
+        <div
+          id="pulse-code-error"
+          class="error-message"
+          role="alert"
+          aria-live="polite"
+          aria-atomic="true"
+        ></div>
+      </form>
+
+      <div class="divider">or</div>
+
+      <!-- Path 2: Login -->
+      <a href="/admin/login" class="btn btn-secondary">Log in</a>
+    </div>
+
+    <!-- Path 3: Sign up — hidden by default; enabled by deploy script setting data-public-signup="true" on <body> -->
+    <div class="signup-link">
+      New here? <a href="/admin/register">Sign up</a>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /**
+       * Validates a pulse code string.
+       * Valid format: exactly 8 alphanumeric characters (A-Z, 0-9), case-insensitive.
+       *
+       * @param {string} code
+       * @returns {boolean}
+       */
+      function isValidPulseCode(code) {
+        return /^[A-Z0-9]{8}$/i.test(code);
+      }
+
+      var form = document.getElementById('pulse-form');
+      var input = document.getElementById('pulse-code');
+      var errorEl = document.getElementById('pulse-code-error');
+
+      function showError(msg) {
+        errorEl.textContent = msg;
+        input.setAttribute('aria-invalid', 'true');
+      }
+
+      function clearError() {
+        errorEl.textContent = '';
+        input.removeAttribute('aria-invalid');
+      }
+
+      input.addEventListener('input', function () {
+        if (errorEl.textContent) clearError();
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var code = input.value.trim();
+
+        if (!isValidPulseCode(code)) {
+          showError("That code doesn\u2019t look right. Check your invitation email.");
+          input.focus();
+          return;
+        }
+
+        clearError();
+        window.location.href = '/s/?code=' + encodeURIComponent(code.toUpperCase());
+      });
+    })();
+  </script>
+</body>
+</html>
