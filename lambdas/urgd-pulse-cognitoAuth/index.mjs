@@ -111,9 +111,14 @@ export const handler = async (event) => {
     const tenantId = payload['custom:tenantId'] || payload.sub
     log('info', 'CognitoAuth: allowed', { sub: payload.sub })
 
-    return generatePolicy(payload.sub, 'Allow', event.methodArn, { tenantId })
+    // Use wildcard ARN so the cached policy covers all methods on this API/stage
+    const arnParts = event.methodArn.split('/')
+    const wildcardArn = `${arnParts[0]}/*/*`
+    return generatePolicy(payload.sub, 'Allow', wildcardArn, { tenantId })
   } catch (err) {
     log('warn', 'CognitoAuth: denied', { reason: err.message })
-    return generatePolicy('anonymous', 'Deny', event.methodArn)
+    const arnParts = event.methodArn.split('/')
+    const wildcardArn = `${arnParts[0]}/*/*`
+    return generatePolicy('anonymous', 'Deny', wildcardArn)
   }
 }

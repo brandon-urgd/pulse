@@ -20,6 +20,9 @@ __pycache__/
 *.pyd
 .Python
 
+# Local dev/debug scripts — not for CI
+scripts/get_token.py
+
 # ── Vitest / test cache ───────────────────────────────────────────────────────
 .vitest-cache/
 vitest.config.*.timestamp*
