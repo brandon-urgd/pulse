@@ -30,6 +30,7 @@ export async function authedMutate(
 
   let res = await fetch(`${API_BASE}${url}`, init);
 
+  // API Gateway Lambda authorizers return 403 (not 401) for expired tokens — try refresh first
   if (res.status === 401 || res.status === 403) {
     try {
       const refreshed = await fetchAuthSession({ forceRefresh: true });
@@ -41,7 +42,8 @@ export async function authedMutate(
       });
       // If still 403 after refresh, it's a real permission error — let it fall through
     } catch {
-      navigate('/admin/login');
+      // Redirect outside render cycle to avoid setState-during-render crash
+      setTimeout(() => navigate('/admin/login'), 0);
       throw new Error('Session expired');
     }
   }

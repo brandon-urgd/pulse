@@ -113,9 +113,9 @@ export default function Items() {
               <div className={styles.itemMain}>
                 <span className={styles.itemName}>{item.itemName}</span>
                 <p className={styles.descriptionExcerpt}>
-                  {item.description.length > 100
+                  {(item.description?.length ?? 0) > 100
                     ? `${item.description.slice(0, 100)}…`
-                    : item.description}
+                    : (item.description ?? '')}
                 </p>
               </div>
               <div className={styles.itemMeta}>

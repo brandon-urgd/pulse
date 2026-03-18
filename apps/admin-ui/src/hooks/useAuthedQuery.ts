@@ -12,22 +12,21 @@ async function authedFetch(url: string, navigate: ReturnType<typeof useNavigate>
     throw new Error('No access token');
   }
 
-  let res = await fetch(`${API_BASE}${url}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const makeRequest = (t: string) =>
+    fetch(`${API_BASE}${url}`, { headers: { Authorization: `Bearer ${t}` } });
 
+  let res = await makeRequest(token);
+
+  // API Gateway Lambda authorizers return 403 (not 401) for expired tokens — try refresh first
   if (res.status === 401 || res.status === 403) {
-    // Silent refresh — API Gateway Lambda authorizers return 403 on expired tokens
     try {
       const refreshed = await fetchAuthSession({ forceRefresh: true });
       const newToken = refreshed.tokens?.accessToken?.toString();
       if (!newToken) throw new Error('Refresh failed');
-      res = await fetch(`${API_BASE}${url}`, {
-        headers: { Authorization: `Bearer ${newToken}` },
-      });
-      // If still 403 after refresh, it's a real permission error — let it fall through
+      res = await makeRequest(newToken);
     } catch {
-      navigate('/admin/login');
+      // Refresh failed — session is truly expired, redirect outside render cycle
+      setTimeout(() => navigate('/admin/login'), 0);
       throw new Error('Session expired');
     }
   }
