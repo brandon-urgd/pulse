@@ -160,20 +160,6 @@ export default function AdminLayout() {
         }}
       >
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-6)' }}>
-          <div
-            role="img"
-            aria-label="ur/gd Studios logo"
-            style={{
-              height: 'clamp(8.4375rem, 15.8203125vw, 12.65625rem)',
-              width: 'clamp(8.4375rem, 15.8203125vw, 12.65625rem)',
-              backgroundImage: `url(${logoUrl})`,
-              backgroundSize: 'contain',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              marginTop: '-5rem',
-              marginBottom: '-6rem',
-            }}
-          />
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
             <p style={{ margin: 0 }}>
               Quietly powerful, by{' '}
