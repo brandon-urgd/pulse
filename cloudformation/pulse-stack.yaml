@@ -511,6 +511,11 @@ Resources:
       UserPoolName: !Sub 'urgd-pulse-userpool-${Environment}'
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
+      EmailConfiguration:
+        EmailSendingAccount: DEVELOPER
+        From: 'Pulse <pulse@urgdstudios.com>'
+        ReplyToEmailAddress: no-reply@urgdstudios.com
+        SourceArn: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/urgdstudios.com'
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -1976,3 +1981,9 @@ Outputs:
     Value: !Sub 'https://${ApiDomainName}'
     Export:
       Name: !Sub 'urgd-pulse-${Environment}-api-base-url'
+
+  CognitoDomain:
+    Description: Cognito hosted UI domain
+    Value: !Sub 'https://${CognitoUserPoolDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-cognito-domain'

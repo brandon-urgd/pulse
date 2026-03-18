@@ -14,6 +14,7 @@ export const labels = {
     newPasswordLabel: 'New password',
     newPasswordSubmit: 'Set password',
     forgotPassword: 'Forgot password?',
+    registrationSuccess: 'Account created. Check your email for a temporary password, then sign in below.',
   },
 
   // Auth — Register

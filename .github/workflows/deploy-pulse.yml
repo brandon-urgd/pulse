@@ -128,15 +128,6 @@ jobs:
           chmod +x scripts/build-lambdas.sh
           ./scripts/build-lambdas.sh "$VERSION"
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build admin-ui
-        run: npm run build --workspace=apps/admin-ui
-
-      - name: Build session-ui
-        run: npm run build --workspace=apps/session-ui
-
       - name: Fetch secrets from SSM
         run: |
           set -euo pipefail
@@ -287,16 +278,8 @@ jobs:
 
           echo "✅ CloudFormation template and parameter files uploaded for version $VERSION"
 
-      - name: Upload frontend build artifacts
-        run: |
-          set -euo pipefail
-          aws s3 sync apps/admin-ui/dist \
-            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/admin-ui/" \
-            --region ${{ env.AWS_REGION }} --no-progress
-          aws s3 sync apps/session-ui/dist \
-            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/session-ui/" \
-            --region ${{ env.AWS_REGION }} --no-progress
-          echo "✅ Frontend artifacts uploaded"
+      # Frontend is built in the deploy job after CF outputs are available
+      # so VITE env vars (UserPoolId, UserPoolClientId, CognitoDomain) can be injected
 
   # ── 4. Deploy ─────────────────────────────────────────────────────────────────
   deploy:
@@ -447,7 +430,7 @@ jobs:
               --output text
           }
 
-          for key in CloudFrontDistributionId ApiGatewayId S3BucketName FrontendBucketName UserPoolId UserPoolClientId ApiBaseUrl; do
+          for key in CloudFrontDistributionId ApiGatewayId S3BucketName FrontendBucketName UserPoolId UserPoolClientId ApiBaseUrl CognitoDomain; do
             val=$(get_output "$key")
             if [ -z "$val" ] || [ "$val" = "None" ]; then
               echo "❌ Missing required output: $key"
@@ -457,6 +440,26 @@ jobs:
             echo "CF_${key}=$val" >> $GITHUB_ENV
           done
           echo "✅ All required outputs present"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build frontend with injected Cognito config
+        run: |
+          set -euo pipefail
+          npm ci
+
+          # Inject real CF outputs as VITE env vars so Amplify is configured correctly
+          export VITE_USER_POOL_ID="$CF_UserPoolId"
+          export VITE_USER_POOL_CLIENT_ID="$CF_UserPoolClientId"
+          export VITE_COGNITO_DOMAIN="$CF_CognitoDomain"
+          export VITE_API_BASE_URL="https://$CF_ApiBaseUrl"
+
+          npm run build --workspace=apps/admin-ui
+          npm run build --workspace=apps/session-ui
+          echo "✅ Frontend built with live Cognito config"
 
       - name: Activate API Gateway deployment
         run: |
@@ -470,27 +473,15 @@ jobs:
             --output text)
           echo "✅ API Gateway deployment activated: $DEPLOYMENT_ID"
 
-      - name: Download and deploy frontend assets
+      - name: Deploy frontend assets
         run: |
           set -euo pipefail
-          mkdir -p /tmp/frontend-dist/admin-ui /tmp/frontend-dist/session-ui
-
-          aws s3 sync \
-            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/admin-ui/" \
-            /tmp/frontend-dist/admin-ui/ \
-            --region ${{ env.AWS_REGION }} --no-progress
-
-          aws s3 sync \
-            "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/frontend/$VERSION/session-ui/" \
-            /tmp/frontend-dist/session-ui/ \
-            --region ${{ env.AWS_REGION }} --no-progress
-
           chmod +x scripts/deploy-frontend.sh
 
-          DIST_DIR=/tmp/frontend-dist/admin-ui S3_PREFIX=admin \
+          DIST_DIR=apps/admin-ui/dist S3_PREFIX=admin \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
-          DIST_DIR=/tmp/frontend-dist/session-ui S3_PREFIX=s \
+          DIST_DIR=apps/session-ui/dist S3_PREFIX=s \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
           if [ -f apps/landing/index.html ]; then

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { signInWithRedirect } from 'aws-amplify/auth';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
@@ -16,6 +16,8 @@ type FormState = 'login' | 'new-password';
 export default function Login() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const registeredSuccessfully = (location.state as { registered?: boolean } | null)?.registered === true;
 
   const [formState, setFormState] = useState<FormState>('login');
   const [email, setEmail] = useState('');
@@ -129,6 +131,11 @@ export default function Login() {
   return (
     <main style={{ maxWidth: 400, margin: '80px auto', padding: '0 16px' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: 24 }}>{labels.login.title}</h1>
+      {registeredSuccessfully && (
+        <p aria-live="polite" style={{ color: 'var(--color-success)', marginBottom: 16 }}>
+          {labels.login.registrationSuccess}
+        </p>
+      )}
       <form onSubmit={handleLogin} noValidate>
         <div style={{ marginBottom: 16 }}>
           <label htmlFor="email">{labels.login.emailLabel}</label>

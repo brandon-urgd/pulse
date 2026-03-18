@@ -1,7 +1,7 @@
 // ur/gd pulse — Register Lambda
 // POST /api/auth/register → creates Cognito user + triggers createTenant
 
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider'
+import { CognitoIdentityProviderClient, AdminCreateUserCommand } from '@aws-sdk/client-cognito-identity-provider'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
 
 // Fail-fast env var validation
@@ -42,29 +42,21 @@ export const handler = async (event) => {
   log('info', 'Register: creating user', { requestId })
 
   try {
-    // Create user in Cognito (suppress welcome email, set permanent password)
+    // Create user in Cognito — Cognito sends a verification email automatically
     await cognito.send(new AdminCreateUserCommand({
       UserPoolId: process.env.USER_POOL_ID,
       Username: email,
       UserAttributes: [
         { Name: 'email', Value: email },
-        { Name: 'email_verified', Value: 'true' },
         { Name: 'name', Value: name },
       ],
-      MessageAction: 'SUPPRESS',
+      TemporaryPassword: password,
+      // No MessageAction: SUPPRESS — let Cognito send the verification email
     }))
 
-    // Set permanent password immediately
-    await cognito.send(new AdminSetUserPasswordCommand({
-      UserPoolId: process.env.USER_POOL_ID,
-      Username: email,
-      Password: password,
-      Permanent: true,
-    }))
+    log('info', 'Register: user created, verification email sent', { requestId })
 
-    log('info', 'Register: user created successfully', { requestId })
-
-    return createResponse(201, { message: 'User registered successfully' }, {}, origin)
+    return createResponse(201, { message: 'User registered successfully. Check your email for a verification code.' }, {}, origin)
   } catch (err) {
     if (err.name === 'UsernameExistsException') {
       log('warn', 'Register: duplicate email', { requestId })
