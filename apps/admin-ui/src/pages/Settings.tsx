@@ -55,7 +55,7 @@ export default function Settings() {
           {labels.settings.accountSection}
         </h2>
         {isLoading ? (
-          <p>Loading…</p>
+          <p>{labels.settings.loading}</p>
         ) : (
           <dl style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-2)' }}>
             <dt style={{ color: 'var(--color-text-secondary)' }}>{labels.settings.tierLabel}</dt>
@@ -72,16 +72,16 @@ export default function Settings() {
           {labels.settings.usageSection}
         </h2>
         {isLoading ? (
-          <p>Loading…</p>
+          <p>{labels.settings.loading}</p>
         ) : (
           <dl style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-2)' }}>
-            <dt style={{ color: 'var(--color-text-secondary)' }}>Items</dt>
+            <dt style={{ color: 'var(--color-text-secondary)' }}>{labels.settings.itemsLabel}</dt>
             <dd style={{ margin: 0 }}>
               {labels.settings.itemsUsage
                 .replace('{used}', String(settings?.usage?.itemCount ?? 0))
                 .replace('{max}', String(settings?.features?.maxActiveItems ?? 1))}
             </dd>
-            <dt style={{ color: 'var(--color-text-secondary)' }}>Sessions</dt>
+            <dt style={{ color: 'var(--color-text-secondary)' }}>{labels.settings.sessionsLabel}</dt>
             <dd style={{ margin: 0 }}>
               {labels.settings.sessionsUsage
                 .replace('{used}', String(settings?.usage?.sessionCount ?? 0))
