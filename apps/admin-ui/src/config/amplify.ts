@@ -14,8 +14,10 @@ export function configureAmplify(): void {
           oauth: {
             domain: cognitoDomain,
             scopes: ['email', 'openid', 'profile'],
-            redirectSignIn: [`${window.location.origin}/admin/items`],
-            redirectSignOut: [`${window.location.origin}/admin/login`],
+            // Both redirect to / — SplashEntry is always rendered there and
+            // Amplify can process the OAuth code before ProtectedRoute runs.
+            redirectSignIn: [`${window.location.origin}/`],
+            redirectSignOut: [`${window.location.origin}/`],
             responseType: 'code',
           },
         },

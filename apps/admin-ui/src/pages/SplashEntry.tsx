@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signInWithRedirect } from 'aws-amplify/auth';
+import { signInWithRedirect, Hub } from 'aws-amplify/auth';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
 import '../styles/glass.css';
@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 // Valid pulse code: exactly 8 alphanumeric chars
 const isValidPulseCode = (code: string) => /^[A-Z0-9]{8}$/i.test(code);
 
-type EntryState = 'splash' | 'login' | 'register' | 'new-password';
+type EntryState = 'splash' | 'login' | 'register' | 'new-password' | 'registered';
 
 export default function SplashEntry() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
@@ -39,6 +39,21 @@ export default function SplashEntry() {
       navigate('/admin/items', { replace: true });
     }
   }, [user, isLoading, navigate]);
+
+  // Handle OAuth redirect callback (Apple / Google)
+  useEffect(() => {
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signInWithRedirect') {
+        // Amplify has exchanged the code — redirectAfterLogin will pick up the session
+        redirectAfterLogin();
+      }
+      if (payload.event === 'signInWithRedirect_failure') {
+        setError('Social sign-in failed. Please try again.');
+      }
+    });
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function transitionTo(next: EntryState) {
     setAnimating(true);
@@ -115,10 +130,9 @@ export default function SplashEntry() {
         else setError(data.error ?? 'Registration failed.');
         return;
       }
-      // Cognito emails a temporary password — go to login with success banner
-      setName(''); setPassword('');
-      setError(labels.login.registrationSuccess);
-      transitionTo('login');
+      // Cognito emails a temporary password — show confirmation screen
+      setName('');
+      transitionTo('registered');
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -164,8 +178,10 @@ export default function SplashEntry() {
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',
-              marginTop: '-5rem',
-              marginBottom: '-6rem',
+              // Margins scale with the logo so the gap to "pulse" stays proportional.
+              // At max size (22.5rem): -5rem ≈ 22%, -6rem ≈ 26.7% of logo height.
+              marginTop: 'clamp(-3.33rem, -6.25vw, -5rem)',
+              marginBottom: 'clamp(-4rem, -7.5vw, -6rem)',
             }}
           />
           <span
@@ -343,6 +359,27 @@ export default function SplashEntry() {
                 ← {labels.splash.backButton}
               </button>
             </form>
+          )}
+
+          {/* REGISTERED — check email confirmation */}
+          {state === 'registered' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, textAlign: 'center' }}>
+              <p style={{ fontSize: '2rem', margin: 0 }}>📬</p>
+              <p style={{ fontWeight: 500, margin: 0 }}>
+                {labels.register.verificationTitle}
+              </p>
+              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+                {labels.register.verificationDescription.replace('{email}', email)}
+                {' '}Use it to sign in below.
+              </p>
+              <button
+                type="button"
+                className="pulse-btn pulse-btn-primary"
+                onClick={() => transitionTo('login')}
+              >
+                {labels.splash.loginButton}
+              </button>
+            </div>
           )}
 
         </div>

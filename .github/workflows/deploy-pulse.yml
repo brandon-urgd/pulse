@@ -203,22 +203,22 @@ jobs:
               dev)
                 API_DOMAIN="api-dev.pulse.urgdstudios.com"
                 FRONTEND_DOMAIN="dev.pulse.urgdstudios.com"
-                COGNITO_CALLBACKS="https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login"
-                COGNITO_LOGOUTS="https://dev.pulse.urgdstudios.com/admin/login,http://localhost:5173/admin/login"
+                COGNITO_CALLBACKS="https://dev.pulse.urgdstudios.com/,http://localhost:5173/"
+                COGNITO_LOGOUTS="https://dev.pulse.urgdstudios.com/,http://localhost:5173/"
                 COGNITO_DOMAIN_PREFIX="pulse-urgd-dev"
                 ;;
               staging)
                 API_DOMAIN="api-staging.pulse.urgdstudios.com"
                 FRONTEND_DOMAIN="staging.pulse.urgdstudios.com"
-                COGNITO_CALLBACKS="https://staging.pulse.urgdstudios.com/admin/login"
-                COGNITO_LOGOUTS="https://staging.pulse.urgdstudios.com/admin/login"
+                COGNITO_CALLBACKS="https://staging.pulse.urgdstudios.com/"
+                COGNITO_LOGOUTS="https://staging.pulse.urgdstudios.com/"
                 COGNITO_DOMAIN_PREFIX="pulse-urgd-staging"
                 ;;
               prod)
                 API_DOMAIN="api.pulse.urgdstudios.com"
                 FRONTEND_DOMAIN="pulse.urgdstudios.com"
-                COGNITO_CALLBACKS="https://pulse.urgdstudios.com/admin/login"
-                COGNITO_LOGOUTS="https://pulse.urgdstudios.com/admin/login"
+                COGNITO_CALLBACKS="https://pulse.urgdstudios.com/"
+                COGNITO_LOGOUTS="https://pulse.urgdstudios.com/"
                 COGNITO_DOMAIN_PREFIX="pulse-urgd"
                 ;;
             esac
