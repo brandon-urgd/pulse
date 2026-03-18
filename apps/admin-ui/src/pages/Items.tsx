@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { labels } from '../config/labels-registry';
+import ItemDetailModal from './ItemDetailModal';
 import styles from './Items.module.css';
 
 interface Item {
@@ -44,16 +44,14 @@ function formatCloseDate(iso: string): string {
   }
 }
 
-/**
- * Items page — lists all items or shows empty/error state.
- * Requirements: 3.18, 3.19, 4.15
- */
 export default function Items() {
-  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useAuthedQuery<ItemsResponse>(
     ['items'],
     '/api/manage/items'
   );
+
+  // null = closed, 'new' = create, string = edit itemId
+  const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
 
   useEffect(() => {
     document.title = labels.items.documentTitle;
@@ -85,7 +83,7 @@ export default function Items() {
         <button
           type="button"
           className={styles.newItemButton}
-          onClick={() => navigate('/admin/items/new')}
+          onClick={() => setModalTarget('new')}
         >
           {labels.items.newItemButton}
         </button>
@@ -101,13 +99,11 @@ export default function Items() {
             <li
               key={item.itemId}
               className={`${styles.itemCard} ${STATUS_CLASS[item.status]}`}
-              onClick={() => navigate(`/admin/items/${item.itemId}`)}
+              onClick={() => setModalTarget(item.itemId)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  navigate(`/admin/items/${item.itemId}`);
-                }
+                if (e.key === 'Enter' || e.key === ' ') setModalTarget(item.itemId);
               }}
             >
               <div className={styles.itemMain}>
@@ -132,6 +128,13 @@ export default function Items() {
             </li>
           ))}
         </ul>
+      )}
+
+      {modalTarget !== null && (
+        <ItemDetailModal
+          itemId={modalTarget === 'new' ? undefined : modalTarget}
+          onClose={() => setModalTarget(null)}
+        />
       )}
     </div>
   );
