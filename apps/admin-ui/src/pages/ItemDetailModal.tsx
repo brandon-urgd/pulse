@@ -99,11 +99,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const uploadingCreate = useRef(false);
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
-  const { data: itemData, isLoading: itemLoading } = useAuthedQuery<Item>(
+  const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
     ['item', itemId],
     `/api/manage/items/${itemId}`,
     { enabled: isEditMode }
   );
+  const itemData = itemResp?.data;
 
   useEffect(() => {
     if (itemData) {
@@ -132,12 +133,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   });
 
   // ── Mutations ───────────────────────────────────────────────────────────────
-  const createMutation = useAuthedMutation<Item, CreateItemPayload>(
+  const createMutation = useAuthedMutation<{ data: Item }, CreateItemPayload>(
     '/api/manage/items',
     'POST',
     {
-      onSuccess: (created) => {
-        savedItemId.current = created.itemId;
+      onSuccess: (resp) => {
+        savedItemId.current = resp.data.itemId;
         autoSaved.current = true;
         queryClient.invalidateQueries({ queryKey: ['items'] });
         if (!uploadingCreate.current) onClose();
@@ -241,14 +242,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       let targetItemId = savedItemId.current;
       if (!targetItemId) {
         uploadingCreate.current = true;
-        const created = await createMutation.mutateAsync({
+        const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
           closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;
-        targetItemId = created.itemId;
+        targetItemId = createdResp.data.itemId;
       }
 
       for (const file of files) {
