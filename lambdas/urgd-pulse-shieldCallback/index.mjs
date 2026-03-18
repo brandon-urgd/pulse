@@ -100,10 +100,13 @@ export const handler = async (event) => {
   if (scanResult === 'NO_THREATS_FOUND') {
     try {
       // Move file from quarantine to data bucket (copy + delete)
+      // TaggingDirective: REPLACE drops the GuardDuty scan tags — they belong
+      // on the quarantine object, not the clean copy in the data bucket.
       await s3.send(new CopyObjectCommand({
         CopySource: `${process.env.QUARANTINE_BUCKET_NAME}/${objectKey}`,
         Bucket: process.env.DATA_BUCKET_NAME,
         Key: objectKey,
+        TaggingDirective: 'REPLACE',
       }))
 
       await s3.send(new DeleteObjectCommand({
