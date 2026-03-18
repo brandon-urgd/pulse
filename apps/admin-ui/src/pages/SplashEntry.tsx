@@ -150,24 +150,22 @@ export default function SplashEntry() {
   if (isLoading) return null;
 
   return (
-    <div className="pulse-entry-bg">
-      <div
-        className="pulse-glass-card"
-        style={{ width: '100%', maxWidth: 420, padding: '40px 32px' }}
-      >
+    <div className="pulse-entry-bg" style={{ padding: '24px' }}>
+    <div className="pulse-glass-card" style={{ width: '100%', maxWidth: 480, padding: '48px 32px', textAlign: 'center', overflow: 'hidden' }}>
         {/* ── Logo + wordmark — always visible ── */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{ margin: '0 auto 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div
             role="img"
             aria-label="ur/gd Studios logo"
             style={{
-              width: 72,
-              height: 72,
+              height: 'clamp(15rem, 28.125vw, 22.5rem)',
+              width: 'clamp(15rem, 28.125vw, 22.5rem)',
               backgroundImage: `url(${window.location.origin}/logo.svg)`,
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',
-              margin: '0 auto 12px',
+              marginTop: '-5rem',
+              marginBottom: '-6rem',
             }}
           />
           <span

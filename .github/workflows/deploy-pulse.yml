@@ -487,6 +487,20 @@ jobs:
             --cache-control "no-cache, max-age=0, must-revalidate" \
             --region ${{ env.AWS_REGION }}
 
+          # Upload logo and favicon separately (not part of Vite build)
+          if [ -f assets/logo.svg ]; then
+            aws s3 cp assets/logo.svg \
+              "s3://${CF_FrontendBucketName}/logo.svg" \
+              --cache-control "public, max-age=31536000, immutable" \
+              --region ${{ env.AWS_REGION }}
+          fi
+          if [ -f assets/favicon.svg ]; then
+            aws s3 cp assets/favicon.svg \
+              "s3://${CF_FrontendBucketName}/favicon.svg" \
+              --cache-control "public, max-age=31536000, immutable" \
+              --region ${{ env.AWS_REGION }}
+          fi
+
           DIST_DIR=apps/session-ui/dist S3_PREFIX=s \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
