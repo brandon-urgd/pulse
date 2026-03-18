@@ -2,7 +2,7 @@
 // Looks up Bearer token in DynamoDB sessions table, returns IAM Allow/Deny
 
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
-import { log } from './utils.mjs'
+import { log } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 const REQUIRED_ENV = ['SESSIONS_TABLE']

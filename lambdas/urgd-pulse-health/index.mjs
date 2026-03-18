@@ -1,7 +1,7 @@
 // ur/gd pulse — Health Lambda
 // GET /v1/health → 200 { status: "healthy" }
 
-import { createResponse, log } from './utils.mjs'
+import { createResponse, log } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 const REQUIRED_ENV = ['CORS_ALLOWED_ORIGINS']

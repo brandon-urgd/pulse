@@ -2,7 +2,7 @@
 // Validates RS256 Cognito JWT, caches JWKS 5 min, extracts tenantId
 
 import { createHash } from 'crypto'
-import { log } from './utils.mjs'
+import { log } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 const REQUIRED_ENV = ['USER_POOL_ID', 'USER_POOL_CLIENT_ID']
