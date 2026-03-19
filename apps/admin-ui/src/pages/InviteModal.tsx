@@ -246,9 +246,10 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
         navigate
       );
       setEndSessionMessages(prev => ({ ...prev, [sessionId]: labels.invitation.publicSessionEndSuccess }));
+      const endedAt = new Date().toISOString();
       queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
         data: (old?.data ?? []).map(s =>
-          s.sessionId === sessionId ? { ...s, status: 'expired' as SessionStatus } : s
+          s.sessionId === sessionId ? { ...s, status: 'expired' as SessionStatus, expiresAt: endedAt } : s
         ),
       }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -450,7 +451,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                         type="button"
                         className={styles.resendButton}
                         onClick={() => handleViewQr(session.sessionId)}
-                        disabled={isLoadingQr && viewingQrSessionId === session.sessionId}
+                        disabled={(isLoadingQr && viewingQrSessionId === session.sessionId) || session.status === 'expired'}
+                        style={session.status === 'expired' ? { opacity: 0.35, cursor: 'not-allowed' } : undefined}
                       >
                         {isLoadingQr && viewingQrSessionId === session.sessionId
                           ? '…'
