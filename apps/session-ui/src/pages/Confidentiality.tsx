@@ -125,7 +125,7 @@ function ShieldIcon({ style }: { style?: React.CSSProperties }) {
 export default function Confidentiality() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
-  const { sessionToken, clearSession } = useSession()
+  const { sessionToken, itemName, clearSession } = useSession()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -172,6 +172,12 @@ export default function Confidentiality() {
 
         <div style={styles.body}>
           <span style={styles.wordmark} aria-label="Pulse">pulse</span>
+
+          {itemName && (
+            <p style={{ fontSize: '0.875rem', color: '#888', marginBottom: '1.25rem', marginTop: 0 }}>
+              Reviewing: <strong style={{ color: '#ccc' }}>{itemName}</strong>
+            </p>
+          )}
 
           <p style={styles.paragraph}>
             Before you begin, please review and accept the following terms. Your feedback will be

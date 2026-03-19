@@ -63,6 +63,7 @@ export const labels = {
     documentTitle: 'Items — Pulse',
     emptyState: 'No items yet',
     newItemButton: 'New Item',
+    inviteButton: 'Invite',
     loadError: 'Something went wrong loading your items. Try again.',
     retryButton: 'Retry',
     statusDraft: 'Draft',

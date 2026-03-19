@@ -5,6 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import ItemDetailModal from './ItemDetailModal';
+import InviteModal from './InviteModal';
 import styles from './Items.module.css';
 
 interface Item {
@@ -49,10 +50,11 @@ const REVEAL_WIDTH    = 80; // px width of delete zone
 interface SwipeCardProps {
   item: Item;
   onOpen: () => void;
+  onInvite: () => void;
   onDeleted: () => void;
 }
 
-function SwipeCard({ item, onOpen, onDeleted }: SwipeCardProps) {
+function SwipeCard({ item, onOpen, onInvite, onDeleted }: SwipeCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -204,6 +206,14 @@ function SwipeCard({ item, onOpen, onDeleted }: SwipeCardProps) {
           <span className={styles.closeDate}>
             {labels.items.closeDate} {formatCloseDate(item.closeDate)}
           </span>
+          <button
+            type="button"
+            className={styles.inviteButton}
+            onClick={(e) => { e.stopPropagation(); onInvite(); }}
+            aria-label={`Invite reviewers for ${item.itemName}`}
+          >
+            {labels.items.inviteButton}
+          </button>
         </div>
       </div>
     </li>
@@ -219,6 +229,7 @@ export default function Items() {
   );
 
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
+  const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
 
   useEffect(() => {
     document.title = labels.items.documentTitle;
@@ -257,6 +268,7 @@ export default function Items() {
               key={item.itemId}
               item={item}
               onOpen={() => setModalTarget(item.itemId)}
+              onInvite={() => setInviteTarget(item)}
               onDeleted={() => {}}
             />
           ))}
@@ -267,6 +279,14 @@ export default function Items() {
         <ItemDetailModal
           itemId={modalTarget === 'new' ? undefined : modalTarget}
           onClose={() => setModalTarget(null)}
+        />
+      )}
+
+      {inviteTarget !== null && (
+        <InviteModal
+          itemId={inviteTarget.itemId}
+          itemName={inviteTarget.itemName}
+          onClose={() => setInviteTarget(null)}
         />
       )}
     </div>

@@ -224,3 +224,21 @@
   color: #fff;
   text-align: center;
 }
+
+.inviteButton {
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent-pulse);
+  background: var(--color-accent-pulse-subtle);
+  border: 1px solid var(--color-accent-pulse-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inviteButton:hover {
+  background: var(--color-accent-pulse-subtle);
+  border-color: var(--color-accent-pulse);
+}

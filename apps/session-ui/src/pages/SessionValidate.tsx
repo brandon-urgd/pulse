@@ -132,7 +132,7 @@ export default function SessionValidate() {
         ...(pathSessionId && !pulseCode ? { sessionId: pathSessionId } : {}),
       })
 
-      setSession(result.sessionToken, result.sessionId)
+      setSession(result.sessionToken, result.sessionId, result.item.itemName)
       navigate(`/s/${result.sessionId}/confidentiality`, { replace: true })
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
