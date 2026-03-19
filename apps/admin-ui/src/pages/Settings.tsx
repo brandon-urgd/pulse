@@ -50,6 +50,9 @@ export default function Settings() {
 
   const [themeSaveState, setThemeSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle');
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
 
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -77,6 +80,30 @@ export default function Settings() {
     setTheme(t);
     setThemeSaveState('saving');
     themeMutation.mutate({ preferences: { theme: t } });
+  }
+
+  function startEditName() {
+    setNameValue(s?.displayName ?? '');
+    setEditingName(true);
+  }
+
+  async function saveDisplayName() {
+    if (nameSaving) return;
+    const trimmed = nameValue.trim();
+    if (trimmed === (s?.displayName ?? '')) { setEditingName(false); return; }
+    setNameSaving(true);
+    try {
+      await authedMutate('/api/manage/settings', 'PUT', { displayName: trimmed }, navigate);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } finally {
+      setNameSaving(false);
+      setEditingName(false);
+    }
+  }
+
+  function handleNameKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); saveDisplayName(); }
+    if (e.key === 'Escape') { setEditingName(false); }
   }
 
   async function handleSignOut() {
@@ -137,7 +164,46 @@ export default function Settings() {
               {s?.displayName && (
                 <div className={styles.fieldRow}>
                   <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
-                  <span className={styles.fieldValue}>{s.displayName}</span>
+                  {editingName ? (
+                    <input
+                      className={styles.inlineNameInput}
+                      value={nameValue}
+                      onChange={e => setNameValue(e.target.value)}
+                      onBlur={saveDisplayName}
+                      onKeyDown={handleNameKeyDown}
+                      disabled={nameSaving}
+                      autoFocus
+                      maxLength={255}
+                    />
+                  ) : (
+                    <button type="button" className={styles.inlineNameButton} onClick={startEditName}>
+                      {s.displayName}
+                    </button>
+                  )}
+                </div>
+              )}
+              {!s?.displayName && !editingName && (
+                <div className={styles.fieldRow}>
+                  <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
+                  <button type="button" className={styles.inlineNameButton} onClick={startEditName}>
+                    {labels.settings.displayNameAdd}
+                  </button>
+                </div>
+              )}
+              {!s?.displayName && editingName && (
+                <div className={styles.fieldRow}>
+                  <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
+                  <input
+                    className={styles.inlineNameInput}
+                    value={nameValue}
+                    onChange={e => setNameValue(e.target.value)}
+                    onBlur={saveDisplayName}
+                    onKeyDown={handleNameKeyDown}
+                    disabled={nameSaving}
+                    autoFocus
+                    maxLength={255}
+                    placeholder={labels.settings.displayNamePlaceholder}
+                  />
                 </div>
               )}
               <div className={styles.fieldRow}>

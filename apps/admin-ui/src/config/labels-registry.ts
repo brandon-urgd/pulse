@@ -174,6 +174,8 @@ export const labels = {
     tierFree: 'Free',
     emailLabel: 'Email',
     displayNameLabel: 'Display name',
+    displayNameAdd: 'Add name…',
+    displayNamePlaceholder: 'Your name',
     usageSection: 'Usage',
     loading: 'Loading…',
     itemsLabel: 'Items',
