@@ -72,14 +72,16 @@ export const handler = async (event) => {
     const sessionCount = sessionsResult.Count ?? 0
 
     return createResponse(200, {
-      tenantId: tenant.tenantId,
-      displayName: tenant.displayName ?? null,
-      email: tenant.email ?? null,
-      tier: tenant.tier ?? 'free',
-      features: tenant.features ?? {},
-      usage: { itemCount, sessionCount },
-      onboardingComplete: tenant.onboardingComplete ?? false,
-      preferences: tenant.preferences ?? {},
+      data: {
+        tenantId: tenant.tenantId,
+        displayName: tenant.displayName ?? null,
+        email: tenant.email ?? null,
+        tier: tenant.tier ?? 'free',
+        features: tenant.features ?? {},
+        usage: { itemCount, sessionCount },
+        onboardingComplete: tenant.onboardingComplete ?? false,
+        preferences: tenant.preferences ?? {},
+      },
     }, {}, origin)
   } catch (err) {
     log('error', 'GetSettings: unexpected error', { requestId, tenantId, errorName: err.name })
