@@ -18,8 +18,9 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient {
     send(...args) { return dynamoSendSpy(...args) }
   }
+  class GetItemCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -56,6 +57,8 @@ describe('Property 13: Upload URL File Type Property', () => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
     getSignedUrlSpy.mockReset()
+    // GetItemCommand returns a valid item, UpdateItemCommand returns {}
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
     dynamoSendSpy.mockResolvedValue({})
     getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
   })
@@ -72,6 +75,7 @@ describe('Property 13: Upload URL File Type Property', () => {
         async (ext, prefix, fileSize) => {
           dynamoSendSpy.mockReset()
           getSignedUrlSpy.mockReset()
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
           dynamoSendSpy.mockResolvedValue({})
           getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
 
@@ -144,6 +148,7 @@ describe('Property 13: Upload URL File Type Property', () => {
         async (ext, fileSize) => {
           dynamoSendSpy.mockReset()
           getSignedUrlSpy.mockReset()
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
           dynamoSendSpy.mockResolvedValue({})
           getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
 

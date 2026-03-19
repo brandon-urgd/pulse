@@ -14,8 +14,9 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient {
     send(...args) { return dynamoSendSpy(...args) }
   }
+  class GetItemCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -51,6 +52,8 @@ describe('urgd-pulse-getUploadUrl', () => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
     getSignedUrlSpy.mockReset()
+    // GetItemCommand returns a valid item, UpdateItemCommand returns {}
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
     dynamoSendSpy.mockResolvedValue({})
     getSignedUrlSpy.mockResolvedValue(MOCK_UPLOAD_URL)
   })
@@ -153,10 +156,11 @@ describe('urgd-pulse-getUploadUrl', () => {
         body: { fileName: 'document.pdf', fileSize: 1024 },
       }))
 
-      expect(dynamoSendSpy).toHaveBeenCalledOnce()
-      const call = dynamoSendSpy.mock.calls[0][0]
-      expect(call.input.UpdateExpression).toContain('documentStatus')
-      expect(call.input.ExpressionAttributeValues[':status'].S).toBe('scanning')
+      // First call is GetItemCommand (verify item exists), second is UpdateItemCommand
+      expect(dynamoSendSpy).toHaveBeenCalledTimes(2)
+      const updateCall = dynamoSendSpy.mock.calls[1][0]
+      expect(updateCall.input.UpdateExpression).toContain('documentStatus')
+      expect(updateCall.input.ExpressionAttributeValues[':status'].S).toBe('scanning')
     })
 
     it('stores the S3 key in documentKey', async () => {
@@ -164,8 +168,8 @@ describe('urgd-pulse-getUploadUrl', () => {
         body: { fileName: 'report.docx', fileSize: 2048 },
       }))
 
-      const call = dynamoSendSpy.mock.calls[0][0]
-      expect(call.input.ExpressionAttributeValues[':key'].S).toMatch(/pulse\/tenant-123\/items\/item-456\/report\.docx$/)
+      const updateCall = dynamoSendSpy.mock.calls[1][0]
+      expect(updateCall.input.ExpressionAttributeValues[':key'].S).toMatch(/pulse\/tenant-123\/items\/item-456\/report\.docx$/)
     })
 
     it('does not call DynamoDB when file type is invalid', async () => {
@@ -179,6 +183,7 @@ describe('urgd-pulse-getUploadUrl', () => {
   describe('error handling', () => {
     it('returns 500 when DynamoDB throws', async () => {
       getSignedUrlSpy.mockResolvedValue(MOCK_UPLOAD_URL)
+      dynamoSendSpy.mockReset()
       dynamoSendSpy.mockRejectedValueOnce(new Error('DynamoDB error'))
 
       const res = await handler(makeEvent({

@@ -1,0 +1,8 @@
+{
+  "name": "urgd-pulse-getitemsessions",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Get Item Sessions Lambda",
+  "main": "index.mjs",
+  "dependencies": {}
+}

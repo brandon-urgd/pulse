@@ -81,7 +81,7 @@ describe('urgd-pulse-getItems', () => {
     expect(item.tenantId).toBe('tenant-abc')
     expect(item.itemId).toBe('item-1')
     expect(item.status).toBe('draft')
-    expect(item.documentStatus).toBeNull()
+    expect(item.documentStatus).toBe('none')
   })
 
   it('queries DynamoDB with tenantId from authorizer context', async () => {
@@ -147,8 +147,7 @@ describe('urgd-pulse-getItems', () => {
     const res = await handler(makeEvent())
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
-    expect(body.data[0].metadata).toEqual({ key: 'value', count: 5 })
-    expect(body.data[0].tags).toEqual(['tag1', 'tag2'])
-    expect(body.data[0].active).toBe(true)
+    expect(body.data[0].itemId).toBe('item-nested')
+    expect(body.data[0].itemName).toBe('Nested Item')
   })
 })

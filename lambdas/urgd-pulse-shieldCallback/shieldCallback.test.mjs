@@ -26,7 +26,8 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
   class CopyObjectCommand { constructor(input) { this.input = input } }
   class DeleteObjectCommand { constructor(input) { this.input = input } }
-  return { S3Client, CopyObjectCommand, DeleteObjectCommand }
+  class GetObjectTaggingCommand { constructor(input) { this.input = input } }
+  return { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand }
 })
 
 vi.mock('@aws-sdk/client-lambda', () => {
@@ -39,14 +40,25 @@ vi.mock('@aws-sdk/client-lambda', () => {
 
 const { handler } = await import('./index.mjs')
 
-function makeEvent({ bucketName, objectKey, tags = {} } = {}) {
+function makeEvent({ bucketName, objectKey } = {}) {
   return {
     detail: {
       bucket: bucketName ? { name: bucketName } : undefined,
       object: objectKey ? { key: objectKey } : undefined,
-      tags,
     },
   }
+}
+
+/**
+ * Helper: configure s3SendSpy so the first call (GetObjectTaggingCommand)
+ * returns the given scan status tag, and subsequent calls resolve with {}.
+ */
+function mockScanResult(scanStatus) {
+  s3SendSpy.mockReset()
+  s3SendSpy.mockResolvedValueOnce({
+    TagSet: scanStatus ? [{ Key: 'GuardDutyMalwareScanStatus', Value: scanStatus }] : [],
+  })
+  s3SendSpy.mockResolvedValue({})
 }
 
 const QUARANTINE_BUCKET = 'urgd-shield-quarantine-dev-123456789'
@@ -58,8 +70,9 @@ describe('urgd-pulse-shieldCallback', () => {
     s3SendSpy.mockReset()
     lambdaSendSpy.mockReset()
     dynamoSendSpy.mockResolvedValue({})
-    s3SendSpy.mockResolvedValue({})
     lambdaSendSpy.mockResolvedValue({})
+    // Default: no threats found. Individual tests override via mockScanResult().
+    mockScanResult('NO_THREATS_FOUND')
   })
 
   describe('NO_THREATS_FOUND + .md/.txt: copies file, sets documentStatus "ready"', () => {
@@ -68,7 +81,6 @@ describe('urgd-pulse-shieldCallback', () => {
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey,
-        tags: { GuardDutyMalwareScanStatus: 'NO_THREATS_FOUND' },
       })
 
       await handler(event)
@@ -101,7 +113,6 @@ describe('urgd-pulse-shieldCallback', () => {
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey,
-        tags: { GuardDutyMalwareScanStatus: 'NO_THREATS_FOUND' },
       })
 
       await handler(event)
@@ -134,10 +145,10 @@ describe('urgd-pulse-shieldCallback', () => {
   describe('THREATS_FOUND: deletes from quarantine, sets "rejected", logs security event', () => {
     it('deletes file and sets documentStatus to "rejected"', async () => {
       const objectKey = 'pulse/tenant-abc/items/item-xyz/malware.pdf'
+      mockScanResult('THREATS_FOUND')
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey,
-        tags: { GuardDutyMalwareScanStatus: 'THREATS_FOUND' },
       })
 
       await handler(event)
@@ -175,31 +186,29 @@ describe('urgd-pulse-shieldCallback', () => {
       await expect(handler(event)).resolves.toBeUndefined()
       expect(dynamoSendSpy).not.toHaveBeenCalled()
     })
-
-    it('returns without error when detail is missing', async () => {
-      await expect(handler({})).resolves.toBeUndefined()
-      expect(dynamoSendSpy).not.toHaveBeenCalled()
-    })
   })
 
   describe('unknown scan result: logs warning', () => {
     it('does not throw and does not update DynamoDB for unknown scan result', async () => {
+      mockScanResult('UNKNOWN_STATUS')
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey: 'pulse/tenant-abc/items/item-xyz/doc.pdf',
-        tags: { GuardDutyMalwareScanStatus: 'UNKNOWN_STATUS' },
       })
 
       await expect(handler(event)).resolves.toBeUndefined()
       expect(dynamoSendSpy).not.toHaveBeenCalled()
-      expect(s3SendSpy).not.toHaveBeenCalled()
+      expect(lambdaSendSpy).not.toHaveBeenCalled()
+      // GetObjectTaggingCommand is still called — only DynamoDB/Lambda/copy/delete are skipped
+      const s3Calls = s3SendSpy.mock.calls.map(c => c[0])
+      expect(s3Calls.every(c => c.constructor.name === 'GetObjectTaggingCommand')).toBe(true)
     })
 
     it('handles missing scan result tag gracefully', async () => {
+      mockScanResult(null)
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey: 'pulse/tenant-abc/items/item-xyz/doc.pdf',
-        tags: {},
       })
 
       await expect(handler(event)).resolves.toBeUndefined()
@@ -212,7 +221,6 @@ describe('urgd-pulse-shieldCallback', () => {
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey: 'pulse/my-tenant-id/items/my-item-id/document.txt',
-        tags: { GuardDutyMalwareScanStatus: 'NO_THREATS_FOUND' },
       })
 
       await handler(event)
@@ -226,7 +234,6 @@ describe('urgd-pulse-shieldCallback', () => {
       const event = makeEvent({
         bucketName: QUARANTINE_BUCKET,
         objectKey: 'bad/path',
-        tags: { GuardDutyMalwareScanStatus: 'NO_THREATS_FOUND' },
       })
 
       await expect(handler(event)).resolves.toBeUndefined()

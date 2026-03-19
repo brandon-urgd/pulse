@@ -121,6 +121,46 @@ Parameters:
     Default: lambda-packages/urgd-pulse-extractText/latest.zip
     Description: S3 key for urgd-pulse-extractText Lambda ZIP
 
+  InviteReviewerCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-inviteReviewer/latest.zip
+    Description: S3 key for urgd-pulse-inviteReviewer Lambda ZIP
+
+  GetItemSessionsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getItemSessions/latest.zip
+    Description: S3 key for urgd-pulse-getItemSessions Lambda ZIP
+
+  ResendInviteCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-resendInvite/latest.zip
+    Description: S3 key for urgd-pulse-resendInvite Lambda ZIP
+
+  ExtendDeadlineCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-extendDeadline/latest.zip
+    Description: S3 key for urgd-pulse-extendDeadline Lambda ZIP
+
+  ValidateSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-validateSession/latest.zip
+    Description: S3 key for urgd-pulse-validateSession Lambda ZIP
+
+  SendReminderCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-sendReminder/latest.zip
+    Description: S3 key for urgd-pulse-sendReminder Lambda ZIP
+
+  ExpireSessionsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-expireSessions/latest.zip
+    Description: S3 key for urgd-pulse-expireSessions Lambda ZIP
+
+  AcceptConfidentialityCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-acceptConfidentiality/latest.zip
+    Description: S3 key for urgd-pulse-acceptConfidentiality Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -217,6 +257,14 @@ Mappings:
       GetUploadUrl: 3
       ShieldCallback: 3
       ExtractText: 3
+      InviteReviewer: 3
+      GetItemSessions: 3
+      ResendInvite: 3
+      ExtendDeadline: 3
+      ValidateSession: 3
+      AcceptConfidentiality: 3
+      SendReminder: 3
+      ExpireSessions: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -234,6 +282,14 @@ Mappings:
       GetUploadUrl: 5
       ShieldCallback: 5
       ExtractText: 5
+      InviteReviewer: 5
+      GetItemSessions: 5
+      ResendInvite: 5
+      ExtendDeadline: 5
+      ValidateSession: 5
+      AcceptConfidentiality: 5
+      SendReminder: 5
+      ExpireSessions: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -251,6 +307,14 @@ Mappings:
       GetUploadUrl: 10
       ShieldCallback: 5
       ExtractText: 5
+      InviteReviewer: 10
+      GetItemSessions: 10
+      ResendInvite: 5
+      ExtendDeadline: 5
+      ValidateSession: 15
+      AcceptConfidentiality: 10
+      SendReminder: 3
+      ExpireSessions: 3
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -356,6 +420,12 @@ Resources:
         - IndexName: pulseCode-index
           KeySchema:
             - AttributeName: pulseCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: sessionId-index
+          KeySchema:
+            - AttributeName: sessionId
               KeyType: HASH
           Projection:
             ProjectionType: ALL
@@ -703,6 +773,12 @@ Resources:
       - PulsePutItemMethod
       - PulseDeleteItemMethod
       - PulsePostUploadUrlMethod
+      - PulsePostInviteMethod
+      - PulseGetItemSessionsMethod
+      - PulsePostResendInviteMethod
+      - PulsePutExtendDeadlineMethod
+      - PulsePostValidateSessionMethod
+      - PulsePostAcceptConfidentialityMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -2778,6 +2854,985 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetUploadUrlFunction.Arn}/invocations'
 
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3: CloudWatch Log Groups
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseInviteReviewerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-inviteReviewer-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetItemSessionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getItemSessions-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseResendInviteLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-resendInvite-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseExtendDeadlineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-extendDeadline-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseValidateSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-validateSession-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseAcceptConfidentialityLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-acceptConfidentiality-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3: IAM Execution Roles
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseInviteReviewerFunctionRole:
+    # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-inviteReviewer-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseGetItemSessionsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getItemSessions-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+                  - !GetAtt PulseItemsTable.Arn
+
+  PulseResendInviteFunctionRole:
+    # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-resendInvite-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseExtendDeadlineFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-extendDeadline-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+
+  PulseValidateSessionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-validateSession-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Sub '${PulseSessionsTable.Arn}/index/pulseCode-index'
+                  - !Sub '${PulseSessionsTable.Arn}/index/sessionId-index'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+
+  PulseAcceptConfidentialityFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-acceptConfidentiality-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3: Lambda Functions
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseInviteReviewerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseInviteReviewerLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-inviteReviewer-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseInviteReviewerFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref InviteReviewerCodeKey
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, InviteReviewer]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseInviteReviewerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseInviteReviewerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetItemSessionsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetItemSessionsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getItemSessions-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetItemSessionsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetItemSessionsCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetItemSessions]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetItemSessionsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetItemSessionsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseResendInviteFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseResendInviteLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-resendInvite-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseResendInviteFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ResendInviteCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ResendInvite]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseResendInviteFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseResendInviteFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseExtendDeadlineFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseExtendDeadlineLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-extendDeadline-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseExtendDeadlineFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ExtendDeadlineCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ExtendDeadline]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseExtendDeadlineFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseExtendDeadlineFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseValidateSessionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseValidateSessionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-validateSession-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseValidateSessionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ValidateSessionCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ValidateSession]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseValidateSessionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseValidateSessionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseAcceptConfidentialityFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseAcceptConfidentialityLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-acceptConfidentiality-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseAcceptConfidentialityFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref AcceptConfidentialityCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AcceptConfidentiality]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseAcceptConfidentialityFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseAcceptConfidentialityFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3: API Gateway Resources
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # POST /api/manage/items/{itemId}/invite
+  PulseManageItemInviteResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: invite
+
+  PulsePostInviteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemInviteResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseInviteReviewerFunction.Arn}/invocations'
+
+  # GET /api/manage/items/{itemId}/sessions
+  PulseManageItemSessionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: sessions
+
+  PulseGetItemSessionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionsResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetItemSessionsFunction.Arn}/invocations'
+
+  # /api/manage/items/{itemId}/sessions/{sessionId}
+  PulseManageItemSessionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemSessionsResource
+      PathPart: '{sessionId}'
+
+  # POST /api/manage/items/{itemId}/sessions/{sessionId}/resend
+  PulseManageItemSessionResendResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemSessionResource
+      PathPart: resend
+
+  PulsePostResendInviteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionResendResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseResendInviteFunction.Arn}/invocations'
+
+  # PUT /api/manage/items/{itemId}/deadline
+  PulseManageItemDeadlineResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: deadline
+
+  PulsePutExtendDeadlineMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemDeadlineResource
+      HttpMethod: PUT
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseExtendDeadlineFunction.Arn}/invocations'
+
+  # /api/session
+  PulseSessionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: session
+
+  # POST /api/session/validate
+  PulseSessionValidateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionResource
+      PathPart: validate
+
+  PulsePostValidateSessionMethod:
+    # checkov:skip=CKV_AWS_6:Validate-session endpoint is intentionally public — reviewers authenticate via pulse code, not Cognito
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionValidateResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseValidateSessionFunction.Arn}/invocations'
+
+  # /api/session/{sessionId}
+  PulseSessionIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionResource
+      PathPart: '{sessionId}'
+
+  # POST /api/session/{sessionId}/accept-confidentiality
+  PulseSessionAcceptConfidentialityResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: accept-confidentiality
+
+  PulsePostAcceptConfidentialityMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionAcceptConfidentialityResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseAcceptConfidentialityFunction.Arn}/invocations'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3: Scheduled Job Resources (sendReminder + expireSessions)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseSendReminderLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-sendReminder-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseExpireSessionsLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-expireSessions-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSendReminderFunctionRole:
+    # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-sendReminder-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseExpireSessionsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-expireSessions-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+
+  PulseSendReminderFunction:
+    # checkov:skip=CKV_AWS_117:Lambda VPC not required — scheduled job accesses DynamoDB/SES/SNS via AWS service endpoints
+    # checkov:skip=CKV_AWS_116:EventBridge-triggered Lambda — DLQ not applicable; failures logged and alerted via SNS
+    # checkov:skip=CKV_AWS_173:Environment variables contain no sensitive data — table names and topic ARNs only
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSendReminderLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-sendReminder-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseSendReminderFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref SendReminderCodeKey
+      Timeout: 300
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SendReminder]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseExpireSessionsFunction:
+    # checkov:skip=CKV_AWS_117:Lambda VPC not required — scheduled job accesses DynamoDB via AWS service endpoints
+    # checkov:skip=CKV_AWS_116:EventBridge-triggered Lambda — DLQ not applicable; failures logged to CloudWatch
+    # checkov:skip=CKV_AWS_173:Environment variables contain no sensitive data — table name only
+    Type: AWS::Lambda::Function
+    DependsOn: PulseExpireSessionsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-expireSessions-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseExpireSessionsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ExpireSessionsCodeKey
+      Timeout: 300
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ExpireSessions]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # EventBridge scheduled rules
+
+  PulseSendReminderRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'urgd-pulse-sendReminder-${Environment}'
+      Description: Triggers sendReminder Lambda hourly to send deadline reminder emails
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Id: PulseSendReminderTarget
+          Arn: !GetAtt PulseSendReminderFunction.Arn
+
+  PulseExpireSessionsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'urgd-pulse-expireSessions-${Environment}'
+      Description: Triggers expireSessions Lambda every 6 hours to mark past-due sessions as expired
+      ScheduleExpression: rate(6 hours)
+      State: ENABLED
+      Targets:
+        - Id: PulseExpireSessionsTarget
+          Arn: !GetAtt PulseExpireSessionsFunction.Arn
+
+  PulseSendReminderPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseSendReminderFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PulseSendReminderRule.Arn
+
+  PulseExpireSessionsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseExpireSessionsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PulseExpireSessionsRule.Arn
 
 # ─── Outputs ──────────────────────────────────────────────────────────────────
 Outputs:

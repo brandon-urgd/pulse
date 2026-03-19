@@ -1,0 +1,10 @@
+{
+  "name": "urgd-pulse-invitereviewer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Invite Reviewer Lambda",
+  "main": "index.mjs",
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

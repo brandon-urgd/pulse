@@ -1,0 +1,7 @@
+{
+  "name": "urgd-pulse-validatesession",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Validate Session Lambda",
+  "main": "index.mjs"
+}

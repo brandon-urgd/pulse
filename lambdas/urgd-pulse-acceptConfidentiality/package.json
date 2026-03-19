@@ -1,0 +1,7 @@
+{
+  "name": "urgd-pulse-acceptconfidentiality",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Accept Confidentiality Lambda",
+  "main": "index.mjs"
+}

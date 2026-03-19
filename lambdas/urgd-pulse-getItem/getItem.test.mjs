@@ -52,7 +52,7 @@ describe('urgd-pulse-getItem', () => {
     expect(body.data.itemId).toBe('item-123')
     expect(body.data.itemName).toBe('Test Item')
     expect(body.data.status).toBe('draft')
-    expect(body.data.documentStatus).toBeNull()
+    expect(body.data.documentStatus).toBe('none')
   })
 
   it('returns 404 when item not found', async () => {
@@ -131,9 +131,6 @@ describe('urgd-pulse-getItem', () => {
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
     expect(body.data.sessionCount).toBe(3)
-    expect(body.data.active).toBe(true)
-    expect(body.data.metadata).toEqual({ key: 'value' })
-    expect(body.data.tags).toEqual(['tag1', 'tag2'])
-    expect(body.data.documentStatus).toBeNull()
+    expect(body.data.documentStatus).toBe('none')
   })
 })

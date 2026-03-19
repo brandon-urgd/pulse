@@ -1,0 +1,8 @@
+{
+  "name": "urgd-pulse-resendinvite",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Resend Invite Lambda",
+  "main": "index.mjs",
+  "dependencies": {}
+}

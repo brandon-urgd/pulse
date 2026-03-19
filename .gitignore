@@ -22,6 +22,7 @@ __pycache__/
 
 # Local dev/debug scripts — not for CI
 scripts/get_token.py
+scripts/smoke_shield_pipeline.py
 
 # ── Vitest / test cache ───────────────────────────────────────────────────────
 .vitest-cache/

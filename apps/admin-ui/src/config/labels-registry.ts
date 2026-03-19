@@ -113,6 +113,34 @@ export const labels = {
     readOnlyNotice: 'This item is locked and cannot be edited.',
   },
 
+  // Invitation section (within ItemDetail)
+  invitation: {
+    sectionTitle: 'Reviewers',
+    emailsLabel: 'Invite reviewers',
+    emailsPlaceholder: 'email@example.com, another@example.com',
+    emailsHint: 'Separate multiple emails with commas.',
+    inviteButton: 'Invite Reviewers',
+    inviting: 'Inviting…',
+    inviteSuccess: 'Invitations sent.',
+    inviteError: 'Failed to send invitations. Please try again.',
+    inviteLimitError: 'Session limit reached for this item.',
+    noSessions: 'No reviewers invited yet.',
+    resendButton: 'Resend',
+    resending: 'Resending…',
+    resendSuccess: 'Invitation resent.',
+    resendError: 'Failed to resend invitation.',
+    statusNotStarted: 'Not started',
+    statusInProgress: 'In progress',
+    statusCompleted: 'Completed',
+    statusExpired: 'Expired',
+    extendDeadlineTitle: 'Extend deadline',
+    extendDeadlineLabel: 'New close date',
+    extendDeadlineButton: 'Extend',
+    extending: 'Extending…',
+    extendSuccess: 'Deadline extended.',
+    extendError: 'Failed to extend deadline.',
+  },
+
   // Settings
   settings: {
     title: 'Settings',
