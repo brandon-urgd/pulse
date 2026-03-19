@@ -9,16 +9,6 @@ requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-/**
- * Masks a reviewer email address: first char + *** + @ + domain
- * e.g. john@example.com → j***@example.com
- */
-function maskEmail(email) {
-  if (!email || !email.includes('@')) return '***'
-  const [local, domain] = email.split('@')
-  return `${local.charAt(0)}***@${domain}`
-}
-
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -66,11 +56,12 @@ export const handler = async (event) => {
     }))
 
     const sessions = (sessionsResult.Items ?? [])
+      .filter((item) => item.status?.S !== 'cancelled')
       .map((item) => {
         const session = {
           sessionId: item.sessionId?.S ?? '',
           pulseCode: item.pulseCode?.S ?? '',
-          maskedEmail: maskEmail(item.reviewerEmail?.S),
+          reviewerEmail: item.reviewerEmail?.S ?? '',
           status: item.status?.S ?? 'not_started',
           createdAt: item.createdAt?.S ?? '',
           expiresAt: item.expiresAt?.S ?? '',

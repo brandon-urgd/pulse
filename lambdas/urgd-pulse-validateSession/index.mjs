@@ -82,12 +82,15 @@ export const handler = async (event) => {
     const isExpiredByStatus = status === 'expired'
     const isExpiredByDate = expiresAt && new Date(expiresAt) < new Date()
 
+    if (status === 'cancelled') {
+      log('info', 'ValidateSession: session cancelled', { requestId, sessionId: foundSessionId, tenantId })
+      return errorResponse(410, 'This invitation has been cancelled', {}, origin)
+    }
+
     if (isExpiredByStatus || isExpiredByDate) {
       log('info', 'ValidateSession: session expired', { requestId, sessionId: foundSessionId, tenantId })
       return errorResponse(410, 'This session has expired', {}, origin)
     }
-
-    // Validate email (case-insensitive)
     if (!reviewerEmail || reviewerEmail.toLowerCase() !== email.toLowerCase().trim()) {
       log('warn', 'ValidateSession: email mismatch', { requestId, sessionId: foundSessionId, tenantId })
       return errorResponse(403, 'Email address does not match our records', {}, origin)

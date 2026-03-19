@@ -1,7 +1,8 @@
 // ur/gd pulse — Cancel Session Lambda
 // DELETE /api/manage/items/{itemId}/sessions/{sessionId} → cancels a not_started session
+// Sets status to "cancelled" (soft delete) so the pulse code returns a clear message if used
 
-import { DynamoDBClient, GetItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 requireEnv(['SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
@@ -47,11 +48,18 @@ export const handler = async (event) => {
       return errorResponse(409, 'Only not_started sessions can be cancelled', {}, origin)
     }
 
-    await dynamo.send(new DeleteItemCommand({
+    // Soft-cancel: mark as "cancelled" so the pulse code returns a clear message if used
+    await dynamo.send(new UpdateItemCommand({
       TableName: process.env.SESSIONS_TABLE,
       Key: {
         tenantId: { S: tenantId },
         sessionId: { S: sessionId },
+      },
+      UpdateExpression: 'SET #status = :cancelled, cancelledAt = :now',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':cancelled': { S: 'cancelled' },
+        ':now': { S: new Date().toISOString() },
       },
     }))
 

@@ -132,7 +132,7 @@ Parameters:
     Description: S3 key for urgd-pulse-getItemSessions Lambda ZIP
 
   CancelSessionCodeKey:
-    Type: AWS::SSM::Parameter::Value<String>
+    Type: String
     Default: lambda-packages/urgd-pulse-cancelSession/latest.zip
     Description: S3 key for urgd-pulse-cancelSession Lambda ZIP
 
