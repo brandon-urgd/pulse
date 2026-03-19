@@ -5,7 +5,7 @@ import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { SESClient, SendEmailCommand, SendRawEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation

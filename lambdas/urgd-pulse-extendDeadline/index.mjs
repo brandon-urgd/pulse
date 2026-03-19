@@ -2,7 +2,7 @@
 // PUT /api/manage/items/{itemId}/deadline → extends item closeDate and updates active sessions
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])

@@ -3,7 +3,7 @@
 // Updates session record with confidentialityAcceptedAt timestamp
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from '../shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
