@@ -410,7 +410,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     </p>
                   )}
 
-                  <form onSubmit={handleSubmit} noValidate className={styles.form}>
+                  <form id="item-detail-form" onSubmit={handleSubmit} noValidate className={styles.form}>
                     <div className={styles.field}>
                       <label htmlFor="itemName" className={styles.label}>
                         {labels.itemDetail.fieldName} <span className={styles.required} aria-hidden="true">*</span>
@@ -542,37 +542,45 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         {formError}
                       </p>
                     )}
-
-                    <div className={styles.actions}>
-                      {isEditMode && (
-                        <button
-                          type="button"
-                          className={styles.deleteButton}
-                          onClick={() => setShowDeleteModal(true)}
-                          disabled={isDeleting}
-                        >
-                          {labels.itemDetail.deleteButton}
-                        </button>
-                      )}
-                      <div className={styles.actionsSpacer} />
-                      <button
-                        type="button"
-                        className={styles.cancelButton}
-                        onClick={handleCancel}
-                        disabled={isSaving}
-                      >
-                        {labels.itemDetail.cancelButton}
-                      </button>
-                      {!isLocked && (
-                        <button type="submit" className={styles.saveButton} disabled={isSaving}>
-                          {isSaving ? '…' : labels.itemDetail.saveButton}
-                        </button>
-                      )}
-                    </div>
                   </form>
                 </>
               )}
             </div>
+
+            {/* Actions — pinned footer outside scrollable body */}
+            {!(isEditMode && itemLoading) && (
+              <div className={styles.actions}>
+                {isEditMode && (
+                  <button
+                    type="button"
+                    className={styles.deleteButton}
+                    onClick={() => setShowDeleteModal(true)}
+                    disabled={isDeleting}
+                  >
+                    {labels.itemDetail.deleteButton}
+                  </button>
+                )}
+                <div className={styles.actionsSpacer} />
+                <button
+                  type="button"
+                  className={styles.cancelButton}
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                >
+                  {labels.itemDetail.cancelButton}
+                </button>
+                {!isLocked && (
+                  <button
+                    type="submit"
+                    form="item-detail-form"
+                    className={styles.saveButton}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? '…' : labels.itemDetail.saveButton}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Preview pane */}
