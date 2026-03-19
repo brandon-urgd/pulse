@@ -361,6 +361,9 @@ export default function Chat() {
         }
       } catch (err) {
         const status = (err as Error & { status?: number }).status
+        // Ensure session is in_progress so the End Session button appears
+        // even after a failed auto-send — reviewer needs a way out
+        setSessionStatus('in_progress')
         handleSendError(status, currentMessages)
       } finally {
         setIsThinking(false)
