@@ -17,8 +17,7 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const FROM_ADDRESS = 'pulse@urgdstudios.com'
-const REPLY_TO_ADDRESS = 'no-reply@urgdstudios.com'
+const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 const DEFAULT_MAX_SESSIONS_FREE = 5
 const DEFAULT_MAX_SESSIONS_PAID = 50
 

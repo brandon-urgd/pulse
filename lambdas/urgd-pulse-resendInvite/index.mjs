@@ -13,7 +13,7 @@ const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const FROM_ADDRESS = 'pulse@urgdstudios.com'
+const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 
 /**
  * Builds the invitation email HTML body with a Gmail-compatible table-based button.

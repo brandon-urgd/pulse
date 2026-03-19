@@ -14,27 +14,27 @@ const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const FROM_ADDRESS = 'pulse@urgdstudios.com'
+const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 const REMINDER_WINDOW_HOURS = 48
 
 /**
- * Fetches the emailReminders feature flag for a tenant.
- * Returns true (send reminders) by default if tenant record not found.
+ * Fetches the emailReminders feature flag and inviter email for a tenant.
+ * Returns { enabled: true, inviterEmail: null } by default if tenant record not found.
  */
-async function getEmailRemindersFlag(tenantId) {
+async function getTenantInfo(tenantId) {
   try {
     const result = await dynamo.send(new GetItemCommand({
       TableName: process.env.TENANTS_TABLE,
       Key: { tenantId: { S: tenantId } },
     }))
-    if (!result.Item) return true
+    if (!result.Item) return { enabled: true, inviterEmail: null }
     const featuresMap = result.Item.features?.M ?? {}
-    // emailReminders defaults to true if not explicitly set to false
-    if (featuresMap.emailReminders?.BOOL === false) return false
-    return true
+    const enabled = featuresMap.emailReminders?.BOOL !== false
+    const inviterEmail = result.Item.email?.S ?? null
+    return { enabled, inviterEmail }
   } catch (err) {
-    log('warn', 'SendReminder: failed to fetch tenant feature flag, defaulting to true', { tenantId, errorName: err.name })
-    return true
+    log('warn', 'SendReminder: failed to fetch tenant info, defaulting to enabled', { tenantId, errorName: err.name })
+    return { enabled: true, inviterEmail: null }
   }
 }
 
@@ -60,7 +60,7 @@ async function getItem(tenantId, itemId) {
 /**
  * Sends a reminder email via SES. On failure, publishes alert to SNS.
  */
-async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCode, closeDate, tenantId, sessionId }) {
+async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCode, closeDate, tenantId, sessionId, inviterEmail }) {
   const closeDateFormatted = new Date(closeDate).toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
@@ -117,7 +117,7 @@ async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCo
     await ses.send(new SendEmailCommand({
       Source: FROM_ADDRESS,
       Destination: { ToAddresses: [reviewerEmail] },
-      ReplyToAddresses: [REPLY_TO_ADDRESS],
+      ReplyToAddresses: [inviterEmail ?? FROM_ADDRESS],
       Message: {
         Subject: { Data: subject, Charset: 'UTF-8' },
         Body: {
@@ -222,11 +222,12 @@ export const handler = async (event) => {
 
       // Check emailReminders feature flag (cached per tenant)
       if (!tenantFlagCache.has(tenantId)) {
-        const flag = await getEmailRemindersFlag(tenantId)
-        tenantFlagCache.set(tenantId, flag)
+        const info = await getTenantInfo(tenantId)
+        tenantFlagCache.set(tenantId, info)
       }
 
-      if (!tenantFlagCache.get(tenantId)) {
+      const tenantInfo = tenantFlagCache.get(tenantId)
+      if (!tenantInfo.enabled) {
         log('info', 'SendReminder: emailReminders disabled for tenant', { tenantId })
         totalSkipped++
         continue
@@ -243,6 +244,7 @@ export const handler = async (event) => {
         closeDate,
         tenantId,
         sessionId,
+        inviterEmail: tenantInfo.inviterEmail,
       })
 
       if (sent) totalSent++
