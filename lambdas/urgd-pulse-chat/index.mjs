@@ -10,6 +10,22 @@ import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { ulid } from 'ulid'
 
+// X-Ray annotations — gracefully no-ops outside Lambda environment
+async function addXRayAnnotations(annotations) {
+  try {
+    if (!process.env._X_AMZN_TRACE_ID) return
+    const xray = await import('aws-xray-sdk-core')
+    const segment = xray.getSegment()
+    if (segment) {
+      for (const [key, value] of Object.entries(annotations)) {
+        segment.addAnnotation(key, String(value))
+      }
+    }
+  } catch {
+    // X-Ray SDK not available (local/test) — safe to ignore
+  }
+}
+
 requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'ITEMS_TABLE', 'DATA_BUCKET', 'BEDROCK_MODEL_ID', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
@@ -202,6 +218,14 @@ Guidelines:
     const tokensIn = responseBody.usage?.input_tokens || 0
     const tokensOut = responseBody.usage?.output_tokens || 0
 
+    // Annotate X-Ray trace with Bedrock metadata
+    await addXRayAnnotations({
+      bedrockModelId: process.env.BEDROCK_MODEL_ID,
+      bedrockLatencyMs: bedrockLatency,
+      bedrockTokensIn: tokensIn,
+      bedrockTokensOut: tokensOut,
+    })
+
     // 9. Save agent response
     const agentMessageId = ulid()
     await dynamo.send(new PutItemCommand({
@@ -298,6 +322,7 @@ Guidelines:
     }, {}, origin)
   } catch (err) {
     log('error', 'Chat: unexpected error', { requestId, sessionId, tenantId, errorName: err.name })
+    await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
     return errorResponse(500, 'Failed to process chat message', {}, origin)
   }
 }
