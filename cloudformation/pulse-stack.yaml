@@ -1412,7 +1412,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0'
 
   PulseCognitoAuthFunctionRole:
     Type: AWS::IAM::Role
@@ -4659,7 +4661,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -4777,7 +4781,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0'
 
   PulseDeleteSessionTranscriptFunctionRole:
     Type: AWS::IAM::Role

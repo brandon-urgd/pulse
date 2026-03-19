@@ -321,8 +321,15 @@ Guidelines:
       },
     }, {}, origin)
   } catch (err) {
-    log('error', 'Chat: unexpected error', { requestId, sessionId, tenantId, errorName: err.name })
+    log('error', 'Chat: unexpected error', { requestId, sessionId, tenantId, errorName: err.name, errorMessage: err.message, stack: err.stack })
     await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
+
+    if (err.name === 'AccessDeniedException') {
+      return errorResponse(503, 'AI service temporarily unavailable', {}, origin)
+    }
+    if (err.name === 'ThrottlingException' || err.name === 'ServiceUnavailableException') {
+      return errorResponse(503, 'AI service temporarily unavailable — please try again', {}, origin)
+    }
     return errorResponse(500, 'Failed to process chat message', {}, origin)
   }
 }
