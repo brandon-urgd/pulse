@@ -22,6 +22,7 @@ interface Props {
   itemId: string;
   itemName: string;
   onClose: () => void;
+  skipLabel?: string;
 }
 
 function todayIso(): string {
@@ -39,7 +40,7 @@ function sessionStatusLabel(status: SessionStatus): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function InviteModal({ itemId, itemName, onClose }: Props) {
+export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -50,6 +51,8 @@ export default function InviteModal({ itemId, itemName, onClose }: Props) {
 
   const [resendingId, setResendingId]   = useState<string | null>(null);
   const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelMessages, setCancelMessages] = useState<Record<string, string>>({});
 
   const [extendDate, setExtendDate]     = useState('');
   const [isExtending, setIsExtending]   = useState(false);
@@ -84,6 +87,7 @@ export default function InviteModal({ itemId, itemName, onClose }: Props) {
       await authedMutate(`/api/manage/items/${itemId}/invite`, 'POST', { emails }, navigate);
       setInviteEmails('');
       setInviteSuccess(labels.invitation.inviteSuccess);
+      // Refetch to get masked emails and full session data
       refetchSessions();
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch (err: unknown) {
@@ -91,6 +95,28 @@ export default function InviteModal({ itemId, itemName, onClose }: Props) {
       setInviteError(status === 403 ? labels.invitation.inviteLimitError : labels.invitation.inviteError);
     } finally {
       setIsInviting(false);
+    }
+  }
+
+  async function handleCancel(sessionId: string) {
+    setCancelMessages(prev => ({ ...prev, [sessionId]: '' }));
+    setCancellingId(sessionId);
+    try {
+      await authedMutate(
+        `/api/manage/items/${itemId}/sessions/${sessionId}`,
+        'DELETE',
+        undefined,
+        navigate
+      );
+      // Remove from list optimistically
+      queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
+        data: (old?.data ?? []).filter(s => s.sessionId !== sessionId),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    } catch {
+      setCancelMessages(prev => ({ ...prev, [sessionId]: 'Failed to cancel. Try again.' }));
+    } finally {
+      setCancellingId(null);
     }
   }
 
@@ -200,21 +226,36 @@ export default function InviteModal({ itemId, itemName, onClose }: Props) {
                       Invited {new Date(session.createdAt).toLocaleDateString()}
                     </span>
                     {session.status === 'not_started' && (
-                      <button
-                        type="button"
-                        className={styles.resendButton}
-                        onClick={() => handleResend(session.sessionId)}
-                        disabled={resendingId === session.sessionId}
-                      >
-                        {resendingId === session.sessionId
-                          ? labels.invitation.resending
-                          : labels.invitation.resendButton}
-                      </button>
+                      <div className={styles.sessionActions}>
+                        <button
+                          type="button"
+                          className={styles.resendButton}
+                          onClick={() => handleResend(session.sessionId)}
+                          disabled={resendingId === session.sessionId || cancellingId === session.sessionId}
+                        >
+                          {resendingId === session.sessionId
+                            ? labels.invitation.resending
+                            : labels.invitation.resendButton}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.cancelInviteButton}
+                          onClick={() => handleCancel(session.sessionId)}
+                          disabled={cancellingId === session.sessionId || resendingId === session.sessionId}
+                        >
+                          {cancellingId === session.sessionId ? '…' : 'Cancel invite'}
+                        </button>
+                      </div>
                     )}
                   </div>
                   {resendMessages[session.sessionId] && (
                     <p aria-live="polite" className={styles.resendMessage}>
                       {resendMessages[session.sessionId]}
+                    </p>
+                  )}
+                  {cancelMessages[session.sessionId] && (
+                    <p aria-live="polite" className={styles.error}>
+                      {cancelMessages[session.sessionId]}
                     </p>
                   )}
                 </li>
@@ -252,6 +293,14 @@ export default function InviteModal({ itemId, itemName, onClose }: Props) {
               <p aria-live="polite" className={styles.success}>{extendMessage}</p>
             )}
           </form>
+
+          {skipLabel && (
+            <div className={styles.skipRow}>
+              <button type="button" className={styles.skipButton} onClick={onClose}>
+                {skipLabel}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

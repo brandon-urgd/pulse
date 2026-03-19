@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import InviteModal from './InviteModal';
 import styles from './ItemDetailModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -89,7 +90,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const [isLocked, setIsLocked]           = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError]     = useState('');
-
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [savedItem, setSavedItem]         = useState<{ itemId: string; itemName: string } | null>(null);
   // Upload state
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
   const [isUploading, setIsUploading]   = useState(false);
@@ -146,7 +148,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         savedItemId.current = resp.data.itemId;
         autoSaved.current = true;
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        if (!uploadingCreate.current) onClose();
+        if (!uploadingCreate.current) {
+          // After creating a new item, prompt to invite reviewers
+          setSavedItem({ itemId: resp.data.itemId, itemName: resp.data.itemName });
+          setShowInviteModal(true);
+        }
       },
       onError: (err) => {
         setFormError(labels.itemDetail.saveError);
@@ -544,6 +550,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Post-save invite flow — shown after creating a new item */}
+      {showInviteModal && savedItem && (
+        <InviteModal
+          itemId={savedItem.itemId}
+          itemName={savedItem.itemName}
+          onClose={() => { setShowInviteModal(false); onClose(); }}
+          skipLabel="Skip for now"
+        />
       )}
     </div>
   );

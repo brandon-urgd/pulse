@@ -180,17 +180,18 @@ export default function Confidentiality() {
           )}
 
           <p style={styles.paragraph}>
-            Before you begin, please review and accept the following terms. Your feedback will be
-            collected and processed by Pulse on behalf of the person who invited you.
+            The material you are about to review may contain non-public, proprietary, or sensitive
+            information belonging to the person who invited you. By participating, you agree to
+            treat that material with discretion and not share, reproduce, or distribute it outside
+            of this session.
           </p>
           <p style={styles.paragraph}>
-            Your responses are confidential and will only be shared in aggregate form with the
-            item owner. Your personal information will not be disclosed to third parties except
-            as required by law.
+            Your feedback will be collected and processed by Pulse on behalf of the person who
+            invited you. Your responses, including the conversation transcript, may be reviewed
+            by the item owner.
           </p>
           <p style={styles.paragraph}>
-            By clicking "I Accept" below, you agree to our terms of use and acknowledge our
-            privacy policy.
+            By clicking "I Accept" you agree to our Terms of Use and acknowledge our Privacy Policy.
           </p>
 
           <div style={styles.linksRow}>

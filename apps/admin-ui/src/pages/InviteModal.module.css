@@ -256,3 +256,48 @@
   gap: 0.5rem;
   align-items: center;
 }
+
+.sessionActions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.cancelInviteButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  background: none;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.5rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.cancelInviteButton:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.cancelInviteButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skipRow {
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+.skipButton {
+  background: none;
+  border: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.25rem;
+}
+
+.skipButton:hover {
+  color: var(--color-text-primary);
+}

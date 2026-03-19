@@ -152,8 +152,10 @@ export const handler = async (event) => {
 
     const existingCount = existingSessionsResult.Count ?? 0
 
-    // Determine maxSessionsPerItem from tenant tier (TENANTS_TABLE is optional — fall back to free defaults)
+    // Fetch tenant record for feature flags + inviter identity
     let maxSessions = DEFAULT_MAX_SESSIONS_FREE
+    let inviterName = null
+    let inviterEmail = null
     if (process.env.TENANTS_TABLE) {
       try {
         const tenantRecord = await dynamo.send(new GetItemCommand({
@@ -168,9 +170,11 @@ export const handler = async (event) => {
           } else {
             maxSessions = tier === 'paid' ? DEFAULT_MAX_SESSIONS_PAID : DEFAULT_MAX_SESSIONS_FREE
           }
+          inviterName = tenantRecord.Item.displayName?.S ?? null
+          inviterEmail = tenantRecord.Item.email?.S ?? null
         }
       } catch (err) {
-        log('warn', 'InviteReviewer: could not fetch tenant for feature flag, using free defaults', { requestId, tenantId })
+        log('warn', 'InviteReviewer: could not fetch tenant record, using defaults', { requestId, tenantId })
       }
     }
 
@@ -232,34 +236,61 @@ export const handler = async (event) => {
       }
 
       // Send invitation email via SES
-      const subject = `You've been invited to review: ${itemName}`
+      const inviterDisplay = inviterName ?? 'Someone'
+      const contactLine = inviterEmail
+        ? `For questions, contact <a href="mailto:${inviterEmail}" style="color:#4a7c59;">${inviterEmail}</a>.`
+        : ''
+      const contactLinePlain = inviterEmail ? `For questions, contact ${inviterEmail}.` : ''
+
+      const subject = `${inviterDisplay} invited you to provide feedback on "${itemName}"`
       const textBody = [
-        `You've been invited to provide feedback on "${itemName}".`,
+        `${inviterDisplay} has invited you to provide feedback on "${itemName}".`,
         '',
         `Direct link: ${sessionLink}`,
         `Pulse Code: ${pulseCode}`,
         '',
         'You can also enter your Pulse Code at pulse.urgdstudios.com to access your session.',
         '',
-        'This invitation was sent by Pulse, powered by ur/gd Studios.',
+        contactLinePlain,
+        '',
+        '---',
+        'Sent by Pulse, powered by ur/gd Studios (https://www.urgdstudios.com)',
+        'ur/gd Studios LLC · ATTN: ur/gd Studios LLC, The Cloud Room, 1424 11th Ave STE 400, Seattle, WA 98122-4271',
+        'Privacy Policy: https://www.urgdstudios.com/privacy · Terms: https://www.urgdstudios.com/terms',
       ].join('\n')
 
       const htmlBody = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Pulse Invitation</title></head>
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-  <h2 style="color: #1a1a1a;">You've been invited to review</h2>
-  <p style="font-size: 16px;">You've been invited to provide feedback on <strong>${itemName}</strong>.</p>
-  <p style="margin: 24px 0;">
-    <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px;">
+  <h2 style="color: #1a1a1a; margin-bottom: 8px;">You've been invited to review</h2>
+  <p style="font-size: 16px; margin-top: 0;">
+    <strong>${inviterDisplay}</strong> has invited you to provide feedback on <strong>${itemName}</strong>.
+  </p>
+  ${contactLine ? `<p style="font-size: 14px; color: #555;">${contactLine}</p>` : ''}
+  <p style="margin: 28px 0;">
+    <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
       Start Your Review
     </a>
   </p>
-  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}">${appUrl}</a>:</p>
-  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a;">${pulseCode}</p>
-  ${qrCodeBuffer ? `<p style="font-size: 14px; color: #555;">QR code attached for quick access.</p>` : ''}
-  <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-  <p style="font-size: 12px; color: #999;">Sent by Pulse, powered by ur/gd Studios. Reply-to: ${REPLY_TO_ADDRESS}</p>
+  <p style="font-size: 13px; color: #555; word-break: break-all;">
+    Or copy this link: <a href="${sessionLink}" style="color:#4a7c59;">${sessionLink}</a>
+  </p>
+  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#4a7c59;">${appUrl}</a>:</p>
+  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a; margin: 8px 0 24px;">${pulseCode}</p>
+  ${qrCodeBuffer ? `<p style="font-size: 14px; color: #555;">A QR code is attached for quick access.</p>` : ''}
+  <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0 16px;">
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#999;">ur/gd Studios</a>
+  </p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    ur/gd Studios LLC &middot; ATTN: ur/gd Studios LLC, The Cloud Room, 1424 11th Ave STE 400, Seattle, WA 98122-4271
+  </p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    <a href="https://www.urgdstudios.com/privacy" style="color:#999;">Privacy Policy</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://www.urgdstudios.com/terms" style="color:#999;">Terms of Use</a>
+  </p>
 </body>
 </html>`
 

@@ -131,6 +131,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-getItemSessions/latest.zip
     Description: S3 key for urgd-pulse-getItemSessions Lambda ZIP
 
+  CancelSessionCodeKey:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: lambda-packages/urgd-pulse-cancelSession/latest.zip
+    Description: S3 key for urgd-pulse-cancelSession Lambda ZIP
+
   ResendInviteCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-resendInvite/latest.zip
@@ -260,6 +265,7 @@ Mappings:
       InviteReviewer: 3
       GetItemSessions: 3
       ResendInvite: 3
+      CancelSession: 3
       ExtendDeadline: 3
       ValidateSession: 3
       AcceptConfidentiality: 3
@@ -285,6 +291,7 @@ Mappings:
       InviteReviewer: 5
       GetItemSessions: 5
       ResendInvite: 5
+      CancelSession: 5
       ExtendDeadline: 5
       ValidateSession: 5
       AcceptConfidentiality: 5
@@ -310,6 +317,7 @@ Mappings:
       InviteReviewer: 10
       GetItemSessions: 10
       ResendInvite: 5
+      CancelSession: 5
       ExtendDeadline: 5
       ValidateSession: 15
       AcceptConfidentiality: 10
@@ -776,6 +784,7 @@ Resources:
       - PulsePostInviteMethod
       - PulseGetItemSessionsMethod
       - PulsePostResendInviteMethod
+      - PulseDeleteCancelSessionMethod
       - PulsePutExtendDeadlineMethod
       - PulsePostValidateSessionMethod
       - PulsePostAcceptConfidentialityMethod
@@ -2892,6 +2901,17 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseCancelSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-cancelSession-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   PulseExtendDeadlineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -3075,6 +3095,39 @@ Resources:
                   - kms:GenerateDataKey*
                   - kms:Decrypt
                 Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseCancelSessionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-cancelSession-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt PulseSessionsTable.Arn
 
   PulseExtendDeadlineFunctionRole:
     Type: AWS::IAM::Role
@@ -3323,6 +3376,48 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
+  PulseCancelSessionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCancelSessionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-cancelSession-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCancelSessionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CancelSessionCodeKey
+      Timeout: 15
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CancelSession]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCancelSessionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCancelSessionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
   PulseExtendDeadlineFunction:
     Type: AWS::Lambda::Function
     DependsOn: PulseExtendDeadlineLogGroup
@@ -3525,6 +3620,20 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseResendInviteFunction.Arn}/invocations'
+
+  # DELETE /api/manage/items/{itemId}/sessions/{sessionId}
+  PulseDeleteCancelSessionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionResource
+      HttpMethod: DELETE
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCancelSessionFunction.Arn}/invocations'
 
   # PUT /api/manage/items/{itemId}/deadline
   PulseManageItemDeadlineResource:

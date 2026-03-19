@@ -124,9 +124,10 @@ export default function AdminLayout() {
           {isDark ? '☀️' : '🌙'}
         </button>
 
-        {/* Avatar */}
-        <div
-          aria-label={labels.layout.avatarAlt}
+        {/* Avatar — links to settings */}
+        <Link
+          to="/admin/settings"
+          aria-label="Go to settings"
           style={{
             width: 32,
             height: 32,
@@ -138,11 +139,12 @@ export default function AdminLayout() {
             fontSize: 'var(--font-size-sm)',
             fontWeight: 600,
             color: 'var(--color-accent-pulse)',
-            cursor: 'default',
+            textDecoration: 'none',
+            flexShrink: 0,
           }}
         >
           {user?.email?.charAt(0).toUpperCase() ?? '?'}
-        </div>
+        </Link>
       </header>
 
       {/* Page content */}
