@@ -85,10 +85,26 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
 
     setIsInviting(true);
     try {
-      await authedMutate(`/api/manage/items/${itemId}/invite`, 'POST', { emails }, navigate);
+      const result = await authedMutate(
+        `/api/manage/items/${itemId}/invite`, 'POST', { emails }, navigate
+      ) as { data: { sessions: Array<{ sessionId: string; reviewerEmail?: string }> } } | null;
       setInviteEmails('');
       setInviteSuccess(labels.invitation.inviteSuccess);
-      // Refetch to get masked emails and full session data
+
+      // Optimistically append new sessions so they appear immediately
+      if (result?.data?.sessions?.length) {
+        const newSessions: Session[] = result.data.sessions.map((s, i) => ({
+          sessionId: s.sessionId,
+          reviewerEmail: emails[i] ?? s.reviewerEmail ?? '',
+          status: 'not_started' as SessionStatus,
+          createdAt: new Date().toISOString(),
+        }));
+        queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
+          data: [...(old?.data ?? []), ...newSessions],
+        }));
+      }
+
+      // Background refetch to get masked emails from server
       refetchSessions();
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch (err: unknown) {

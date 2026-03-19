@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
@@ -16,6 +16,39 @@ interface Item {
   sessionCount: number;
   closeDate: string;
   updatedAt: string;
+  createdAt?: string;
+}
+
+type SortField = 'name' | 'created' | 'dueDate';
+type SortDir = 'asc' | 'desc';
+
+const SORT_STORAGE_KEY = 'pulse_items_sort';
+
+function loadSort(): { field: SortField; dir: SortDir } {
+  try {
+    const raw = localStorage.getItem(SORT_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { field: 'created', dir: 'desc' };
+}
+
+function saveSort(field: SortField, dir: SortDir) {
+  try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ field, dir })); } catch { /* ignore */ }
+}
+
+function sortItems(items: Item[], field: SortField, dir: SortDir): Item[] {
+  const sorted = [...items].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'name') {
+      cmp = (a.itemName ?? '').localeCompare(b.itemName ?? '');
+    } else if (field === 'created') {
+      cmp = (a.createdAt ?? a.updatedAt ?? '').localeCompare(b.createdAt ?? b.updatedAt ?? '');
+    } else if (field === 'dueDate') {
+      cmp = (a.closeDate ?? '').localeCompare(b.closeDate ?? '');
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
 }
 
 interface ItemsResponse {
@@ -155,9 +188,22 @@ export default function Items() {
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
 
+  const [sortField, setSortField] = useState<SortField>(() => loadSort().field);
+  const [sortDir, setSortDir] = useState<SortDir>(() => loadSort().dir);
+
+  function handleSort(field: SortField) {
+    const newDir: SortDir = sortField === field && sortDir === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortDir(newDir);
+    saveSort(field, newDir);
+  }
+
   useEffect(() => {
     document.title = labels.items.documentTitle;
   }, []);
+
+  const rawItems = data?.data ?? [];
+  const items = useMemo(() => sortItems(rawItems, sortField, sortDir), [rawItems, sortField, sortDir]);
 
   if (isLoading) return <div className={styles.container} aria-busy="true" />;
 
@@ -172,7 +218,11 @@ export default function Items() {
     );
   }
 
-  const items = data?.data ?? [];
+  const sortLabel = (field: SortField, label: string) => {
+    const active = sortField === field;
+    const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    return `${label}${arrow}`;
+  };
 
   return (
     <div className={styles.container}>
@@ -182,6 +232,26 @@ export default function Items() {
           {labels.items.newItemButton}
         </button>
       </div>
+
+      {rawItems.length > 0 && (
+        <div className={styles.sortBar} role="group" aria-label="Sort items">
+          <span className={styles.sortLabel}>Sort:</span>
+          {(['name', 'created', 'dueDate'] as SortField[]).map((f) => {
+            const labelMap: Record<SortField, string> = { name: 'Name', created: 'Created', dueDate: 'Due date' };
+            return (
+              <button
+                key={f}
+                type="button"
+                className={`${styles.sortButton} ${sortField === f ? styles.sortButtonActive : ''}`}
+                onClick={() => handleSort(f)}
+                aria-pressed={sortField === f}
+              >
+                {sortLabel(f, labelMap[f])}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className={styles.emptyState}><p>{labels.items.emptyState}</p></div>

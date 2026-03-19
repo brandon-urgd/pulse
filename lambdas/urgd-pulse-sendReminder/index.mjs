@@ -15,7 +15,6 @@ const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'pulse@urgdstudios.com'
-const REPLY_TO_ADDRESS = 'no-reply@urgdstudios.com'
 const REMINDER_WINDOW_HOURS = 48
 
 /**
@@ -75,7 +74,10 @@ async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCo
     '',
     'You can also enter your Pulse Code at pulse.urgdstudios.com to access your session.',
     '',
-    'Sent by Pulse, powered by ur/gd Studios.',
+    '---',
+    'Sent by Pulse, powered by ur/gd Studios (https://www.urgdstudios.com)',
+    'ur/gd Studios LLC · The Cloud Room · 1424 11th Ave STE 400 · Seattle, WA 98122-4271',
+    'Privacy Policy: https://www.urgdstudios.com/privacy | Terms: https://www.urgdstudios.com/terms',
   ].join('\n')
 
   const htmlBody = `<!DOCTYPE html>
@@ -84,15 +86,30 @@ async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCo
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
   <h2 style="color: #1a1a1a;">Your review is due soon</h2>
   <p style="font-size: 16px;">This is a reminder that your review of <strong>${itemName}</strong> is due on <strong>${closeDateFormatted}</strong>.</p>
-  <p style="margin: 24px 0;">
-    <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px;">
-      Continue Your Review
-    </a>
+  <table cellpadding="0" cellspacing="0" border="0" style="margin: 28px 0;">
+    <tr>
+      <td style="background-color:#4a7c59; border-radius:6px; padding:12px 24px;">
+        <a href="${sessionLink}" style="color:#ffffff; text-decoration:none; font-size:16px; font-weight:600; font-family:sans-serif;">
+          Continue Your Review
+        </a>
+      </td>
+    </tr>
+  </table>
+  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${process.env.APP_URL}" style="color:#4a7c59;">pulse.urgdstudios.com</a>:</p>
+  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a; margin: 8px 0 24px;">${pulseCode}</p>
+  <p style="font-size: 13px; color: #555;">Direct link: <a href="${sessionLink}" style="color:#4a7c59;">${sessionLink}</a></p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0 16px;">
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#999;">ur/gd Studios</a>
   </p>
-  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${process.env.APP_URL}">${process.env.APP_URL}</a>:</p>
-  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a;">${pulseCode}</p>
-  <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-  <p style="font-size: 12px; color: #999;">Sent by Pulse, powered by ur/gd Studios. Reply-to: ${REPLY_TO_ADDRESS}</p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    ur/gd Studios LLC &middot; The Cloud Room &middot; 1424 11th Ave STE 400 &middot; Seattle, WA 98122-4271
+  </p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    <a href="https://www.urgdstudios.com/privacy" style="color:#999;">Privacy Policy</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://www.urgdstudios.com/terms" style="color:#999;">Terms of Use</a>
+  </p>
 </body>
 </html>`
 
