@@ -39,7 +39,7 @@ interface Item {
 
 interface Session {
   sessionId: string;
-  maskedEmail: string;
+  reviewerEmail: string;
   status: SessionStatus;
   createdAt: string;
   expiresAt?: string;
@@ -680,7 +680,7 @@ export default function ItemDetail() {
               {sessions.map(session => (
                 <li key={session.sessionId} className={styles.sessionRow}>
                   <div className={styles.sessionInfo}>
-                    <span className={styles.maskedEmail}>{session.maskedEmail}</span>
+                    <span className={styles.maskedEmail}>{session.reviewerEmail}</span>
                     <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
                       {sessionStatusLabel(session.status)}
                     </span>

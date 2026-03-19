@@ -6,7 +6,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 
 // Fail-fast env var validation
@@ -237,7 +237,6 @@ export const handler = async (event) => {
         : null
 
       const subject = `${inviterDisplay} invited you to provide feedback on "${itemName}"`
-      const appUrl = process.env.APP_URL
 
       const textBody = [
         `${inviterDisplay} has invited you to provide feedback on "${itemName}".`,
