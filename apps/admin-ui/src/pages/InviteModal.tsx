@@ -60,7 +60,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
 
   const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
     ['sessions', itemId],
-    `/api/manage/items/${itemId}/sessions`
+    `/api/manage/items/${itemId}/sessions`,
+    { staleTime: 0 }
   );
   const sessions = sessionsData?.data ?? [];
 

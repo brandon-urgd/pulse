@@ -23,7 +23,7 @@ const REPLY_TO_ADDRESS = 'no-reply@urgdstudios.com'
  * Builds a multipart/mixed MIME email with QR code attachment.
  * Returns a Buffer suitable for SES SendRawEmail.
  */
-function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionId }) {
+function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionId, replyTo }) {
   const boundary = `boundary_${randomUUID().replace(/-/g, '')}`
   const attachmentBoundary = `attach_${randomUUID().replace(/-/g, '')}`
   const qrBase64 = qrCodeBuffer.toString('base64')
@@ -31,7 +31,7 @@ function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionI
   const lines = [
     `From: Pulse <${FROM_ADDRESS}>`,
     `To: ${to}`,
-    `Reply-To: ${REPLY_TO_ADDRESS}`,
+    `Reply-To: ${replyTo}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -126,6 +126,31 @@ export const handler = async (event) => {
     }))
 
     const itemName = itemResult.Item?.itemName?.S ?? 'Untitled Item'
+    const closeDate = itemResult.Item?.closeDate?.S ?? null
+
+    // Fetch tenant record for inviter identity
+    let inviterName = null
+    let inviterEmail = null
+    if (process.env.TENANTS_TABLE) {
+      try {
+        const tenantRecord = await dynamo.send(new GetItemCommand({
+          TableName: process.env.TENANTS_TABLE,
+          Key: { tenantId: { S: tenantId } },
+        }))
+        if (tenantRecord.Item) {
+          inviterName = tenantRecord.Item.displayName?.S ?? null
+          inviterEmail = tenantRecord.Item.email?.S ?? null
+        }
+      } catch {
+        log('warn', 'ResendInvite: could not fetch tenant record', { requestId, tenantId })
+      }
+    }
+
+    const inviterDisplay = inviterName ?? 'Someone'
+    const replyTo = inviterEmail ?? FROM_ADDRESS
+    const closeDateFormatted = closeDate
+      ? new Date(closeDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : null
 
     // Attempt to load QR code from S3
     let qrCodeBuffer = null
@@ -147,43 +172,61 @@ export const handler = async (event) => {
     }
 
     // Build email content
-    const subject = `You've been invited to review: ${itemName}`
+    const subject = `${inviterDisplay} invited you to provide feedback on "${itemName}"`
     const appUrl = process.env.APP_URL
 
     const textBody = [
-      `You've been invited to provide feedback on "${itemName}".`,
+      `${inviterDisplay} has invited you to provide feedback on "${itemName}".`,
+      ...(closeDateFormatted ? [`Feedback will close on ${closeDateFormatted}.`] : []),
       '',
-      `Direct link: ${sessionLink}`,
-      `Pulse Code: ${pulseCode}`,
+      `Start your review: ${sessionLink}`,
       '',
-      'You can also enter your Pulse Code at pulse.urgdstudios.com to access your session.',
+      `Or enter your Pulse Code at pulse.urgdstudios.com: ${pulseCode}`,
       '',
-      'This invitation was sent by Pulse, powered by ur/gd Studios.',
+      ...(inviterEmail ? [`For questions, contact ${inviterEmail}.`, ''] : []),
+      '---',
+      'Sent by Pulse, powered by ur/gd Studios (https://www.urgdstudios.com)',
+      'ur/gd Studios LLC · 1424 11th Ave STE 400, Seattle, WA 98122-4271',
+      'Privacy Policy: https://www.urgdstudios.com/privacy | Terms: https://www.urgdstudios.com/terms',
     ].join('\n')
 
     const htmlBody = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Pulse Invitation</title></head>
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-  <h2 style="color: #1a1a1a;">You've been invited to review</h2>
-  <p style="font-size: 16px;">You've been invited to provide feedback on <strong>${itemName}</strong>.</p>
-  <p style="margin: 24px 0;">
-    <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px;">
+  <h2 style="color: #1a1a1a; margin-bottom: 8px;">You've been invited to review</h2>
+  <p style="font-size: 16px; margin-top: 0;">
+    <strong>${inviterDisplay}</strong> has invited you to provide feedback on <strong>${itemName}</strong>.
+  </p>
+  ${closeDateFormatted ? `<p style="font-size: 14px; color: #555; margin-top: 0;">Feedback will close on <strong>${closeDateFormatted}</strong>.</p>` : ''}
+  ${inviterEmail ? `<p style="font-size: 14px; color: #555;">For questions, contact <a href="mailto:${inviterEmail}" style="color:#4a7c59;">${inviterEmail}</a>.</p>` : ''}
+  <p style="margin: 28px 0;">
+    <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
       Start Your Review
     </a>
   </p>
-  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}">${appUrl}</a>:</p>
-  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a;">${pulseCode}</p>
+  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#4a7c59;">pulse.urgdstudios.com</a>:</p>
+  <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a; margin: 8px 0 24px;">${pulseCode}</p>
   ${qrCodeBuffer ? `<p style="font-size: 14px; color: #555;">QR code attached for quick access.</p>` : ''}
-  <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-  <p style="font-size: 12px; color: #999;">Sent by Pulse, powered by ur/gd Studios. Reply-to: ${REPLY_TO_ADDRESS}</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0 16px;">
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#999;">ur/gd Studios</a>
+  </p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    ur/gd Studios LLC &middot; 1424 11th Ave STE 400, Seattle, WA 98122-4271
+  </p>
+  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+    <a href="https://www.urgdstudios.com/privacy" style="color:#999;">Privacy Policy</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://www.urgdstudios.com/terms" style="color:#999;">Terms of Use</a>
+  </p>
 </body>
 </html>`
 
     // Send invitation email via SES
     try {
       if (qrCodeBuffer) {
-        const rawMessage = buildRawEmail({ to: reviewerEmail, subject, htmlBody, textBody, qrCodeBuffer, sessionId })
+        const rawMessage = buildRawEmail({ to: reviewerEmail, subject, htmlBody, textBody, qrCodeBuffer, sessionId, replyTo })
         await ses.send(new SendRawEmailCommand({
           RawMessage: { Data: rawMessage },
         }))
@@ -191,7 +234,7 @@ export const handler = async (event) => {
         await ses.send(new SendEmailCommand({
           Source: FROM_ADDRESS,
           Destination: { ToAddresses: [reviewerEmail] },
-          ReplyToAddresses: [REPLY_TO_ADDRESS],
+          ReplyToAddresses: [replyTo],
           Message: {
             Subject: { Data: subject, Charset: 'UTF-8' },
             Body: {

@@ -39,7 +39,7 @@ function generatePulseCode() {
  * Builds a multipart/mixed MIME email with QR code attachment.
  * Returns a Buffer suitable for SES SendRawEmail.
  */
-function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionId }) {
+function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionId, replyTo }) {
   const boundary = `boundary_${randomUUID().replace(/-/g, '')}`
   const attachmentBoundary = `attach_${randomUUID().replace(/-/g, '')}`
   const qrBase64 = qrCodeBuffer.toString('base64')
@@ -47,7 +47,7 @@ function buildRawEmail({ to, subject, htmlBody, textBody, qrCodeBuffer, sessionI
   const lines = [
     `From: Pulse <${FROM_ADDRESS}>`,
     `To: ${to}`,
-    `Reply-To: ${REPLY_TO_ADDRESS}`,
+    `Reply-To: ${replyTo}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -237,26 +237,26 @@ export const handler = async (event) => {
 
       // Send invitation email via SES
       const inviterDisplay = inviterName ?? 'Someone'
-      const contactLine = inviterEmail
-        ? `For questions, contact <a href="mailto:${inviterEmail}" style="color:#4a7c59;">${inviterEmail}</a>.`
-        : ''
+      const replyTo = inviterEmail ?? FROM_ADDRESS
       const contactLinePlain = inviterEmail ? `For questions, contact ${inviterEmail}.` : ''
+      const closeDateFormatted = closeDate
+        ? new Date(closeDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        : null
 
       const subject = `${inviterDisplay} invited you to provide feedback on "${itemName}"`
       const textBody = [
         `${inviterDisplay} has invited you to provide feedback on "${itemName}".`,
+        ...(closeDateFormatted ? [`Feedback will close on ${closeDateFormatted}.`] : []),
         '',
-        `Direct link: ${sessionLink}`,
-        `Pulse Code: ${pulseCode}`,
+        `Start your review: ${sessionLink}`,
         '',
-        'You can also enter your Pulse Code at pulse.urgdstudios.com to access your session.',
+        `Or enter your Pulse Code at pulse.urgdstudios.com: ${pulseCode}`,
         '',
-        contactLinePlain,
-        '',
+        ...(contactLinePlain ? [contactLinePlain, ''] : []),
         '---',
         'Sent by Pulse, powered by ur/gd Studios (https://www.urgdstudios.com)',
-        'ur/gd Studios LLC · ATTN: ur/gd Studios LLC, The Cloud Room, 1424 11th Ave STE 400, Seattle, WA 98122-4271',
-        'Privacy Policy: https://www.urgdstudios.com/privacy · Terms: https://www.urgdstudios.com/terms',
+        'ur/gd Studios LLC · 1424 11th Ave STE 400, Seattle, WA 98122-4271',
+        'Privacy Policy: https://www.urgdstudios.com/privacy | Terms: https://www.urgdstudios.com/terms',
       ].join('\n')
 
       const htmlBody = `<!DOCTYPE html>
@@ -267,16 +267,14 @@ export const handler = async (event) => {
   <p style="font-size: 16px; margin-top: 0;">
     <strong>${inviterDisplay}</strong> has invited you to provide feedback on <strong>${itemName}</strong>.
   </p>
-  ${contactLine ? `<p style="font-size: 14px; color: #555;">${contactLine}</p>` : ''}
+  ${closeDateFormatted ? `<p style="font-size: 14px; color: #555; margin-top: 0;">Feedback will close on <strong>${closeDateFormatted}</strong>.</p>` : ''}
+  ${inviterEmail ? `<p style="font-size: 14px; color: #555;">For questions, contact <a href="mailto:${inviterEmail}" style="color:#4a7c59;">${inviterEmail}</a>.</p>` : ''}
   <p style="margin: 28px 0;">
     <a href="${sessionLink}" style="background: #4a7c59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
       Start Your Review
     </a>
   </p>
-  <p style="font-size: 13px; color: #555; word-break: break-all;">
-    Or copy this link: <a href="${sessionLink}" style="color:#4a7c59;">${sessionLink}</a>
-  </p>
-  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#4a7c59;">${appUrl}</a>:</p>
+  <p style="font-size: 14px; color: #555;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#4a7c59;">pulse.urgdstudios.com</a>:</p>
   <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace; color: #1a1a1a; margin: 8px 0 24px;">${pulseCode}</p>
   ${qrCodeBuffer ? `<p style="font-size: 14px; color: #555;">A QR code is attached for quick access.</p>` : ''}
   <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0 16px;">
@@ -284,7 +282,7 @@ export const handler = async (event) => {
     Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#999;">ur/gd Studios</a>
   </p>
   <p style="font-size: 11px; color: #999; margin: 4px 0;">
-    ur/gd Studios LLC &middot; ATTN: ur/gd Studios LLC, The Cloud Room, 1424 11th Ave STE 400, Seattle, WA 98122-4271
+    ur/gd Studios LLC &middot; 1424 11th Ave STE 400, Seattle, WA 98122-4271
   </p>
   <p style="font-size: 11px; color: #999; margin: 4px 0;">
     <a href="https://www.urgdstudios.com/privacy" style="color:#999;">Privacy Policy</a>
@@ -297,7 +295,7 @@ export const handler = async (event) => {
       try {
         if (qrCodeBuffer) {
           // Send raw email with QR code attachment
-          const rawMessage = buildRawEmail({ to: email, subject, htmlBody, textBody, qrCodeBuffer, sessionId })
+          const rawMessage = buildRawEmail({ to: email, subject, htmlBody, textBody, qrCodeBuffer, sessionId, replyTo })
           await ses.send(new SendRawEmailCommand({
             RawMessage: { Data: rawMessage },
           }))
@@ -306,7 +304,7 @@ export const handler = async (event) => {
           await ses.send(new SendEmailCommand({
             Source: FROM_ADDRESS,
             Destination: { ToAddresses: [email] },
-            ReplyToAddresses: [REPLY_TO_ADDRESS],
+            ReplyToAddresses: [replyTo],
             Message: {
               Subject: { Data: subject, Charset: 'UTF-8' },
               Body: {
