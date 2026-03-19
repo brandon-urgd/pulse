@@ -94,7 +94,7 @@
 .sortButtonActive {
   color: var(--color-text-primary);
   border-color: var(--color-text-secondary);
-  background: var(--color-surface-hover, rgba(0,0,0,0.04));
+  background: var(--color-surface-hover);
 }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
@@ -110,14 +110,14 @@
 
 .itemCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  box-shadow: var(--shadow-card-hover);
 }
 
 /* Status border colors */
-.statusDraft  { border-left-color: var(--color-status-draft, #cbd5e1); }
+.statusDraft  { border-left-color: var(--color-status-draft); }
 .statusActive { border-left-color: var(--color-accent-pulse-subtle); }
-.statusClosed { border-left-color: var(--color-status-closed, #94a3b8); }
-.statusRevised { border-left-color: #4ade80; }
+.statusClosed { border-left-color: var(--color-status-closed); }
+.statusRevised { border-left-color: var(--color-status-revised); }
 
 /* Content area — full-width button */
 .cardContent {
@@ -181,8 +181,8 @@
 }
 
 .statusBadge.statusRevised {
-  background: #e6f9ec;
-  color: #2f9e44;
+  background: var(--color-status-revised-bg);
+  color: var(--color-status-revised-text);
 }
 
 .sessionCount,
@@ -241,7 +241,7 @@
 
 .actionDelete:hover {
   border-color: var(--color-error);
-  background: #fff1f1;
+  background: var(--color-error-bg);
 }
 
 .deleteConfirmRow {
@@ -274,7 +274,7 @@
   cursor: pointer;
   border: none;
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-text-inverse);
 }
 
 .actionDeleteConfirm:disabled,

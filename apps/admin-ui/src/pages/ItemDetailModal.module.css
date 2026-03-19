@@ -26,8 +26,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.22),
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    var(--shadow-modal);
   width: 100%;
   max-width: 680px;
   max-height: 90vh;
@@ -95,9 +94,9 @@
 /* ── Form ────────────────────────────────────────────────────────────────── */
 
 .lockedNotice {
-  background: rgba(251, 191, 36, 0.07);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-  border-left: 3px solid rgba(251, 191, 36, 0.6);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-left: 3px solid var(--color-warning-border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   color: var(--color-text-primary);
@@ -353,7 +352,7 @@
   padding: var(--space-7);
   max-width: 440px;
   width: 100%;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-modal-confirm);
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -380,7 +379,7 @@
   padding: var(--space-2) var(--space-5);
   border-radius: var(--radius-md);
   background: var(--color-error);
-  color: #ffffff;
+  color: var(--color-text-inverse);
   border: none;
   font-size: var(--font-size-sm);
   font-weight: 500;

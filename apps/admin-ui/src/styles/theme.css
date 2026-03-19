@@ -26,17 +26,30 @@
   --color-interactive-hover: #212529;
   --color-interactive-subtle: #f8f9fa;
 
+  /* Surface hover */
+  --color-surface-hover: rgba(0, 0, 0, 0.04);
+
   /* Status colors */
   --color-status-draft: #adb5bd;
   --color-status-active: var(--color-accent-pulse);
   --color-status-closed: #6c757d;
-  --color-status-revised: #51cf66;
+  --color-status-revised: #4ade80;
+  --color-status-revised-bg: #e6f9ec;
+  --color-status-revised-text: #2f9e44;
+  --color-status-completed-bg: #d1fae5;
+  --color-status-completed-text: #065f46;
+  --color-status-expired-bg: #fee2e2;
+  --color-status-expired-text: #991b1b;
 
   /* Semantic */
   --color-error: #fa5252;
-  --color-error-bg: #fff5f5;
+  --color-error-bg: #fff1f1;
   --color-success: #51cf66;
+  --color-success-bg: rgba(74, 124, 89, 0.1);
   --color-warning: #fcc419;
+  --color-warning-bg: rgba(251, 191, 36, 0.07);
+  --color-warning-border: rgba(251, 191, 36, 0.25);
+  --color-warning-border-strong: rgba(251, 191, 36, 0.6);
 
   /* Typography */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -71,6 +84,9 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.10);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  --shadow-modal-confirm: 0 24px 64px rgba(0, 0, 0, 0.28);
 
   /* Layout */
   --topbar-height: 56px;
@@ -95,6 +111,8 @@
   --color-interactive: #f1f3f5;
   --color-interactive-hover: #ffffff;
   --color-interactive-subtle: #2c2e33;
+
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
 
   --color-error-bg: #2c1a1a;
 }

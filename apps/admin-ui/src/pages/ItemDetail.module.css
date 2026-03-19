@@ -11,9 +11,9 @@
 }
 
 .lockedNotice {
-  background: rgba(251, 191, 36, 0.07);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-  border-left: 3px solid rgba(251, 191, 36, 0.6);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-left: 3px solid var(--color-warning-border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   color: var(--color-text-primary);
@@ -276,7 +276,7 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -315,7 +315,7 @@
   padding: var(--space-2) var(--space-5);
   border-radius: var(--radius-md);
   background: var(--color-error);
-  color: #ffffff;
+  color: var(--color-text-inverse);
   border: none;
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -416,8 +416,8 @@
 }
 
 .status_completed {
-  color: var(--color-success);
-  background: var(--color-success-bg, rgba(74, 124, 89, 0.1));
+  color: var(--color-status-completed-text);
+  background: var(--color-status-completed-bg);
 }
 
 .status_expired {

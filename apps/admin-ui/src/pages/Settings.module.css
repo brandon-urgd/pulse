@@ -1,0 +1,221 @@
+/* ── Page ────────────────────────────────────────────────────────────────── */
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+.heading {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin: 0 0 var(--space-8);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sectionHeading {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+/* ── Account rows ────────────────────────────────────────────────────────── */
+
+.fieldGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.fieldValue {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.tierBadge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Usage bars ──────────────────────────────────────────────────────────── */
+
+.usageRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.usageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.usageLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.usageCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.usageTrack {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.usageFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-pulse);
+  transition: width 0.4s ease;
+}
+
+.usageFillWarning {
+  background: var(--color-warning);
+}
+
+.usageFillFull {
+  background: var(--color-error);
+}
+
+/* ── Theme toggle ────────────────────────────────────────────────────────── */
+
+.themeGroup {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.themeButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.themeButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.themeButtonActive {
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border-color: var(--color-interactive);
+  font-weight: 500;
+}
+
+.themeButtonActive:hover {
+  background: var(--color-interactive-hover);
+  border-color: var(--color-interactive-hover);
+  color: var(--color-text-inverse);
+}
+
+.themeSaving {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+
+.actionsSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.signOutButton {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.signOutButton:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-text-secondary);
+}
+
+.deleteButton {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+  font-size: var(--font-size-sm);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.deleteHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────────────── */
+
+.skeleton {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonShort { width: 80px; }
+.skeletonMed   { width: 160px; }
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
