@@ -117,7 +117,9 @@ describe('urgd-pulse-chat', () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() }) // GetItem session
         .mockResolvedValueOnce({})                       // PutItem reviewer
-        .mockResolvedValueOnce({ Items: [] })            // Query transcripts
+        .mockResolvedValueOnce({ Items: [                // Query transcripts (includes just-saved reviewer message)
+          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
+        ] })
         .mockResolvedValueOnce(makeItemRecord())         // GetItem item
         .mockResolvedValueOnce({})                       // PutItem agent
         .mockResolvedValueOnce({})                       // UpdateItem session
@@ -193,7 +195,9 @@ describe('urgd-pulse-chat', () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })  // GetItem session
         .mockResolvedValueOnce({})                        // PutItem reviewer
-        .mockResolvedValueOnce({ Items: [] })             // Query transcripts
+        .mockResolvedValueOnce({ Items: [                 // Query transcripts
+          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
+        ] })
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
         .mockResolvedValueOnce({})                        // PutItem agent
         .mockResolvedValueOnce({})                        // UpdateItem session
@@ -278,7 +282,9 @@ describe('urgd-pulse-chat', () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })  // GetItem session
         .mockResolvedValueOnce({})                        // PutItem reviewer
-        .mockResolvedValueOnce({ Items: [] })             // Query transcripts
+        .mockResolvedValueOnce({ Items: [                 // Query transcripts
+          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
+        ] })
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
 
       bedrockSendSpy.mockRejectedValueOnce(new Error('Bedrock error'))

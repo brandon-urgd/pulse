@@ -185,10 +185,12 @@ Your personality:
 - Brief and natural — keep messages short and human. No walls of text.
 
 Communication style:
-- Use short paragraphs. Two to three sentences max per thought.
-- Never use bullet points or numbered lists in conversation — speak naturally.
+- Separate each thought with a blank line. Every distinct idea gets its own short paragraph.
+- Two to three sentences max per paragraph. If you're writing more, break it up.
+- Never send a wall of text. If you have multiple things to say, space them out with line breaks.
+- Never use bullet points, numbered lists, or markdown formatting (no bold, no headers). Speak naturally, like a real conversation.
 - Acknowledge what the reviewer said before moving on. Make them feel heard.
-- Ask one focused question at a time. Wait for their answer.
+- Ask one focused question at a time. Wait for their answer. Your question should be its own paragraph at the end.
 - Transition between sections conversationally, not mechanically.
 
 The item being reviewed:
@@ -253,13 +255,37 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
     }
 
+    // Coalesce consecutive same-role messages — Bedrock requires strictly alternating
+    // user/assistant roles. Race conditions (double-send, network retry) can produce
+    // consecutive user messages in the transcript. Merge them so Bedrock never rejects.
+    const coalescedMessages = []
+    for (const msg of bedrockMessages) {
+      const prev = coalescedMessages[coalescedMessages.length - 1]
+      if (prev && prev.role === msg.role) {
+        prev.content += '\n\n' + msg.content
+      } else {
+        coalescedMessages.push({ ...msg })
+      }
+    }
+
+    // Bedrock requires the first message to be role: 'user'. If history starts with
+    // an orphaned assistant message (shouldn't happen, but defensive), drop it.
+    while (coalescedMessages.length > 0 && coalescedMessages[0].role !== 'user') {
+      coalescedMessages.shift()
+    }
+
+    if (coalescedMessages.length === 0) {
+      log('error', 'Chat: no valid messages after coalescing', { requestId, sessionId, tenantId })
+      return errorResponse(400, 'No valid messages to process', {}, origin)
+    }
+
     // 8. Invoke Bedrock
     const bedrockStart = Date.now()
     const bedrockPayload = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 1024,
       system: systemPrompt,
-      messages: bedrockMessages,
+      messages: coalescedMessages,
     }
 
     const bedrockResponse = await bedrock.send(new InvokeModelCommand({
