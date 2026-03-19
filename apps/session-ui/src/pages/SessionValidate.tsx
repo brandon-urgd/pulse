@@ -1,5 +1,6 @@
-// Session validation page — reviewer enters email to access their session
+// Session validation page — reviewer enters credentials to access their session
 // Accepts ?code={pulseCode} query param or /{sessionId} path param
+// Accepts ?public=1 to show the public walk-in entry form
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { validateSession } from '../api/session'
@@ -53,6 +54,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ccc',
     marginBottom: '0.375rem',
   },
+  optionalLabel: {
+    display: 'block',
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    color: '#ccc',
+    marginBottom: '0.375rem',
+  },
+  optionalHint: {
+    fontSize: '0.75rem',
+    color: '#666',
+    marginLeft: '0.375rem',
+  },
   input: {
     width: '100%',
     padding: '0.625rem 0.75rem',
@@ -103,9 +116,11 @@ export default function SessionValidate() {
   const { sessionId: pathSessionId } = useParams<{ sessionId: string }>()
   const [searchParams] = useSearchParams()
   const pulseCode = searchParams.get('code') ?? undefined
+  const isPublic = searchParams.get('public') === '1'
   const navigate = useNavigate()
   const { setSession } = useSession()
 
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -118,16 +133,25 @@ export default function SessionValidate() {
     e.preventDefault()
     setError(null)
 
-    const trimmedEmail = email.trim()
-    if (!trimmedEmail) {
-      setError('Please enter your email address.')
-      return
+    if (isPublic) {
+      // Public session: name required, email optional
+      if (!name.trim()) {
+        setError('Please enter your name.')
+        return
+      }
+    } else {
+      // Private session: email required
+      if (!email.trim()) {
+        setError('Please enter your email address.')
+        return
+      }
     }
 
     setLoading(true)
     try {
       const result = await validateSession({
-        email: trimmedEmail,
+        email: isPublic ? (email.trim() || undefined) : email.trim(),
+        name: isPublic ? name.trim() : undefined,
         ...(pulseCode ? { pulseCode } : {}),
         ...(pathSessionId && !pulseCode ? { sessionId: pathSessionId } : {}),
       })
@@ -146,10 +170,22 @@ export default function SessionValidate() {
     <main style={styles.page}>
       <div style={styles.card}>
         <span style={styles.wordmark} aria-label="Pulse">pulse</span>
-        <h1 style={styles.heading}>Access your session</h1>
-        <p style={styles.subheading}>
-          Enter the email address where you received your invitation to continue.
-        </p>
+
+        {isPublic ? (
+          <>
+            <h1 style={styles.heading}>Join this session</h1>
+            <p style={styles.subheading}>
+              You're joining a public feedback session. Enter your name to get started.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 style={styles.heading}>Access your session</h1>
+            <p style={styles.subheading}>
+              Enter the email address where you received your invitation to continue.
+            </p>
+          </>
+        )}
 
         {error && (
           <div role="alert" aria-live="polite" style={styles.error}>
@@ -158,18 +194,52 @@ export default function SessionValidate() {
         )}
 
         <form onSubmit={handleSubmit} noValidate>
-          <label htmlFor="email" style={styles.label}>Email address</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            style={styles.input}
-            disabled={loading}
-            required
-          />
+          {isPublic ? (
+            <>
+              <label htmlFor="name" style={styles.label}>Your name</label>
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Jane Smith"
+                style={styles.input}
+                disabled={loading}
+                required
+              />
+              <label htmlFor="email" style={styles.optionalLabel}>
+                Email address
+                <span style={styles.optionalHint}>(optional)</span>
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={styles.input}
+                disabled={loading}
+              />
+            </>
+          ) : (
+            <>
+              <label htmlFor="email" style={styles.label}>Email address</label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={styles.input}
+                disabled={loading}
+                required
+              />
+            </>
+          )}
+
           <button
             type="submit"
             style={{ ...styles.button, ...(loading ? styles.buttonDisabled : {}) }}

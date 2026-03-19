@@ -65,6 +65,7 @@ export const handler = async (event) => {
           status: item.status?.S ?? 'not_started',
           createdAt: item.createdAt?.S ?? '',
           expiresAt: item.expiresAt?.S ?? '',
+          isPublic: item.isPublic?.BOOL === true,
         }
         if (item.startedAt?.S) session.startedAt = item.startedAt.S
         if (item.completedAt?.S) session.completedAt = item.completedAt.S

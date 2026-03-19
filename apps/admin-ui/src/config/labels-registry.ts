@@ -111,7 +111,7 @@ export const labels = {
     deleteConfirmCancel: 'Cancel',
     deleteConfirmDelete: 'Delete',
     deleteError: 'Failed to delete item. Please try again.',
-    readOnlyNotice: 'This item is locked and cannot be edited.',
+    readOnlyNotice: 'Items with active or completed sessions can\u2019t be edited to preserve the integrity of reviewer feedback. To make changes, create a new item.',
   },
 
   // Invitation section (within ItemDetail)
@@ -148,6 +148,10 @@ export const labels = {
     publicSessionDoneButton: 'Done',
     publicSessionError: 'Failed to generate public session. Please try again.',
     publicSessionDownloadQr: 'Download QR code',
+    publicSessionViewQr: 'View QR',
+    publicSessionHideQr: 'Hide',
+    publicSessionBadge: 'Public session',
+    publicSessionQrError: 'Failed to load QR code. Try again.',
     closeButton: 'Close',
   },
 

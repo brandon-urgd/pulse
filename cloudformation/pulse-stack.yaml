@@ -171,6 +171,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-createPublicSession/latest.zip
     Description: S3 key for urgd-pulse-createPublicSession Lambda ZIP
 
+  GetPublicSessionQrCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getPublicSessionQr/latest.zip
+    Description: S3 key for urgd-pulse-getPublicSessionQr Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -277,6 +282,7 @@ Mappings:
       SendReminder: 3
       ExpireSessions: 3
       CreatePublicSession: 3
+      GetPublicSessionQr: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -304,6 +310,7 @@ Mappings:
       SendReminder: 5
       ExpireSessions: 5
       CreatePublicSession: 5
+      GetPublicSessionQr: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -331,6 +338,7 @@ Mappings:
       SendReminder: 3
       ExpireSessions: 3
       CreatePublicSession: 10
+      GetPublicSessionQr: 10
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -797,6 +805,7 @@ Resources:
       - PulsePostValidateSessionMethod
       - PulsePostAcceptConfidentialityMethod
       - PulsePostCreatePublicSessionMethod
+      - PulseGetPublicSessionQrMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -2966,6 +2975,18 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseGetPublicSessionQrLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getPublicSessionQr-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: IAM Execution Roles
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3295,6 +3316,42 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/qr/*'
+
+  PulseGetPublicSessionQrFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getPublicSessionQr-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub '${PulseSessionsTable.Arn}/index/sessionId-index'
+              - Effect: Allow
+                Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/qr/*'
 
@@ -3653,6 +3710,50 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
+  PulseGetPublicSessionQrFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetPublicSessionQrLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getPublicSessionQr-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetPublicSessionQrFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetPublicSessionQrCodeKey
+      Timeout: 15
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetPublicSessionQr]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetPublicSessionQrFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetPublicSessionQrFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: API Gateway Resources
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3783,6 +3884,27 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCreatePublicSessionFunction.Arn}/invocations'
+
+  # GET /api/manage/items/{itemId}/sessions/{sessionId}/qr
+  PulseManageItemSessionQrResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemSessionResource
+      PathPart: qr
+
+  PulseGetPublicSessionQrMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionQrResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetPublicSessionQrFunction.Arn}/invocations'
 
   # /api/session
   PulseSessionResource:

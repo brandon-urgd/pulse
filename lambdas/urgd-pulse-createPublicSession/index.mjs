@@ -83,7 +83,7 @@ export const handler = async (event) => {
 
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()
-    const sessionLink = `${process.env.APP_URL}/s/${sessionId}`
+    const sessionLink = `${process.env.APP_URL}/s/${sessionId}?public=1`
     const now = new Date().toISOString()
 
     // Store session record — reviewerEmail is null, isPublic is true

@@ -21,7 +21,7 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { sessionId, pulseCode, email } = body
+  const { sessionId, pulseCode, email, name } = body
 
   // At least one of sessionId or pulseCode must be provided
   if (!sessionId && !pulseCode) {
@@ -134,6 +134,7 @@ export const handler = async (event) => {
       sessionId: foundSessionId,
       tenantId,
       item: itemContext,
+      ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
   } catch (err) {
     log('error', 'ValidateSession: unexpected error', { requestId, errorName: err.name })

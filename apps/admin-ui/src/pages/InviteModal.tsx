@@ -16,6 +16,13 @@ interface Session {
   status: SessionStatus;
   createdAt: string;
   expiresAt?: string;
+  isPublic?: boolean;
+}
+
+interface PublicQrResult {
+  qrCodeUrl: string;
+  pulseCode: string;
+  sessionLink: string;
 }
 
 interface Props {
@@ -68,6 +75,12 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
     qrCodeUrl: string | null;
   } | null>(null);
   const [publicSessionError, setPublicSessionError] = useState('');
+
+  // View QR for existing public session
+  const [viewingQrSessionId, setViewingQrSessionId] = useState<string | null>(null);
+  const [viewingQrResult, setViewingQrResult] = useState<PublicQrResult | null>(null);
+  const [viewingQrError, setViewingQrError] = useState('');
+  const [isLoadingQr, setIsLoadingQr] = useState(false);
 
   const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
     ['sessions', itemId],
@@ -185,6 +198,30 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
       setPublicSessionError(labels.invitation.publicSessionError);
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleViewQr(sessionId: string) {
+    setViewingQrSessionId(sessionId);
+    setViewingQrResult(null);
+    setViewingQrError('');
+    setIsLoadingQr(true);
+    try {
+      const { fetchAuthSession } = await import('aws-amplify/auth');
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (!token) throw new Error('No token');
+      const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+      const res = await fetch(`${apiBase}/api/manage/items/${itemId}/sessions/${sessionId}/qr`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw Object.assign(new Error('Failed'), { status: res.status });
+      const data = await res.json() as PublicQrResult;
+      setViewingQrResult(data);
+    } catch {
+      setViewingQrError(labels.invitation.publicSessionQrError);
+    } finally {
+      setIsLoadingQr(false);
     }
   }
 
@@ -359,7 +396,9 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
               {sessions.map(session => (
                 <li key={session.sessionId} className={styles.sessionRow}>
                   <div className={styles.sessionInfo}>
-                    <span className={styles.maskedEmail}>{session.reviewerEmail}</span>
+                    <span className={styles.maskedEmail}>
+                      {session.isPublic ? labels.invitation.publicSessionBadge : session.reviewerEmail}
+                    </span>
                     <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
                       {sessionStatusLabel(session.status)}
                     </span>
@@ -368,7 +407,18 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                     <span className={styles.sessionDate}>
                       Invited {new Date(session.createdAt).toLocaleDateString()}
                     </span>
-                    {session.status === 'not_started' && (
+                    {session.isPublic ? (
+                      <button
+                        type="button"
+                        className={styles.resendButton}
+                        onClick={() => handleViewQr(session.sessionId)}
+                        disabled={isLoadingQr && viewingQrSessionId === session.sessionId}
+                      >
+                        {isLoadingQr && viewingQrSessionId === session.sessionId
+                          ? '…'
+                          : labels.invitation.publicSessionViewQr}
+                      </button>
+                    ) : session.status === 'not_started' ? (
                       <div className={styles.sessionActions}>
                         <button
                           type="button"
@@ -389,7 +439,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                           {cancellingId === session.sessionId ? '…' : 'Cancel invite'}
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                   {resendMessages[session.sessionId] && (
                     <p aria-live="polite" className={styles.resendMessage}>
@@ -400,6 +450,49 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                     <p aria-live="polite" className={styles.error}>
                       {cancelMessages[session.sessionId]}
                     </p>
+                  )}
+                  {/* Inline QR viewer for this public session */}
+                  {viewingQrSessionId === session.sessionId && (
+                    <div className={styles.inlineQrPanel}>
+                      {viewingQrError && (
+                        <p role="alert" className={styles.error}>{viewingQrError}</p>
+                      )}
+                      {viewingQrResult && (
+                        <>
+                          {viewingQrResult.qrCodeUrl && (
+                            <div className={styles.qrWrapper}>
+                              <img
+                                src={viewingQrResult.qrCodeUrl}
+                                alt="QR code for public session"
+                                className={styles.qrImage}
+                              />
+                              <a
+                                href={viewingQrResult.qrCodeUrl}
+                                download="pulse-public-session-qr.png"
+                                className={styles.downloadLink}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {labels.invitation.publicSessionDownloadQr}
+                              </a>
+                            </div>
+                          )}
+                          <p className={styles.pulseCodeDisplay}>{viewingQrResult.pulseCode}</p>
+                          <p className={styles.sessionLinkText}>
+                            <a href={viewingQrResult.sessionLink} target="_blank" rel="noreferrer">
+                              {viewingQrResult.sessionLink}
+                            </a>
+                          </p>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.skipButton}
+                        onClick={() => { setViewingQrSessionId(null); setViewingQrResult(null); }}
+                      >
+                        {labels.invitation.publicSessionHideQr}
+                      </button>
+                    </div>
                   )}
                 </li>
               ))}

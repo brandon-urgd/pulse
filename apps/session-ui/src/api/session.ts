@@ -13,7 +13,8 @@ export interface ValidateSessionResponse {
 }
 
 export async function validateSession(params: {
-  email: string
+  email?: string
+  name?: string
   pulseCode?: string
   sessionId?: string
 }): Promise<ValidateSessionResponse> {

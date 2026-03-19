@@ -385,3 +385,12 @@
 .sessionLinkText a {
   color: var(--color-accent-pulse);
 }
+
+.inlineQrPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
