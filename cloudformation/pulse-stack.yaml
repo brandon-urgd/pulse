@@ -670,6 +670,15 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Sub 'https://${FrontendDomainName}'
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - '*'
+            MaxAgeSeconds: 3600
       Tags:
         - Key: project
           Value: pulse
