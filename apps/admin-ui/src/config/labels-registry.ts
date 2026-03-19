@@ -140,6 +140,15 @@ export const labels = {
     extending: 'Extending…',
     extendSuccess: 'Deadline extended.',
     extendError: 'Failed to extend deadline.',
+    publicSessionTitle: 'Start Public Session',
+    publicSessionDescription: 'For use at events, tables, or group settings where a single code is shared.',
+    publicSessionDeadlineLabel: 'Session deadline',
+    publicSessionGenerateButton: 'Generate',
+    publicSessionGenerating: 'Generating…',
+    publicSessionDoneButton: 'Done',
+    publicSessionError: 'Failed to generate public session. Please try again.',
+    publicSessionDownloadQr: 'Download QR code',
+    closeButton: 'Close',
   },
 
   // Settings

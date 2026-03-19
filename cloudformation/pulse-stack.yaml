@@ -166,6 +166,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-acceptConfidentiality/latest.zip
     Description: S3 key for urgd-pulse-acceptConfidentiality Lambda ZIP
 
+  CreatePublicSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-createPublicSession/latest.zip
+    Description: S3 key for urgd-pulse-createPublicSession Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -271,6 +276,7 @@ Mappings:
       AcceptConfidentiality: 3
       SendReminder: 3
       ExpireSessions: 3
+      CreatePublicSession: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -297,6 +303,7 @@ Mappings:
       AcceptConfidentiality: 5
       SendReminder: 5
       ExpireSessions: 5
+      CreatePublicSession: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -323,6 +330,7 @@ Mappings:
       AcceptConfidentiality: 10
       SendReminder: 3
       ExpireSessions: 3
+      CreatePublicSession: 10
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -788,6 +796,7 @@ Resources:
       - PulsePutExtendDeadlineMethod
       - PulsePostValidateSessionMethod
       - PulsePostAcceptConfidentialityMethod
+      - PulsePostCreatePublicSessionMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -2945,6 +2954,18 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseCreatePublicSessionLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-createPublicSession-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: IAM Execution Roles
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3235,6 +3256,47 @@ Resources:
                 Action:
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
+
+  PulseCreatePublicSessionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-createPublicSession-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/qr/*'
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: Lambda Functions
@@ -3546,6 +3608,51 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
+  PulseCreatePublicSessionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCreatePublicSessionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-createPublicSession-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCreatePublicSessionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CreatePublicSessionCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CreatePublicSession]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCreatePublicSessionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCreatePublicSessionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: API Gateway Resources
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3655,6 +3762,27 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseExtendDeadlineFunction.Arn}/invocations'
+
+  # POST /api/manage/items/{itemId}/public-session
+  PulseManageItemPublicSessionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: public-session
+
+  PulsePostCreatePublicSessionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemPublicSessionResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCreatePublicSessionFunction.Arn}/invocations'
 
   # /api/session
   PulseSessionResource:

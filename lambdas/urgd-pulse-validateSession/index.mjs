@@ -23,11 +23,6 @@ export const handler = async (event) => {
 
   const { sessionId, pulseCode, email } = body
 
-  // email is always required
-  if (!email || typeof email !== 'string') {
-    return errorResponse(400, 'email is required', {}, origin)
-  }
-
   // At least one of sessionId or pulseCode must be provided
   if (!sessionId && !pulseCode) {
     return errorResponse(400, 'sessionId or pulseCode is required', {}, origin)
@@ -78,6 +73,8 @@ export const handler = async (event) => {
 
     log('info', 'ValidateSession: session found', { requestId, sessionId: foundSessionId, tenantId })
 
+    const isPublic = sessionRecord.isPublic?.BOOL === true
+
     // Check expiry — expiresAt stored as ISO string (closeDate format from inviteReviewer)
     const isExpiredByStatus = status === 'expired'
     const isExpiredByDate = expiresAt && new Date(expiresAt) < new Date()
@@ -91,9 +88,16 @@ export const handler = async (event) => {
       log('info', 'ValidateSession: session expired', { requestId, sessionId: foundSessionId, tenantId })
       return errorResponse(410, 'This session has expired', {}, origin)
     }
-    if (!reviewerEmail || reviewerEmail.toLowerCase() !== email.toLowerCase().trim()) {
-      log('warn', 'ValidateSession: email mismatch', { requestId, sessionId: foundSessionId, tenantId })
-      return errorResponse(403, 'Email address does not match our records', {}, origin)
+
+    // Public sessions skip email validation — any visitor proceeds directly to confidentiality
+    if (!isPublic) {
+      if (!email || typeof email !== 'string') {
+        return errorResponse(400, 'email is required', {}, origin)
+      }
+      if (!reviewerEmail || reviewerEmail.toLowerCase() !== email.toLowerCase().trim()) {
+        log('warn', 'ValidateSession: email mismatch', { requestId, sessionId: foundSessionId, tenantId })
+        return errorResponse(403, 'Email address does not match our records', {}, origin)
+      }
     }
 
     // Load item context

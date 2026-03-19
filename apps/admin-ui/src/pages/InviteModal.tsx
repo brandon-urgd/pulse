@@ -58,6 +58,17 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
   const [isExtending, setIsExtending]   = useState(false);
   const [extendMessage, setExtendMessage] = useState('');
 
+  // Public session sub-panel state
+  const [showPublicSession, setShowPublicSession] = useState(false);
+  const [publicSessionDate, setPublicSessionDate] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [publicSessionResult, setPublicSessionResult] = useState<{
+    pulseCode: string;
+    sessionLink: string;
+    qrCodeUrl: string | null;
+  } | null>(null);
+  const [publicSessionError, setPublicSessionError] = useState('');
+
   const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
     ['sessions', itemId],
     `/api/manage/items/${itemId}/sessions`,
@@ -150,6 +161,33 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
     }
   }
 
+  async function handleGeneratePublicSession(e: React.FormEvent) {
+    e.preventDefault();
+    setPublicSessionError('');
+    if (!publicSessionDate) return;
+
+    setIsGenerating(true);
+    try {
+      const result = await authedMutate(
+        `/api/manage/items/${itemId}/public-session`,
+        'POST',
+        { closeDate: publicSessionDate },
+        navigate
+      ) as { sessionId: string; pulseCode: string; sessionLink: string; qrCodeUrl: string | null };
+      setPublicSessionResult({
+        pulseCode: result.pulseCode,
+        sessionLink: result.sessionLink,
+        qrCodeUrl: result.qrCodeUrl,
+      });
+      queryClient.invalidateQueries({ queryKey: ['sessions', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    } catch {
+      setPublicSessionError(labels.invitation.publicSessionError);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   async function handleExtendDeadline(e: React.FormEvent) {
     e.preventDefault();
     setExtendMessage('');
@@ -221,6 +259,94 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
               {isInviting ? labels.invitation.inviting : labels.invitation.inviteButton}
             </button>
           </form>
+
+          <hr className={styles.divider} />
+
+          {/* Public session sub-panel */}
+          {!showPublicSession ? (
+            <div className={styles.publicSessionRow}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => { setShowPublicSession(true); setPublicSessionResult(null); setPublicSessionError(''); }}
+              >
+                {labels.invitation.publicSessionTitle}
+              </button>
+              <p className={styles.hint}>{labels.invitation.publicSessionDescription}</p>
+            </div>
+          ) : publicSessionResult ? (
+            <div className={styles.publicSessionPanel}>
+              <h3 className={styles.subHeading}>{labels.invitation.publicSessionTitle}</h3>
+              {publicSessionResult.qrCodeUrl && (
+                <div className={styles.qrWrapper}>
+                  <img
+                    src={publicSessionResult.qrCodeUrl}
+                    alt="QR code for public session"
+                    className={styles.qrImage}
+                  />
+                  <a
+                    href={publicSessionResult.qrCodeUrl}
+                    download="pulse-public-session-qr.png"
+                    className={styles.downloadLink}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {labels.invitation.publicSessionDownloadQr}
+                  </a>
+                </div>
+              )}
+              <p className={styles.pulseCodeDisplay}>{publicSessionResult.pulseCode}</p>
+              <p className={styles.sessionLinkText}>
+                <a href={publicSessionResult.sessionLink} target="_blank" rel="noreferrer">
+                  {publicSessionResult.sessionLink}
+                </a>
+              </p>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => { setShowPublicSession(false); setPublicSessionResult(null); setPublicSessionDate(''); }}
+              >
+                {labels.invitation.publicSessionDoneButton}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>
+              <h3 className={styles.subHeading}>{labels.invitation.publicSessionTitle}</h3>
+              <p className={styles.hint}>{labels.invitation.publicSessionDescription}</p>
+              <label htmlFor="publicSessionDate" className={styles.label}>
+                {labels.invitation.publicSessionDeadlineLabel}
+              </label>
+              <div className={styles.extendRow}>
+                <input
+                  id="publicSessionDate"
+                  type="date"
+                  className={styles.input}
+                  value={publicSessionDate}
+                  onChange={e => setPublicSessionDate(e.target.value)}
+                  min={todayIso()}
+                  disabled={isGenerating}
+                />
+                <button
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={isGenerating || !publicSessionDate}
+                >
+                  {isGenerating ? labels.invitation.publicSessionGenerating : labels.invitation.publicSessionGenerateButton}
+                </button>
+                <button
+                  type="button"
+                  className={styles.skipButton}
+                  onClick={() => { setShowPublicSession(false); setPublicSessionError(''); }}
+                  disabled={isGenerating}
+                >
+                  Cancel
+                </button>
+              </div>
+              {publicSessionError && (
+                <p role="alert" aria-live="polite" className={styles.error}>{publicSessionError}</p>
+              )}
+            </form>
+          )}
 
           <hr className={styles.divider} />
 
@@ -311,13 +437,16 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
             )}
           </form>
 
-          {skipLabel && (
-            <div className={styles.skipRow}>
+          <div className={styles.modalFooter}>
+            {skipLabel && (
               <button type="button" className={styles.skipButton} onClick={onClose}>
                 {skipLabel}
               </button>
-            </div>
-          )}
+            )}
+            <button type="button" className={styles.secondaryButton} onClick={onClose}>
+              {labels.invitation.closeButton}
+            </button>
+          </div>
         </div>
       </div>
     </div>
