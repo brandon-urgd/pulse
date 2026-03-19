@@ -75,6 +75,7 @@ export interface SessionSummaryResponse {
     closingMessage: string
     tenantName?: string
   }
+  tenantName?: string
 }
 
 export interface FileViewerUrlResponse {
@@ -111,7 +112,8 @@ export async function sendChatMessage(
     throw makeError(body, 'Chat request failed', res.status)
   }
 
-  return res.json()
+  const json = await res.json()
+  return json.data ?? json
 }
 
 export async function getSessionState(
@@ -127,7 +129,8 @@ export async function getSessionState(
     throw makeError(body, 'Failed to load session state', res.status)
   }
 
-  return res.json()
+  const json = await res.json()
+  return json.data ?? json
 }
 
 export async function getSessionSummary(
@@ -143,7 +146,8 @@ export async function getSessionSummary(
     throw makeError(body, 'Failed to load session summary', res.status)
   }
 
-  return res.json()
+  const json = await res.json()
+  return json.data ?? json
 }
 
 export async function getFileViewerUrl(
@@ -160,7 +164,8 @@ export async function getFileViewerUrl(
     throw makeError(body, 'Failed to get file viewer URL', res.status)
   }
 
-  return res.json()
+  const json = await res.json()
+  return json.data ?? json
 }
 
 export async function deleteSessionTranscript(

@@ -406,10 +406,26 @@
   overflow: hidden;
 }
 
+/* Single-pane (no preview) — flex column so modalBody can scroll */
+.modalSinglePane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
 .modalFormPane {
   flex: 0 0 680px;
   max-width: 680px;
   overflow-y: auto;
+}
+
+/* Single-pane form wrapper — fills remaining height, allows body to scroll */
+.modalFormSingle {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .previewPane {

@@ -394,10 +394,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           </button>
         </div>
 
-        {/* Inner layout — flex row when preview is open */}
-        <div className={previewData ? styles.modalInner : undefined}>
+        {/* Inner layout — flex row when preview is open, flex column always */}
+        <div className={previewData ? styles.modalInner : styles.modalSinglePane}>
           {/* Form pane */}
-          <div className={previewData ? styles.modalFormPane : undefined}>
+          <div className={previewData ? styles.modalFormPane : styles.modalFormSingle}>
             {/* Body */}
             <div className={styles.modalBody}>
               {isEditMode && itemLoading ? (

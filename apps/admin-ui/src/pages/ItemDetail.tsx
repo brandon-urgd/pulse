@@ -126,11 +126,12 @@ export default function ItemDetail() {
   const autoSaved = useRef(false);
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
-  const { data: itemData, isLoading: itemLoading } = useAuthedQuery<Item>(
+  const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
     ['item', itemId],
     `/api/manage/items/${itemId}`,
     { enabled: isEditMode }
   );
+  const itemData = itemResp?.data;
 
   useEffect(() => {
     if (itemData) {
@@ -164,11 +165,12 @@ export default function ItemDetail() {
   // Whether the current create is triggered by a file upload (suppress navigate)
   const uploadingCreate = useRef(false);
 
-  const createMutation = useAuthedMutation<Item, CreateItemPayload>(
+  const createMutation = useAuthedMutation<{ data: Item }, CreateItemPayload>(
     '/api/manage/items',
     'POST',
     {
-      onSuccess: (created) => {
+      onSuccess: (resp) => {
+        const created = resp.data;
         savedItemId.current = created.itemId;
         autoSaved.current = true;
         queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -360,14 +362,14 @@ export default function ItemDetail() {
       let targetItemId = savedItemId.current;
       if (!targetItemId) {
         uploadingCreate.current = true;
-        const created = await createMutation.mutateAsync({
+        const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
           closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;
-        targetItemId = created.itemId;
+        targetItemId = createdResp.data.itemId;
       }
 
       // Upload files sequentially
@@ -417,8 +419,8 @@ export default function ItemDetail() {
         try {
           // refetchQueries waits for the fetch to complete — no stale-read race
           await queryClient.refetchQueries({ queryKey: ['item', targetItemId] });
-          const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
-          const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
+          const refreshed = queryClient.getQueryData<{ data: Item }>(['item', targetItemId]);
+          const status = (refreshed?.data?.documentStatus ?? 'none') as DocumentStatus;
 
           if (!mountedRef.current) { resolve(); return; }
 
