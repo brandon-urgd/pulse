@@ -189,7 +189,10 @@ export const labels = {
     themeSaved: 'Saved',
     signOutButton: 'Sign out',
     deleteAccountButton: 'Delete account',
-    deleteAccountHint: 'Account deletion is not available on the free plan.',
+    deleteAccountConfirm: 'Confirm — delete my account',
+    deleteAccountDeleting: 'Deleting…',
+    deleteAccountHint: 'This will permanently delete your account and all data.',
+    deleteAccountConfirmHint: 'This cannot be undone. Click again to confirm.',
   },
 
   // Layout

@@ -1,17 +1,13 @@
 // ur/gd pulse — Get Settings Lambda
-// GET /api/manage/settings → returns tenant settings from DynamoDB
+// GET /api/manage/settings → returns tenant settings with live usage counts
 
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
-// Fail-fast env var validation
-requireEnv(['TENANTS_TABLE', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['TENANTS_TABLE', 'ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-/**
- * Unmarshal a DynamoDB item into a plain JS object (minimal, handles S/N/BOOL/M/L)
- */
 function unmarshal(item) {
   if (!item) return null
   const result = {}
@@ -39,25 +35,49 @@ export const handler = async (event) => {
   log('info', 'GetSettings: fetching tenant', { requestId, tenantId })
 
   try {
-    const result = await dynamo.send(new GetItemCommand({
-      TableName: process.env.TENANTS_TABLE,
-      Key: { tenantId: { S: tenantId } },
-    }))
+    const [tenantResult, itemsResult, sessionsResult] = await Promise.all([
+      dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: tenantId } },
+      })),
+      // Count active/draft items for this tenant
+      dynamo.send(new QueryCommand({
+        TableName: process.env.ITEMS_TABLE,
+        KeyConditionExpression: 'tenantId = :tid',
+        FilterExpression: '#st IN (:draft, :active)',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':tid': { S: tenantId },
+          ':draft': { S: 'draft' },
+          ':active': { S: 'active' },
+        },
+        Select: 'COUNT',
+      })),
+      // Count all sessions for this tenant
+      dynamo.send(new QueryCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        KeyConditionExpression: 'tenantId = :tid',
+        ExpressionAttributeValues: { ':tid': { S: tenantId } },
+        Select: 'COUNT',
+      })),
+    ])
 
-    if (!result.Item) {
+    if (!tenantResult.Item) {
       log('warn', 'GetSettings: tenant not found', { requestId, tenantId })
       return errorResponse(404, 'Tenant not found', {}, origin)
     }
 
-    const tenant = unmarshal(result.Item)
+    const tenant = unmarshal(tenantResult.Item)
+    const itemCount = itemsResult.Count ?? 0
+    const sessionCount = sessionsResult.Count ?? 0
 
     return createResponse(200, {
       tenantId: tenant.tenantId,
       displayName: tenant.displayName ?? null,
       email: tenant.email ?? null,
-      tier: tenant.tier,
+      tier: tenant.tier ?? 'free',
       features: tenant.features ?? {},
-      usage: tenant.usage ?? {},
+      usage: { itemCount, sessionCount },
       onboardingComplete: tenant.onboardingComplete ?? false,
       preferences: tenant.preferences ?? {},
     }, {}, origin)

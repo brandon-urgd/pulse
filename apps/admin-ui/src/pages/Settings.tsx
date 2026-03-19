@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
-import { useAuthedMutation } from '../hooks/useAuthedMutation';
+import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { labels } from '../config/labels-registry';
@@ -49,6 +49,7 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
 
   const [themeSaveState, setThemeSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle');
 
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -81,6 +82,23 @@ export default function Settings() {
   async function handleSignOut() {
     await signOut();
     navigate('/admin/login', { replace: true });
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteState === 'idle') {
+      setDeleteState('confirm');
+      return;
+    }
+    if (deleteState === 'confirm') {
+      setDeleteState('deleting');
+      try {
+        await authedMutate('/api/manage/account', 'DELETE', undefined, navigate);
+        await signOut();
+        navigate('/admin/login', { replace: true });
+      } catch {
+        setDeleteState('idle');
+      }
+    }
   }
 
   const s = data?.data;
@@ -201,10 +219,25 @@ export default function Settings() {
           <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
             {labels.settings.signOutButton}
           </button>
-          <button type="button" className={styles.deleteButton} disabled aria-disabled="true">
-            {labels.settings.deleteAccountButton}
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={handleDeleteAccount}
+            disabled={deleteState === 'deleting'}
+            aria-disabled={deleteState === 'deleting'}
+          >
+            {deleteState === 'confirm'
+              ? labels.settings.deleteAccountConfirm
+              : deleteState === 'deleting'
+                ? labels.settings.deleteAccountDeleting
+                : labels.settings.deleteAccountButton}
           </button>
-          <p className={styles.deleteHint}>{labels.settings.deleteAccountHint}</p>
+          {deleteState === 'confirm' && (
+            <p className={styles.deleteHint}>{labels.settings.deleteAccountConfirmHint}</p>
+          )}
+          {deleteState === 'idle' && (
+            <p className={styles.deleteHint}>{labels.settings.deleteAccountHint}</p>
+          )}
         </div>
       </section>
     </div>

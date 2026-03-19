@@ -368,6 +368,11 @@
   align-items: center;
 }
 
+.extendRow .primaryButton {
+  align-self: auto;
+  flex-shrink: 0;
+}
+
 /* ── Modal footer ────────────────────────────────────────────────────────── */
 
 .modalFooter {

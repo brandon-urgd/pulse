@@ -81,6 +81,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-updateSettings/latest.zip
     Description: S3 key for urgd-pulse-updateSettings Lambda ZIP
 
+  DeleteAccountCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-deleteAccount/latest.zip
+    Description: S3 key for urgd-pulse-deleteAccount Lambda ZIP
+
   GetItemsCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-getItems/latest.zip
@@ -269,6 +274,7 @@ Mappings:
       CreateTenant: 3
       GetSettings: 3
       UpdateSettings: 3
+      DeleteAccount: 3
       GetItems: 3
       CreateItem: 3
       GetItem: 3
@@ -298,6 +304,7 @@ Mappings:
       CreateTenant: 5
       GetSettings: 5
       UpdateSettings: 5
+      DeleteAccount: 5
       GetItems: 5
       CreateItem: 5
       GetItem: 5
@@ -327,6 +334,7 @@ Mappings:
       CreateTenant: 5
       GetSettings: 10
       UpdateSettings: 10
+      DeleteAccount: 5
       GetItems: 10
       CreateItem: 10
       GetItem: 10
@@ -799,6 +807,7 @@ Resources:
       - PulseRegisterMethod
       - PulseGetSettingsMethod
       - PulsePutSettingsMethod
+      - PulseDeleteAccountMethod
       - PulseGetItemsMethod
       - PulsePostItemsMethod
       - PulseGetItemMethod
@@ -1621,6 +1630,17 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseDeleteAccountLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-deleteAccount-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   PulseGetItemsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -1732,6 +1752,12 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
 
   PulseUpdateSettingsFunctionRole:
     Type: AWS::IAM::Role
@@ -1764,6 +1790,53 @@ Resources:
                 Action:
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+
+  PulseDeleteAccountFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-deleteAccount-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DeleteAccountPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminDeleteUser
+                Resource: !GetAtt PulseUserPool.Arn
 
   PulseGetItemsFunctionRole:
     Type: AWS::IAM::Role
@@ -1902,6 +1975,8 @@ Resources:
       Environment:
         Variables:
           TENANTS_TABLE: !Ref PulseTenantsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
@@ -1967,6 +2042,53 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref PulseUpdateSettingsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseDeleteAccountFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseDeleteAccountLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-deleteAccount-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseDeleteAccountFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref DeleteAccountCodeKey
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, DeleteAccount]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          USER_POOL_ID: !Ref PulseUserPool
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
+          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseDeleteAccountFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseDeleteAccountFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
@@ -2096,6 +2218,27 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseUpdateSettingsFunction.Arn}/invocations'
+
+  # /api/manage/account
+  PulseManageAccountResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageResource
+      PathPart: account
+
+  PulseDeleteAccountMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageAccountResource
+      HttpMethod: DELETE
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseDeleteAccountFunction.Arn}/invocations'
 
   # /api/manage/items
   PulseManageItemsResource:

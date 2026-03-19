@@ -114,7 +114,7 @@ export const handler = async (event) => {
     // Use wildcard ARN so the cached policy covers all methods on this API/stage
     const arnParts = event.methodArn.split('/')
     const wildcardArn = `${arnParts[0]}/*/*`
-    return generatePolicy(payload.sub, 'Allow', wildcardArn, { tenantId })
+    return generatePolicy(payload.sub, 'Allow', wildcardArn, { tenantId, username: payload.username || payload.sub })
   } catch (err) {
     log('warn', 'CognitoAuth: denied', { reason: err.message })
     const arnParts = event.methodArn.split('/')
