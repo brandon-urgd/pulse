@@ -5,6 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import InviteModal from './InviteModal';
+import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import styles from './ItemDetailModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -47,6 +48,10 @@ interface UpdateItemPayload {
 
 interface UploadUrlResponse {
   data: { uploadUrl: string; key: string };
+}
+
+interface DocumentUrlResponse {
+  data: { url: string; contentType: string; filename: string; originalUrl?: string };
 }
 
 interface Props {
@@ -100,6 +105,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const savedItemId   = useRef<string | null>(itemId ?? null);
   const autoSaved     = useRef(false);
   const uploadingCreate = useRef(false);
+
+  // Preview state
+  interface PreviewData { url: string; contentType: string; filename: string; originalUrl?: string }
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [loadingPreviewFile, setLoadingPreviewFile] = useState<string | null>(null);
+  const previewTriggerRef = useRef<HTMLElement | null>(null);
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
@@ -330,6 +341,31 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     });
   }
 
+  // ── Preview handler ─────────────────────────────────────────────────────────
+  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
+    const targetItemId = savedItemId.current ?? itemId;
+    if (!targetItemId) return;
+    setLoadingPreviewFile(fileName);
+    previewTriggerRef.current = e.currentTarget as HTMLElement;
+    try {
+      const resp = await authedMutate(
+        `/api/manage/items/${targetItemId}/document-url`,
+        'GET',
+        undefined,
+        navigate
+      ) as DocumentUrlResponse;
+      setPreviewData({
+        url: resp.data.url,
+        contentType: resp.data.contentType,
+        filename: resp.data.filename,
+        originalUrl: resp.data.originalUrl,
+      });
+    } catch { /* silently fail */ }
+    finally {
+      setLoadingPreviewFile(null);
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   const isSaving  = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
@@ -342,7 +378,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       aria-modal="true"
       aria-labelledby="item-modal-title"
     >
-      <div className={styles.modal}>
+      <div className={`${styles.modal} ${previewData ? styles.modalExpanded : ''}`}>
         {/* Header */}
         <div className={styles.modalHeader}>
           <h2 id="item-modal-title" className={styles.modalTitle}>
@@ -358,156 +394,197 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           </button>
         </div>
 
-        {/* Body */}
-        <div className={styles.modalBody}>
-          {isEditMode && itemLoading ? (
-            <div className={styles.loading} aria-busy="true" />
-          ) : (
-            <>
-              {isLocked && (
-                <p className={styles.lockedNotice} role="status">
-                  🔒 {labels.itemDetail.readOnlyNotice}
-                </p>
-              )}
+        {/* Inner layout — flex row when preview is open */}
+        <div className={previewData ? styles.modalInner : undefined}>
+          {/* Form pane */}
+          <div className={previewData ? styles.modalFormPane : undefined}>
+            {/* Body */}
+            <div className={styles.modalBody}>
+              {isEditMode && itemLoading ? (
+                <div className={styles.loading} aria-busy="true" />
+              ) : (
+                <>
+                  {isLocked && (
+                    <p className={styles.lockedNotice} role="status">
+                      🔒 {labels.itemDetail.readOnlyNotice}
+                    </p>
+                  )}
 
-              <form onSubmit={handleSubmit} noValidate className={styles.form}>
-                <div className={styles.field}>
-                  <label htmlFor="itemName" className={styles.label}>
-                    {labels.itemDetail.fieldName} <span className={styles.required} aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    id="itemName"
-                    type="text"
-                    className={styles.input}
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    maxLength={200}
-                    required
-                    disabled={isLocked}
-                    placeholder={labels.itemDetail.fieldNamePlaceholder}
-                  />
-                </div>
+                  <form onSubmit={handleSubmit} noValidate className={styles.form}>
+                    <div className={styles.field}>
+                      <label htmlFor="itemName" className={styles.label}>
+                        {labels.itemDetail.fieldName} <span className={styles.required} aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        id="itemName"
+                        type="text"
+                        className={styles.input}
+                        value={itemName}
+                        onChange={(e) => setItemName(e.target.value)}
+                        maxLength={200}
+                        required
+                        disabled={isLocked}
+                        placeholder={labels.itemDetail.fieldNamePlaceholder}
+                      />
+                    </div>
 
-                <div className={styles.field}>
-                  <label htmlFor="description" className={styles.label}>
-                    {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
-                  </label>
-                  <textarea
-                    id="description"
-                    className={styles.textarea}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    maxLength={2000}
-                    rows={3}
-                    required
-                    disabled={isLocked}
-                    placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
-                  />
-                </div>
+                    <div className={styles.field}>
+                      <label htmlFor="description" className={styles.label}>
+                        {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
+                      </label>
+                      <textarea
+                        id="description"
+                        className={styles.textarea}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={2000}
+                        rows={3}
+                        required
+                        disabled={isLocked}
+                        placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
+                      />
+                    </div>
 
-                <div className={styles.field}>
-                  <label htmlFor="closeDate" className={styles.label}>
-                    {labels.itemDetail.fieldCloseDate} <span className={styles.required} aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    id="closeDate"
-                    type="date"
-                    className={styles.input}
-                    value={closeDate}
-                    onChange={(e) => setCloseDate(e.target.value)}
-                    min={todayIso()}
-                    required
-                    disabled={isLocked}
-                  />
-                </div>
+                    <div className={styles.field}>
+                      <label htmlFor="closeDate" className={styles.label}>
+                        {labels.itemDetail.fieldCloseDate} <span className={styles.required} aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        id="closeDate"
+                        type="date"
+                        className={styles.input}
+                        value={closeDate}
+                        onChange={(e) => setCloseDate(e.target.value)}
+                        min={todayIso()}
+                        required
+                        disabled={isLocked}
+                      />
+                    </div>
 
-                <div className={styles.field}>
-                  <label className={styles.label}>{labels.itemDetail.fieldContent}</label>
-                  <p className={styles.contentHint}>{labels.itemDetail.fieldContentHint}</p>
+                    <div className={styles.field}>
+                      <label className={styles.label}>{labels.itemDetail.fieldContent}</label>
+                      <p className={styles.contentHint}>{labels.itemDetail.fieldContentHint}</p>
 
-                  <label htmlFor="content" className={styles.subLabel}>
-                    {labels.itemDetail.contentPasteLabel}
-                  </label>
-                  <textarea
-                    id="content"
-                    className={styles.contentTextarea}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    rows={8}
-                    disabled={isLocked}
-                    placeholder={labels.itemDetail.fieldContentPlaceholder}
-                  />
+                      <label htmlFor="content" className={styles.subLabel}>
+                        {labels.itemDetail.contentPasteLabel}
+                      </label>
+                      <textarea
+                        id="content"
+                        className={styles.contentTextarea}
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        rows={8}
+                        disabled={isLocked}
+                        placeholder={labels.itemDetail.fieldContentPlaceholder}
+                      />
 
-                  <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
-                  <div className={styles.uploadArea}>
-                    <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      id="fileUpload"
-                      className={styles.fileInput}
-                      accept=".md,.txt,.pdf,.docx"
-                      multiple
-                      onChange={handleFileChange}
-                      disabled={isUploading || isLocked}
-                      aria-label={labels.itemDetail.uploadChooseFile}
-                    />
-                    <label
-                      htmlFor="fileUpload"
-                      className={`${styles.fileLabel} ${(isUploading || isLocked) ? styles.fileLabelDisabled : ''}`}
-                    >
-                      {isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
-                    </label>
+                      <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
+                      <div className={styles.uploadArea}>
+                        <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          id="fileUpload"
+                          className={styles.fileInput}
+                          accept=".md,.txt,.pdf,.docx"
+                          multiple
+                          onChange={handleFileChange}
+                          disabled={isUploading || isLocked}
+                          aria-label={labels.itemDetail.uploadChooseFile}
+                        />
+                        <label
+                          htmlFor="fileUpload"
+                          className={`${styles.fileLabel} ${(isUploading || isLocked) ? styles.fileLabelDisabled : ''}`}
+                        >
+                          {isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
+                        </label>
 
-                    {Object.entries(fileStatuses).map(([name, state]) => (
-                      <div key={name} className={styles.fileStatusRow} aria-live="polite">
-                        <span className={styles.fileName}>{name}</span>
-                        <span className={`${styles.fileStatusBadge} ${
-                          state.status === 'ready' ? styles.docStatusReady
-                          : state.status === 'rejected' || state.status === 'extraction_failed' || state.status === 'error' ? styles.docStatusError
-                          : styles.docStatusPending
-                        }`}>
-                          {fileStatusLabel(state.status)}
-                        </span>
+                        {Object.entries(fileStatuses).map(([name, state]) => {
+                          const isReady = state.status === 'ready';
+                          const isLoadingThis = loadingPreviewFile === name;
+                          return (
+                            <div
+                              key={name}
+                              className={`${styles.fileStatusRow} ${isReady ? styles.fileStatusRowClickable : ''}`}
+                              aria-live="polite"
+                              role={isReady ? 'button' : undefined}
+                              tabIndex={isReady ? 0 : undefined}
+                              aria-label={isReady ? labels.itemDetail.previewAriaLabel.replace('{filename}', name) : undefined}
+                              onClick={isReady ? (e) => handlePreviewClick(name, e) : undefined}
+                              onKeyDown={isReady ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handlePreviewClick(name, e);
+                                }
+                              } : undefined}
+                            >
+                              <span className={styles.fileName}>{name}</span>
+                              <span className={`${styles.fileStatusBadge} ${
+                                state.status === 'ready' ? styles.docStatusReady
+                                : state.status === 'rejected' || state.status === 'extraction_failed' || state.status === 'error' ? styles.docStatusError
+                                : styles.docStatusPending
+                              }`}>
+                                {fileStatusLabel(state.status)}
+                              </span>
+                              {isReady && (
+                                <span className={styles.previewLinkText}>
+                                  {isLoadingThis ? '…' : labels.itemDetail.previewLink}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
 
-                {formError && (
-                  <p className={styles.formError} role="alert" aria-live="polite">
-                    {formError}
-                  </p>
-                )}
+                    {formError && (
+                      <p className={styles.formError} role="alert" aria-live="polite">
+                        {formError}
+                      </p>
+                    )}
 
-                <div className={styles.actions}>
-                  {isEditMode && (
-                    <button
-                      type="button"
-                      className={styles.deleteButton}
-                      onClick={() => setShowDeleteModal(true)}
-                      disabled={isDeleting}
-                    >
-                      {labels.itemDetail.deleteButton}
-                    </button>
-                  )}
-                  <div className={styles.actionsSpacer} />
-                  <button
-                    type="button"
-                    className={styles.cancelButton}
-                    onClick={handleCancel}
-                    disabled={isSaving}
-                  >
-                    {labels.itemDetail.cancelButton}
-                  </button>
-                  {!isLocked && (
-                    <button type="submit" className={styles.saveButton} disabled={isSaving}>
-                      {isSaving ? '…' : labels.itemDetail.saveButton}
-                    </button>
-                  )}
-                </div>
-              </form>
-            </>
+                    <div className={styles.actions}>
+                      {isEditMode && (
+                        <button
+                          type="button"
+                          className={styles.deleteButton}
+                          onClick={() => setShowDeleteModal(true)}
+                          disabled={isDeleting}
+                        >
+                          {labels.itemDetail.deleteButton}
+                        </button>
+                      )}
+                      <div className={styles.actionsSpacer} />
+                      <button
+                        type="button"
+                        className={styles.cancelButton}
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                      >
+                        {labels.itemDetail.cancelButton}
+                      </button>
+                      {!isLocked && (
+                        <button type="submit" className={styles.saveButton} disabled={isSaving}>
+                          {isSaving ? '…' : labels.itemDetail.saveButton}
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Preview pane */}
+          {previewData && (
+            <DocumentPreviewPanel
+              url={previewData.url}
+              contentType={previewData.contentType}
+              filename={previewData.filename}
+              originalUrl={previewData.originalUrl}
+              onClose={() => setPreviewData(null)}
+              triggerRef={previewTriggerRef as React.RefObject<HTMLElement | null>}
+            />
           )}
         </div>
       </div>

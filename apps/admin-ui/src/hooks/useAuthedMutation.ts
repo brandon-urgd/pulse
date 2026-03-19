@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-type HttpMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export async function authedMutate(
   url: string,
@@ -25,7 +25,7 @@ export async function authedMutate(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined && method !== 'GET' ? JSON.stringify(body) : undefined,
   };
 
   let res = await fetch(`${API_BASE}${url}`, init);

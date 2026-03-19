@@ -112,6 +112,17 @@ export const labels = {
     deleteConfirmDelete: 'Delete',
     deleteError: 'Failed to delete item. Please try again.',
     readOnlyNotice: 'Items with active or completed sessions can\u2019t be edited to preserve the integrity of reviewer feedback. To make changes, create a new item.',
+    previewLink: 'Preview',
+    previewAriaLabel: 'Preview {filename}',
+    previewCloseAriaLabel: 'Close document preview',
+    previewLoading: 'Loading document\u2026',
+    previewError: "This document couldn\u2019t be loaded.",
+    previewRetry: 'Try again',
+    previewEmpty: 'No document to preview.',
+    previewExtractedCaption: 'Showing extracted text.',
+    previewDownloadOriginal: 'Download original',
+    previewPdfFallback: 'Open PDF in new tab \u2192',
+    previewNoText: 'No text could be extracted from this file.',
   },
 
   // Invitation section (within ItemDetail)

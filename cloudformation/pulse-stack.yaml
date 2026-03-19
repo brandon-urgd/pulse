@@ -186,6 +186,41 @@ Parameters:
     Default: lambda-packages/urgd-pulse-expirePublicSession/latest.zip
     Description: S3 key for urgd-pulse-expirePublicSession Lambda ZIP
 
+  ChatCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-chat/latest.zip
+    Description: S3 key for urgd-pulse-chat Lambda ZIP
+
+  GetSessionStateCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getSessionState/latest.zip
+    Description: S3 key for urgd-pulse-getSessionState Lambda ZIP
+
+  GetSessionSummaryCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getSessionSummary/latest.zip
+    Description: S3 key for urgd-pulse-getSessionSummary Lambda ZIP
+
+  GenerateSessionSummaryCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-generateSessionSummary/latest.zip
+    Description: S3 key for urgd-pulse-generateSessionSummary Lambda ZIP
+
+  DeleteSessionTranscriptCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-deleteSessionTranscript/latest.zip
+    Description: S3 key for urgd-pulse-deleteSessionTranscript Lambda ZIP
+
+  GetSessionFileCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getSessionFile/latest.zip
+    Description: S3 key for urgd-pulse-getSessionFile Lambda ZIP
+
+  GetDocumentUrlCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getDocumentUrl/latest.zip
+    Description: S3 key for urgd-pulse-getDocumentUrl Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -295,6 +330,13 @@ Mappings:
       CreatePublicSession: 3
       GetPublicSessionQr: 3
       ExpirePublicSession: 3
+      Chat: 3
+      GetSessionState: 3
+      GetSessionSummary: 3
+      GenerateSessionSummary: 3
+      DeleteSessionTranscript: 3
+      GetSessionFile: 3
+      GetDocumentUrl: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -325,6 +367,13 @@ Mappings:
       CreatePublicSession: 5
       GetPublicSessionQr: 5
       ExpirePublicSession: 5
+      Chat: 5
+      GetSessionState: 5
+      GetSessionSummary: 5
+      GenerateSessionSummary: 5
+      DeleteSessionTranscript: 5
+      GetSessionFile: 5
+      GetDocumentUrl: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -355,6 +404,13 @@ Mappings:
       CreatePublicSession: 10
       GetPublicSessionQr: 10
       ExpirePublicSession: 10
+      Chat: 15
+      GetSessionState: 10
+      GetSessionSummary: 10
+      GenerateSessionSummary: 5
+      DeleteSessionTranscript: 5
+      GetSessionFile: 10
+      GetDocumentUrl: 10
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -823,6 +879,12 @@ Resources:
       - PulsePostAcceptConfidentialityMethod
       - PulsePostCreatePublicSessionMethod
       - PulseGetPublicSessionQrMethod
+      - PulsePostChatMethod
+      - PulseGetSessionStateMethod
+      - PulseGetSessionSummaryMethod
+      - PulseDeleteSessionTranscriptMethod
+      - PulseGetSessionFileMethod
+      - PulseGetDocumentUrlMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -4454,6 +4516,876 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt PulseExpireSessionsRule.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S4: CloudWatch Log Groups
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseChatLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-chat-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetSessionStateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getSessionState-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetSessionSummaryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getSessionSummary-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGenerateSessionSummaryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-generateSessionSummary-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseDeleteSessionTranscriptLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-deleteSessionTranscript-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetSessionFileLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getSessionFile-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetDocumentUrlLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getDocumentUrl-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S4: IAM Execution Roles
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseChatFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-chat-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseChatPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulseGenerateSessionSummaryFunction.Arn
+
+  PulseGetSessionStateFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getSessionState-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetSessionStatePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+
+  PulseGetSessionSummaryFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getSessionSummary-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetSessionSummaryPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+
+  PulseGenerateSessionSummaryFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-generateSessionSummary-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGenerateSessionSummaryPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0'
+
+  PulseDeleteSessionTranscriptFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-deleteSessionTranscript-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseDeleteSessionTranscriptPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+
+  PulseGetSessionFileFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getSessionFile-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetSessionFilePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+
+  PulseGetDocumentUrlFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getDocumentUrl-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetDocumentUrlPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S4: Lambda Functions
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseGenerateSessionSummaryFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGenerateSessionSummaryLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-generateSessionSummary-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGenerateSessionSummaryFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GenerateSessionSummaryCodeKey
+      Timeout: 120
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateSessionSummary]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseChatFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseChatLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-chat-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseChatFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ChatCodeKey
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, Chat]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+          GENERATE_SESSION_SUMMARY_FUNCTION_NAME: !Ref PulseGenerateSessionSummaryFunction
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseChatFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseChatFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetSessionStateFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetSessionStateLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getSessionState-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetSessionStateFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetSessionStateCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetSessionState]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetSessionStateFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetSessionStateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetSessionSummaryFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetSessionSummaryLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getSessionSummary-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetSessionSummaryFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetSessionSummaryCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetSessionSummary]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetSessionSummaryFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetSessionSummaryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseDeleteSessionTranscriptFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseDeleteSessionTranscriptLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-deleteSessionTranscript-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseDeleteSessionTranscriptFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref DeleteSessionTranscriptCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, DeleteSessionTranscript]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseDeleteSessionTranscriptFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseDeleteSessionTranscriptFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetSessionFileFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetSessionFileLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getSessionFile-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetSessionFileFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetSessionFileCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetSessionFile]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetSessionFileFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetSessionFileFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetDocumentUrlFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetDocumentUrlLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getDocumentUrl-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetDocumentUrlFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetDocumentUrlCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetDocumentUrl]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetDocumentUrlFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetDocumentUrlFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S4: API Gateway Resources
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # POST /api/session/{sessionId}/chat
+  PulseSessionChatResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: chat
+
+  PulsePostChatMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionChatResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseChatFunction.Arn}/invocations'
+
+  # GET /api/session/{sessionId}/state
+  PulseSessionStateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: state
+
+  PulseGetSessionStateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionStateResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetSessionStateFunction.Arn}/invocations'
+
+  # GET /api/session/{sessionId}/summary
+  PulseSessionSummaryResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: summary
+
+  PulseGetSessionSummaryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionSummaryResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetSessionSummaryFunction.Arn}/invocations'
+
+  # DELETE /api/session/{sessionId}/transcript
+  PulseSessionTranscriptResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: transcript
+
+  PulseDeleteSessionTranscriptMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionTranscriptResource
+      HttpMethod: DELETE
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseDeleteSessionTranscriptFunction.Arn}/invocations'
+
+  # GET /api/session/{sessionId}/files/{fileId}
+  PulseSessionFilesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: files
+
+  PulseSessionFileIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionFilesResource
+      PathPart: '{fileId}'
+
+  PulseGetSessionFileMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionFileIdResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetSessionFileFunction.Arn}/invocations'
+
+  # GET /api/manage/items/{itemId}/document-url
+  PulseManageItemDocumentUrlResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: document-url
+
+  PulseGetDocumentUrlMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemDocumentUrlResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetDocumentUrlFunction.Arn}/invocations'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S4: CloudWatch Alarms (P1)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseBedrockLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-bedrock-latency'
+      AlarmDescription: Bedrock p99 latency exceeded 10 seconds
+      Namespace: Pulse/Chat
+      MetricName: BedrockLatency
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  PulseBedrockErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-bedrock-errors'
+      AlarmDescription: Bedrock error rate exceeded 5% of requests
+      Namespace: Pulse/Chat
+      MetricName: BedrockErrors
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  PulseChatDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-chat-duration'
+      AlarmDescription: Chat message processing p99 duration exceeded 30 seconds
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'urgd-pulse-chat-${Environment}'
+      ExtendedStatistic: p99
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 30000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
 
 # ─── Outputs ──────────────────────────────────────────────────────────────────
 Outputs:

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import styles from './Welcome.module.css';
 
 /**
  * Welcome screen — shown on first login.
@@ -19,19 +20,13 @@ export default function Welcome() {
   }, [updateSettings]);
 
   return (
-    <main style={{ maxWidth: 560, margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
-      <h1 style={{ fontSize: '2rem', marginBottom: 16 }}>{labels.welcome.title}</h1>
-      <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 32 }}>
-        {labels.welcome.description}
-      </p>
+    <main className={styles.container}>
+      <h1 className={styles.heading}>{labels.welcome.title}</h1>
+      <p className={styles.description}>{labels.welcome.description}</p>
       <button
         type="button"
+        className={styles.ctaButton}
         onClick={() => navigate('/admin/items')}
-        style={{
-          padding: '12px 24px',
-          fontSize: '1rem',
-          cursor: 'pointer',
-        }}
       >
         {labels.welcome.ctaButton}
       </button>

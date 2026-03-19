@@ -70,6 +70,15 @@ else
   fail=1
 fi
 
+# S4 gate: session routes exist and reject unauthenticated requests (401)
+# These are auth-gated — no token means 401, which confirms the route + authorizer are wired up
+check "S4 POST /api/session/{id}/chat reachable"          "$BASE_URL/api/session/smoke-test/chat"          "401"
+check "S4 GET /api/session/{id}/state reachable"          "$BASE_URL/api/session/smoke-test/state"         "401"
+check "S4 GET /api/session/{id}/summary reachable"        "$BASE_URL/api/session/smoke-test/summary"       "401"
+check "S4 DELETE /api/session/{id}/transcript reachable"  "$BASE_URL/api/session/smoke-test/transcript"    "401"
+check "S4 GET /api/session/{id}/files/{fid} reachable"    "$BASE_URL/api/session/smoke-test/files/abc123"  "401"
+check "S4 GET /api/manage/items/{id}/document-url reachable" "$BASE_URL/api/manage/items/smoke-test/document-url" "401"
+
 # Summary
 echo ""
 echo "## 📊 Smoke Test Summary"

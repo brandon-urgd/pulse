@@ -82,11 +82,11 @@ export default function AdminLayout() {
             to="/admin/items"
             style={({ isActive }) => ({
               padding: 'var(--space-2) var(--space-3)',
-              borderRadius: 'var(--radius-sm)',
               textDecoration: 'none',
               color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
               fontWeight: isActive ? 600 : 400,
-              background: isActive ? 'var(--color-interactive-subtle)' : 'transparent',
+              borderBottom: isActive ? '2px solid var(--color-accent-pulse)' : '2px solid transparent',
+              paddingBottom: 'calc(var(--space-2) - 2px)',
             })}
           >
             {labels.layout.navItems}
@@ -95,11 +95,11 @@ export default function AdminLayout() {
             to="/admin/settings"
             style={({ isActive }) => ({
               padding: 'var(--space-2) var(--space-3)',
-              borderRadius: 'var(--radius-sm)',
               textDecoration: 'none',
               color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
               fontWeight: isActive ? 600 : 400,
-              background: isActive ? 'var(--color-interactive-subtle)' : 'transparent',
+              borderBottom: isActive ? '2px solid var(--color-accent-pulse)' : '2px solid transparent',
+              paddingBottom: 'calc(var(--space-2) - 2px)',
             })}
           >
             {labels.layout.navSettings}

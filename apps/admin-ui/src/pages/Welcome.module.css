@@ -1,0 +1,36 @@
+.container {
+  max-width: 560px;
+  margin: 80px auto;
+  padding: 0 var(--space-4);
+  text-align: center;
+}
+
+.heading {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-4);
+}
+
+.description {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0 0 var(--space-8);
+  font-size: var(--font-size-base);
+}
+
+.ctaButton {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  transition: background 0.15s;
+}
+
+.ctaButton:hover {
+  background: var(--color-interactive-hover);
+}
