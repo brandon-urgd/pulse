@@ -678,7 +678,7 @@ Resources:
               - GET
             AllowedHeaders:
               - '*'
-            MaxAgeSeconds: 3600
+            MaxAge: 3600
       Tags:
         - Key: project
           Value: pulse
@@ -1412,7 +1412,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
 
   PulseCognitoAuthFunctionRole:
     Type: AWS::IAM::Role
@@ -1546,7 +1546,7 @@ Resources:
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
       Tags:
         - Key: project
           Value: pulse
@@ -4659,7 +4659,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -4777,7 +4777,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0'
 
   PulseDeleteSessionTranscriptFunctionRole:
     Type: AWS::IAM::Role
@@ -4919,7 +4919,7 @@ Resources:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
       Tags:
         - Key: project
           Value: pulse
@@ -4956,7 +4956,7 @@ Resources:
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
           GENERATE_SESSION_SUMMARY_FUNCTION_NAME: !Ref PulseGenerateSessionSummaryFunction
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
