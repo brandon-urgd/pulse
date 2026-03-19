@@ -111,28 +111,25 @@ export const handler = async (event) => {
     let currentSection = parseInt(session.currentSection?.N || '1', 10)
     const totalSections = parseInt(session.totalSections?.N || '5', 10)
 
-    // 4. Save reviewer message (skip for special start/resume messages)
-    const isSpecial = SPECIAL_MESSAGES.includes(message)
-    if (!isSpecial || message === '__session_end__') {
-      if (!isSpecial || message !== '__session_end__') {
-        // Only save non-special messages as reviewer messages
-      }
-    }
-
+    // 4. Save reviewer message
     const reviewerMessageId = ulid()
-    if (!SPECIAL_MESSAGES.includes(message) || message === '__session_end__') {
-      if (!['__session_start__', '__session_resume__'].includes(message)) {
-        await dynamo.send(new PutItemCommand({
-          TableName: process.env.TRANSCRIPTS_TABLE,
-          Item: {
-            sessionId: { S: sessionId },
-            messageId: { S: reviewerMessageId },
-            role: { S: 'reviewer' },
-            content: { S: message },
-            timestamp: { S: new Date().toISOString() },
-          },
-        }))
-      }
+    // Save all messages to transcript — including special messages as their bracket form
+    // so conversation history always has alternating user/assistant roles
+    const isSpecial = SPECIAL_MESSAGES.includes(message)
+    const transcriptContent = isSpecial ? `[${message}]` : message
+
+    // Skip saving __session_end__ as reviewer message (saved before Bedrock call below)
+    if (message !== '__session_end__') {
+      await dynamo.send(new PutItemCommand({
+        TableName: process.env.TRANSCRIPTS_TABLE,
+        Item: {
+          sessionId: { S: sessionId },
+          messageId: { S: reviewerMessageId },
+          role: { S: 'reviewer' },
+          content: { S: transcriptContent },
+          timestamp: { S: new Date().toISOString() },
+        },
+      }))
     }
 
     // 5. Load full conversation history
@@ -158,42 +155,102 @@ export const handler = async (event) => {
         || ''
     }
 
+    // 6b. Load item metadata (name, description) from DynamoDB
+    let itemName = 'this item'
+    let itemDescription = ''
+    if (itemId && tenantId) {
+      try {
+        const itemResult = await dynamo.send(new GetItemCommand({
+          TableName: process.env.ITEMS_TABLE,
+          Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          ProjectionExpression: 'itemName, description',
+        }))
+        if (itemResult.Item) {
+          itemName = itemResult.Item.itemName?.S || 'this item'
+          itemDescription = itemResult.Item.description?.S || ''
+        }
+      } catch {
+        // Non-fatal — fall back to generic name
+      }
+    }
+
     // 7. Build system prompt
-    let systemPrompt = `You are a professional feedback facilitator conducting a structured review session. Your role is to guide the reviewer through a thoughtful discussion of the document provided.
+    let systemPrompt = `You are Pulse — an AI feedback agent built by ur/gd Studios. You guide reviewers through structured, one-on-one feedback sessions.
+
+Your personality:
+- Warm, calm, and conversational — like a thoughtful colleague, not a chatbot
+- Respectful of the reviewer's time and attention
+- Patient and unhurried — one question at a time, never overwhelming
+- Quietly confident — you know the material, but you're here to listen, not lecture
+- Brief and natural — keep messages short and human. No walls of text.
+
+Communication style:
+- Use short paragraphs. Two to three sentences max per thought.
+- Never use bullet points or numbered lists in conversation — speak naturally.
+- Acknowledge what the reviewer said before moving on. Make them feel heard.
+- Ask one focused question at a time. Wait for their answer.
+- Transition between sections conversationally, not mechanically.
+
+The item being reviewed:
+- Name: "${itemName}"
+${itemDescription ? `- Context: ${itemDescription}` : ''}
 
 Document content:
 ${itemContent || '(No document content available)'}
 
-You are conducting a ${totalSections}-section review. The reviewer is currently on section ${currentSection} of ${totalSections}.
+Session structure:
+- This is a ${totalSections}-section review. Current section: ${currentSection} of ${totalSections}.
+- Each section should feel like a natural conversation, not an interrogation.
+- When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text. The reviewer never sees this tag.
+- When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
 
-Guidelines:
-- Ask one focused question at a time
-- Acknowledge the reviewer's responses before moving forward
-- Keep the conversation natural and professional
-- When transitioning between sections, clearly signal the transition
-- Signal section transitions by including [SECTION:N] in your response where N is the new section number
-- Signal completion by including [SESSION_COMPLETE] when all sections are covered`
+Important:
+- Never show [SECTION:N] or [SESSION_COMPLETE] tags inline with your conversational text. Always place them on their own line at the very end.
+- Never refer to sections by number with the reviewer. Use natural transitions like "Let's shift gears" or "I'd love to hear your thoughts on another angle."
+- If the reviewer goes off-topic, gently guide them back without being dismissive.
+- If the reviewer gives a short answer, that's okay — acknowledge it and move on. Don't push.`
 
     if (windingDown === 'true') {
-      systemPrompt += '\n\nIMPORTANT: You are approaching the time limit. Begin wrapping up the current section naturally and prepare to move toward a closing summary.'
+      systemPrompt += '\n\nThe session is approaching its time limit. Start wrapping up the current topic naturally. Don\'t mention the time limit directly — just begin steering toward a close.'
     } else if (windingDown === 'final') {
-      systemPrompt += '\n\nIMPORTANT: The session is nearly at the time limit. Deliver a brief closing summary of what has been covered and thank the reviewer for their time.'
+      systemPrompt += '\n\nThe session is nearly out of time. Deliver a brief, warm closing. Thank the reviewer for their time. Summarize what you covered together in a sentence or two. Let them know they can come back to continue.'
     }
 
     if (message === '__session_start__') {
-      systemPrompt += '\n\nThis is the start of the session. Introduce yourself briefly, explain the review process, and present the first section topic with an opening question.'
+      systemPrompt += `\n\nThis is the very start of the session. Send your opening as a series of short, distinct thoughts — not one big block. Structure it like this:
+
+1. First message: A warm, brief greeting. Introduce yourself as Pulse. One to two sentences max. Example tone: "Hey! I'm Pulse, an AI feedback agent powered by ur/gd Studios."
+
+2. Then explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think. We'll cover it in ${totalSections} sections — just a conversation, nothing formal."
+
+3. Then let them know they're in control: "You can take your time, and if you ever want to stop early, just tap 'End session' at the top."
+
+4. Then invite them to begin: "Ready to dive in? Or any questions before we start?"
+
+Keep each thought to one or two sentences. Be warm but not over-the-top. This should feel like the start of a good conversation, not a briefing.`
     } else if (message === '__session_resume__') {
-      systemPrompt += '\n\nThe reviewer has returned to a session in progress. Acknowledge their return warmly and reference where you left off in the review.'
+      systemPrompt += '\n\nThe reviewer has returned to continue their session. Welcome them back warmly and briefly. Reference where you left off. Keep it to two or three short sentences — don\'t re-explain the whole process.'
     } else if (message === '__session_end__') {
-      systemPrompt += '\n\nThe reviewer has chosen to end the session early. Generate a brief, professional closing summary of the topics covered so far.'
+      systemPrompt += '\n\nThe reviewer has chosen to end the session early. Thank them genuinely for the time they gave. Briefly mention what you covered together (one sentence). Keep it warm and short — no more than three sentences total.'
     }
 
     // Build messages for Bedrock
-    const bedrockMessages = history.length > 0 ? history : []
-    if (['__session_start__', '__session_resume__', '__session_end__'].includes(message)) {
-      bedrockMessages.push({ role: 'user', content: `[${message}]` })
-    } else {
-      bedrockMessages.push({ role: 'user', content: message })
+    // For __session_end__, save the reviewer message now (before Bedrock) so transcript
+    // has the complete user→assistant pair written before status transitions to completed
+    const bedrockMessages = [...history]
+    if (message === '__session_end__') {
+      const endMessageId = ulid()
+      await dynamo.send(new PutItemCommand({
+        TableName: process.env.TRANSCRIPTS_TABLE,
+        Item: {
+          sessionId: { S: sessionId },
+          messageId: { S: endMessageId },
+          role: { S: 'reviewer' },
+          content: { S: '[__session_end__]' },
+          timestamp: { S: new Date().toISOString() },
+        },
+      }))
+      bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
     }
 
     // 8. Invoke Bedrock
