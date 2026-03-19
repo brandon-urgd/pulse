@@ -3126,7 +3126,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
 
   PulseExtendDeadlineFunctionRole:
