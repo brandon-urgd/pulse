@@ -17,12 +17,14 @@ interface Session {
   createdAt: string;
   expiresAt?: string;
   isPublic?: boolean;
+  sessionName?: string;
 }
 
 interface PublicQrResult {
   qrCodeUrl: string;
   pulseCode: string;
   sessionLink: string;
+  sessionName?: string | null;
 }
 
 interface Props {
@@ -51,6 +53,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // ── Reviewer invite state ──
   const [inviteEmails, setInviteEmails] = useState('');
   const [inviteError, setInviteError]   = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
@@ -61,26 +64,26 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelMessages, setCancelMessages] = useState<Record<string, string>>({});
 
+  // ── Extend deadline state ──
   const [extendDate, setExtendDate]     = useState('');
   const [isExtending, setIsExtending]   = useState(false);
   const [extendMessage, setExtendMessage] = useState('');
 
-  // Public session sub-panel state
-  const [showPublicSession, setShowPublicSession] = useState(false);
+  // ── Public session create form state ──
   const [publicSessionDate, setPublicSessionDate] = useState('');
+  const [publicSessionName, setPublicSessionName] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [publicSessionResult, setPublicSessionResult] = useState<{
-    pulseCode: string;
-    sessionLink: string;
-    qrCodeUrl: string | null;
-  } | null>(null);
   const [publicSessionError, setPublicSessionError] = useState('');
 
-  // View QR for existing public session
+  // ── View QR for existing public session ──
   const [viewingQrSessionId, setViewingQrSessionId] = useState<string | null>(null);
   const [viewingQrResult, setViewingQrResult] = useState<PublicQrResult | null>(null);
   const [viewingQrError, setViewingQrError] = useState('');
   const [isLoadingQr, setIsLoadingQr] = useState(false);
+
+  // ── End public session state ──
+  const [endingSessionId, setEndingSessionId] = useState<string | null>(null);
+  const [endSessionMessages, setEndSessionMessages] = useState<Record<string, string>>({});
 
   const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
     ['sessions', itemId],
@@ -88,6 +91,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
     { staleTime: 0 }
   );
   const sessions = sessionsData?.data ?? [];
+  const privateSessions = sessions.filter(s => !s.isPublic);
+  const publicSessions  = sessions.filter(s => s.isPublic);
 
   // Esc to close
   useEffect(() => {
@@ -95,6 +100,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   });
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -115,7 +122,6 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
       setInviteEmails('');
       setInviteSuccess(labels.invitation.inviteSuccess);
 
-      // Optimistically append new sessions so they appear immediately
       if (result?.data?.sessions?.length) {
         const newSessions: Session[] = result.data.sessions.map((s, i) => ({
           sessionId: s.sessionId,
@@ -128,7 +134,6 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
         }));
       }
 
-      // Background refetch to get masked emails from server
       refetchSessions();
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch (err: unknown) {
@@ -149,7 +154,6 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
         undefined,
         navigate
       );
-      // Remove from list optimistically
       queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
         data: (old?.data ?? []).filter(s => s.sessionId !== sessionId),
       }));
@@ -181,19 +185,20 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
 
     setIsGenerating(true);
     try {
-      const result = await authedMutate(
+      const body: Record<string, string> = { closeDate: publicSessionDate };
+      if (publicSessionName.trim()) body.sessionName = publicSessionName.trim();
+
+      await authedMutate(
         `/api/manage/items/${itemId}/public-session`,
         'POST',
-        { closeDate: publicSessionDate },
+        body,
         navigate
-      ) as { sessionId: string; pulseCode: string; sessionLink: string; qrCodeUrl: string | null };
-      setPublicSessionResult({
-        pulseCode: result.pulseCode,
-        sessionLink: result.sessionLink,
-        qrCodeUrl: result.qrCodeUrl,
-      });
+      );
+      setPublicSessionDate('');
+      setPublicSessionName('');
       queryClient.invalidateQueries({ queryKey: ['sessions', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      refetchSessions();
     } catch {
       setPublicSessionError(labels.invitation.publicSessionError);
     } finally {
@@ -202,6 +207,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
   }
 
   async function handleViewQr(sessionId: string) {
+    if (viewingQrSessionId === sessionId) {
+      setViewingQrSessionId(null);
+      setViewingQrResult(null);
+      return;
+    }
     setViewingQrSessionId(sessionId);
     setViewingQrResult(null);
     setViewingQrError('');
@@ -225,6 +235,30 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
     }
   }
 
+  async function handleEndPublicSession(sessionId: string) {
+    setEndSessionMessages(prev => ({ ...prev, [sessionId]: '' }));
+    setEndingSessionId(sessionId);
+    try {
+      await authedMutate(
+        `/api/manage/items/${itemId}/sessions/${sessionId}/expire`,
+        'PUT',
+        {},
+        navigate
+      );
+      setEndSessionMessages(prev => ({ ...prev, [sessionId]: labels.invitation.publicSessionEndSuccess }));
+      queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
+        data: (old?.data ?? []).map(s =>
+          s.sessionId === sessionId ? { ...s, status: 'expired' as SessionStatus } : s
+        ),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    } catch {
+      setEndSessionMessages(prev => ({ ...prev, [sessionId]: labels.invitation.publicSessionEndError }));
+    } finally {
+      setEndingSessionId(null);
+    }
+  }
+
   async function handleExtendDeadline(e: React.FormEvent) {
     e.preventDefault();
     setExtendMessage('');
@@ -243,6 +277,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
       setIsExtending(false);
     }
   }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -268,7 +304,8 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
 
         {/* Body */}
         <div className={styles.modalBody}>
-          {/* Invite form */}
+
+          {/* ── Section 1: Invite Reviewers ── */}
           <form onSubmit={handleInvite} noValidate className={styles.inviteForm}>
             <label htmlFor="inviteEmails" className={styles.label}>
               {labels.invitation.emailsLabel}
@@ -284,11 +321,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
               disabled={isInviting}
             />
             {(inviteError || inviteSuccess) && (
-              <p
-                role="alert"
-                aria-live="polite"
-                className={inviteError ? styles.error : styles.success}
-              >
+              <p role="alert" aria-live="polite" className={inviteError ? styles.error : styles.success}>
                 {inviteError || inviteSuccess}
               </p>
             )}
@@ -297,108 +330,13 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
             </button>
           </form>
 
-          <hr className={styles.divider} />
-
-          {/* Public session sub-panel */}
-          {!showPublicSession ? (
-            <div className={styles.publicSessionRow}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => { setShowPublicSession(true); setPublicSessionResult(null); setPublicSessionError(''); }}
-              >
-                {labels.invitation.publicSessionTitle}
-              </button>
-              <p className={styles.hint}>{labels.invitation.publicSessionDescription}</p>
-            </div>
-          ) : publicSessionResult ? (
-            <div className={styles.publicSessionPanel}>
-              <h3 className={styles.subHeading}>{labels.invitation.publicSessionTitle}</h3>
-              {publicSessionResult.qrCodeUrl && (
-                <div className={styles.qrWrapper}>
-                  <img
-                    src={publicSessionResult.qrCodeUrl}
-                    alt="QR code for public session"
-                    className={styles.qrImage}
-                  />
-                  <a
-                    href={publicSessionResult.qrCodeUrl}
-                    download="pulse-public-session-qr.png"
-                    className={styles.downloadLink}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {labels.invitation.publicSessionDownloadQr}
-                  </a>
-                </div>
-              )}
-              <p className={styles.pulseCodeDisplay}>{publicSessionResult.pulseCode}</p>
-              <p className={styles.sessionLinkText}>
-                <a href={publicSessionResult.sessionLink} target="_blank" rel="noreferrer">
-                  {publicSessionResult.sessionLink}
-                </a>
-              </p>
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={() => { setShowPublicSession(false); setPublicSessionResult(null); setPublicSessionDate(''); }}
-              >
-                {labels.invitation.publicSessionDoneButton}
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>
-              <h3 className={styles.subHeading}>{labels.invitation.publicSessionTitle}</h3>
-              <p className={styles.hint}>{labels.invitation.publicSessionDescription}</p>
-              <label htmlFor="publicSessionDate" className={styles.label}>
-                {labels.invitation.publicSessionDeadlineLabel}
-              </label>
-              <div className={styles.extendRow}>
-                <input
-                  id="publicSessionDate"
-                  type="date"
-                  className={styles.input}
-                  value={publicSessionDate}
-                  onChange={e => setPublicSessionDate(e.target.value)}
-                  min={todayIso()}
-                  disabled={isGenerating}
-                />
-                <button
-                  type="submit"
-                  className={styles.primaryButton}
-                  disabled={isGenerating || !publicSessionDate}
-                >
-                  {isGenerating ? labels.invitation.publicSessionGenerating : labels.invitation.publicSessionGenerateButton}
-                </button>
-                <button
-                  type="button"
-                  className={styles.skipButton}
-                  onClick={() => { setShowPublicSession(false); setPublicSessionError(''); }}
-                  disabled={isGenerating}
-                >
-                  Cancel
-                </button>
-              </div>
-              {publicSessionError && (
-                <p role="alert" aria-live="polite" className={styles.error}>{publicSessionError}</p>
-              )}
-            </form>
-          )}
-
-          <hr className={styles.divider} />
-
-          {/* Session list */}
-          <h3 className={styles.subHeading}>{labels.invitation.sectionTitle}</h3>
-          {sessions.length === 0 ? (
-            <p className={styles.emptyState}>{labels.invitation.noSessions}</p>
-          ) : (
-            <ul className={styles.sessionList} aria-label="Reviewer sessions">
-              {sessions.map(session => (
+          {/* Reviewer session list */}
+          {privateSessions.length > 0 && (
+            <ul className={styles.sessionList} aria-label="Reviewer sessions" style={{ marginTop: '1rem' }}>
+              {privateSessions.map(session => (
                 <li key={session.sessionId} className={styles.sessionRow}>
                   <div className={styles.sessionInfo}>
-                    <span className={styles.maskedEmail}>
-                      {session.isPublic ? labels.invitation.publicSessionBadge : session.reviewerEmail}
-                    </span>
+                    <span className={styles.maskedEmail}>{session.reviewerEmail}</span>
                     <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
                       {sessionStatusLabel(session.status)}
                     </span>
@@ -407,18 +345,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                     <span className={styles.sessionDate}>
                       Invited {new Date(session.createdAt).toLocaleDateString()}
                     </span>
-                    {session.isPublic ? (
-                      <button
-                        type="button"
-                        className={styles.resendButton}
-                        onClick={() => handleViewQr(session.sessionId)}
-                        disabled={isLoadingQr && viewingQrSessionId === session.sessionId}
-                      >
-                        {isLoadingQr && viewingQrSessionId === session.sessionId
-                          ? '…'
-                          : labels.invitation.publicSessionViewQr}
-                      </button>
-                    ) : session.status === 'not_started' ? (
+                    {session.status === 'not_started' && (
                       <div className={styles.sessionActions}>
                         <button
                           type="button"
@@ -426,9 +353,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                           onClick={() => handleResend(session.sessionId)}
                           disabled={resendingId === session.sessionId || cancellingId === session.sessionId}
                         >
-                          {resendingId === session.sessionId
-                            ? labels.invitation.resending
-                            : labels.invitation.resendButton}
+                          {resendingId === session.sessionId ? labels.invitation.resending : labels.invitation.resendButton}
                         </button>
                         <button
                           type="button"
@@ -439,19 +364,118 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                           {cancellingId === session.sessionId ? '…' : 'Cancel invite'}
                         </button>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                   {resendMessages[session.sessionId] && (
-                    <p aria-live="polite" className={styles.resendMessage}>
-                      {resendMessages[session.sessionId]}
-                    </p>
+                    <p aria-live="polite" className={styles.resendMessage}>{resendMessages[session.sessionId]}</p>
                   )}
                   {cancelMessages[session.sessionId] && (
-                    <p aria-live="polite" className={styles.error}>
-                      {cancelMessages[session.sessionId]}
-                    </p>
+                    <p aria-live="polite" className={styles.error}>{cancelMessages[session.sessionId]}</p>
                   )}
-                  {/* Inline QR viewer for this public session */}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <hr className={styles.divider} />
+
+          {/* ── Section 2: Public Sessions ── */}
+          <h3 className={styles.subHeading}>{labels.invitation.publicSessionSectionTitle}</h3>
+
+          {/* Create public session form — always visible */}
+          <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>
+            <label htmlFor="publicSessionName" className={styles.label}>
+              {labels.invitation.publicSessionNameLabel}
+            </label>
+            <p className={styles.hint}>{labels.invitation.publicSessionNameHint}</p>
+            <input
+              id="publicSessionName"
+              type="text"
+              className={styles.publicSessionNameInput}
+              value={publicSessionName}
+              onChange={e => setPublicSessionName(e.target.value)}
+              placeholder={labels.invitation.publicSessionNamePlaceholder}
+              disabled={isGenerating}
+              maxLength={100}
+            />
+            <label htmlFor="publicSessionDate" className={styles.label} style={{ marginTop: '0.5rem' }}>
+              {labels.invitation.publicSessionDeadlineLabel}
+            </label>
+            <div className={styles.extendRow}>
+              <input
+                id="publicSessionDate"
+                type="date"
+                className={styles.input}
+                value={publicSessionDate}
+                onChange={e => setPublicSessionDate(e.target.value)}
+                min={todayIso()}
+                disabled={isGenerating}
+              />
+              <button
+                type="submit"
+                className={styles.primaryButton}
+                disabled={isGenerating || !publicSessionDate}
+              >
+                {isGenerating ? labels.invitation.publicSessionGenerating : labels.invitation.publicSessionGenerateButton}
+              </button>
+            </div>
+            {publicSessionError && (
+              <p role="alert" aria-live="polite" className={styles.error}>{publicSessionError}</p>
+            )}
+          </form>
+
+          {/* Public session list */}
+          {publicSessions.length === 0 ? (
+            <p className={styles.emptyState} style={{ marginTop: '0.75rem' }}>{labels.invitation.noPublicSessions}</p>
+          ) : (
+            <ul className={styles.sessionList} aria-label="Public sessions" style={{ marginTop: '0.75rem' }}>
+              {publicSessions.map(session => (
+                <li key={session.sessionId} className={styles.sessionRow}>
+                  <div className={styles.sessionInfo}>
+                    <span className={styles.maskedEmail}>
+                      {session.sessionName ?? labels.invitation.publicSessionBadge}
+                    </span>
+                    <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
+                      {sessionStatusLabel(session.status)}
+                    </span>
+                  </div>
+                  <div className={styles.sessionMeta}>
+                    {session.expiresAt && (
+                      <span className={styles.sessionEndDate}>
+                        {labels.invitation.publicSessionEndsLabel} {new Date(session.expiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                    <div className={styles.sessionActions}>
+                      <button
+                        type="button"
+                        className={styles.resendButton}
+                        onClick={() => handleViewQr(session.sessionId)}
+                        disabled={isLoadingQr && viewingQrSessionId === session.sessionId}
+                      >
+                        {isLoadingQr && viewingQrSessionId === session.sessionId
+                          ? '…'
+                          : viewingQrSessionId === session.sessionId
+                            ? labels.invitation.publicSessionHideQr
+                            : labels.invitation.publicSessionViewQr}
+                      </button>
+                      {(session.status === 'not_started' || session.status === 'in_progress') && (
+                        <button
+                          type="button"
+                          className={styles.endSessionButton}
+                          onClick={() => handleEndPublicSession(session.sessionId)}
+                          disabled={endingSessionId === session.sessionId}
+                        >
+                          {endingSessionId === session.sessionId
+                            ? labels.invitation.publicSessionEnding
+                            : labels.invitation.publicSessionEndButton}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {endSessionMessages[session.sessionId] && (
+                    <p aria-live="polite" className={styles.resendMessage}>{endSessionMessages[session.sessionId]}</p>
+                  )}
+                  {/* Inline QR panel */}
                   {viewingQrSessionId === session.sessionId && (
                     <div className={styles.inlineQrPanel}>
                       {viewingQrError && (
@@ -485,13 +509,6 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                           </p>
                         </>
                       )}
-                      <button
-                        type="button"
-                        className={styles.skipButton}
-                        onClick={() => { setViewingQrSessionId(null); setViewingQrResult(null); }}
-                      >
-                        {labels.invitation.publicSessionHideQr}
-                      </button>
                     </div>
                   )}
                 </li>
@@ -501,7 +518,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
 
           <hr className={styles.divider} />
 
-          {/* Extend deadline */}
+          {/* ── Section 3: Extend Deadline ── */}
           <form onSubmit={handleExtendDeadline} noValidate className={styles.extendForm}>
             <h3 className={styles.subHeading}>{labels.invitation.extendDeadlineTitle}</h3>
             <label htmlFor="extendDate" className={styles.label}>
@@ -540,6 +557,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
               {labels.invitation.closeButton}
             </button>
           </div>
+
         </div>
       </div>
     </div>

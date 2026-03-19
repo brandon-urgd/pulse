@@ -394,3 +394,45 @@
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border);
 }
+
+.publicSessionNameInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  box-sizing: border-box;
+}
+
+.publicSessionNameInput:focus {
+  outline: none;
+  border-color: var(--color-accent-pulse);
+  box-shadow: 0 0 0 2px var(--color-accent-pulse-subtle);
+}
+
+.endSessionButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  background: none;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.5rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.endSessionButton:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.endSessionButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sessionEndDate {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

@@ -67,6 +67,7 @@ export const handler = async (event) => {
           expiresAt: item.expiresAt?.S ?? '',
           isPublic: item.isPublic?.BOOL === true,
         }
+        if (item.sessionName?.S) session.sessionName = item.sessionName.S
         if (item.startedAt?.S) session.startedAt = item.startedAt.S
         if (item.completedAt?.S) session.completedAt = item.completedAt.S
         return session

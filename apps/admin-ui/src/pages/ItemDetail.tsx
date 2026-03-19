@@ -464,7 +464,7 @@ export default function ItemDetail() {
 
       {isLocked && (
         <p className={styles.lockedNotice} role="status">
-          {labels.itemDetail.readOnlyNotice}
+          🔒 {labels.itemDetail.readOnlyNotice}
         </p>
       )}
 

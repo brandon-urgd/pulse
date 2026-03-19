@@ -366,7 +366,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             <>
               {isLocked && (
                 <p className={styles.lockedNotice} role="status">
-                  {labels.itemDetail.readOnlyNotice}
+                  🔒 {labels.itemDetail.readOnlyNotice}
                 </p>
               )}
 

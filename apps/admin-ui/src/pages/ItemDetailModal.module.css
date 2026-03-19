@@ -95,12 +95,14 @@
 /* ── Form ────────────────────────────────────────────────────────────────── */
 
 .lockedNotice {
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-left: 3px solid rgba(251, 191, 36, 0.6);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+  line-height: 1.6;
   margin-bottom: var(--space-5);
 }
 

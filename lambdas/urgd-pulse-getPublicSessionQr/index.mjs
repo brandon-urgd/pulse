@@ -68,6 +68,7 @@ export const handler = async (event) => {
       qrCodeUrl,
       pulseCode: sessionRecord.pulseCode?.S ?? '',
       sessionLink: `${process.env.APP_URL}/s/${sessionId}?public=1`,
+      sessionName: sessionRecord.sessionName?.S ?? null,
     }, {}, origin)
   } catch (err) {
     log('error', 'GetPublicSessionQr: unexpected error', { requestId, tenantId, itemId, sessionId, errorName: err.name })

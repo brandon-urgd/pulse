@@ -176,6 +176,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-getPublicSessionQr/latest.zip
     Description: S3 key for urgd-pulse-getPublicSessionQr Lambda ZIP
 
+  ExpirePublicSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-expirePublicSession/latest.zip
+    Description: S3 key for urgd-pulse-expirePublicSession Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -283,6 +288,7 @@ Mappings:
       ExpireSessions: 3
       CreatePublicSession: 3
       GetPublicSessionQr: 3
+      ExpirePublicSession: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -311,6 +317,7 @@ Mappings:
       ExpireSessions: 5
       CreatePublicSession: 5
       GetPublicSessionQr: 5
+      ExpirePublicSession: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -339,6 +346,7 @@ Mappings:
       ExpireSessions: 3
       CreatePublicSession: 10
       GetPublicSessionQr: 10
+      ExpirePublicSession: 10
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -2987,6 +2995,18 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseExpirePublicSessionLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-expirePublicSession-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: IAM Execution Roles
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3354,6 +3374,42 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/qr/*'
+
+  PulseExpirePublicSessionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-expirePublicSession-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub '${PulseSessionsTable.Arn}/index/sessionId-index'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: Lambda Functions
@@ -3754,6 +3810,48 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
+  PulseExpirePublicSessionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseExpirePublicSessionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-expirePublicSession-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseExpirePublicSessionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ExpirePublicSessionCodeKey
+      Timeout: 15
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ExpirePublicSession]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseExpirePublicSessionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseExpirePublicSessionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: API Gateway Resources
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3905,6 +4003,27 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetPublicSessionQrFunction.Arn}/invocations'
+
+  # PUT /api/manage/items/{itemId}/sessions/{sessionId}/expire
+  PulseManageItemSessionExpireResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemSessionResource
+      PathPart: expire
+
+  PulsePutExpirePublicSessionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionExpireResource
+      HttpMethod: PUT
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseExpirePublicSessionFunction.Arn}/invocations'
 
   # /api/session
   PulseSessionResource:

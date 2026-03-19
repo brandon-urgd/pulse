@@ -50,7 +50,7 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { closeDate } = body
+  const { closeDate, sessionName } = body
 
   if (!closeDate || typeof closeDate !== 'string') {
     return errorResponse(400, 'closeDate is required', {}, origin)
@@ -87,18 +87,22 @@ export const handler = async (event) => {
     const now = new Date().toISOString()
 
     // Store session record — reviewerEmail is null, isPublic is true
+    const sessionItem = {
+      tenantId: { S: tenantId },
+      sessionId: { S: sessionId },
+      itemId: { S: itemId },
+      pulseCode: { S: pulseCode },
+      status: { S: 'not_started' },
+      isPublic: { BOOL: true },
+      expiresAt: { S: closeDate },
+      createdAt: { S: now },
+    }
+    if (sessionName && typeof sessionName === 'string') {
+      sessionItem.sessionName = { S: sessionName.trim().slice(0, 100) }
+    }
     await dynamo.send(new PutItemCommand({
       TableName: process.env.SESSIONS_TABLE,
-      Item: {
-        tenantId: { S: tenantId },
-        sessionId: { S: sessionId },
-        itemId: { S: itemId },
-        pulseCode: { S: pulseCode },
-        status: { S: 'not_started' },
-        isPublic: { BOOL: true },
-        expiresAt: { S: closeDate },
-        createdAt: { S: now },
-      },
+      Item: sessionItem,
     }))
 
     log('info', 'CreatePublicSession: session created', { requestId, tenantId, itemId, sessionId })

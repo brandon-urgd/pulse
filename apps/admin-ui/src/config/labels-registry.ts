@@ -153,6 +153,16 @@ export const labels = {
     publicSessionBadge: 'Public session',
     publicSessionQrError: 'Failed to load QR code. Try again.',
     closeButton: 'Close',
+    publicSessionSectionTitle: 'Public Sessions',
+    publicSessionNameLabel: 'Session name',
+    publicSessionNamePlaceholder: 'e.g. Design Week Table',
+    publicSessionNameHint: 'Optional — helps identify this session if you create multiple.',
+    publicSessionEndButton: 'End session',
+    publicSessionEnding: 'Ending\u2026',
+    publicSessionEndError: 'Failed to end session. Try again.',
+    publicSessionEndSuccess: 'Session ended.',
+    publicSessionEndsLabel: 'Ends',
+    noPublicSessions: 'No public sessions yet.',
   },
 
   // Settings
