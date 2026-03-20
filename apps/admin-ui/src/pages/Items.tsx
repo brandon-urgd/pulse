@@ -141,9 +141,7 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
           </span>
         </div>
         <p className={styles.descriptionExcerpt}>
-          {(item.description?.length ?? 0) > 120
-            ? `${item.description.slice(0, 120)}…`
-            : (item.description ?? '')}
+          {item.description ?? ''}
         </p>
         <div className={styles.cardMeta}>
           <span className={styles.sessionCount}>
