@@ -35,7 +35,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     borderRadius: '16px 16px 16px 4px',
-    maxWidth: '72%',
+    maxWidth: '75%',
     padding: '0.75rem 1rem',
   },
   reviewer: {

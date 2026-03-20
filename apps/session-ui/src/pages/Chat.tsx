@@ -670,15 +670,37 @@ export default function Chat() {
             )
           }
 
-          // agent — split on double newlines for multi-bubble rendering
-          const paragraphs = msg.content.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
-          return paragraphs.map((para, pi) => (
+          // agent — strip section/completion tags, then split into multi-bubble groups
+          const cleaned = msg.content
+            .replace(/\[SECTION:\d+\]/g, '')
+            .replace(/\[SESSION_COMPLETE\]/g, '')
+            .trim()
+          const paragraphs = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
+
+          // Group short consecutive paragraphs into a single bubble to avoid over-fragmentation.
+          // A paragraph under 80 chars merges with the next one (up to 2 merges) unless the
+          // next paragraph starts a new thought (question mark = standalone bubble).
+          const grouped: string[] = []
+          let buffer = ''
+          for (const para of paragraphs) {
+            if (!buffer) {
+              buffer = para
+            } else if (buffer.length < 120 && para.length < 120 && !buffer.endsWith('?')) {
+              buffer += '\n\n' + para
+            } else {
+              grouped.push(buffer)
+              buffer = para
+            }
+          }
+          if (buffer) grouped.push(buffer)
+
+          return grouped.map((text, pi) => (
             <div key={`${i}-${pi}`} style={{
               ...styles.messageRow,
               ...(pi > 0 ? { marginTop: '-0.5rem' } : {}),
             }}>
               {pi === 0 ? <PulseDot state="idle" /> : <div style={{ width: '28px', flexShrink: 0 }} />}
-              <ChatBubble type="agent">{para}</ChatBubble>
+              <ChatBubble type="agent">{text}</ChatBubble>
             </div>
           ))
         })}
