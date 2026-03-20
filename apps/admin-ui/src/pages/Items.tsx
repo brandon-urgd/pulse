@@ -160,9 +160,11 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
         <button type="button" className={styles.actionEdit} onClick={onOpen}>
           Edit
         </button>
-        <button type="button" className={styles.actionInvite} onClick={onInvite}>
-          {labels.items.inviteButton}
-        </button>
+        {item.status !== 'closed' && item.status !== 'revised' && (
+          <button type="button" className={styles.actionInvite} onClick={onInvite}>
+            {labels.items.inviteButton}
+          </button>
+        )}
         {item.status !== 'draft' && (
           <button
             type="button"

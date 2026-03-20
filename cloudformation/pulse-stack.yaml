@@ -952,6 +952,7 @@ Resources:
       - PulsePostAcceptConfidentialityMethod
       - PulsePostCreatePublicSessionMethod
       - PulseGetPublicSessionQrMethod
+      - PulsePutExpirePublicSessionMethod
       - PulsePostChatMethod
       - PulseGetSessionStateMethod
       - PulseGetSessionSummaryMethod
@@ -959,6 +960,10 @@ Resources:
       - PulseGetSessionFileMethod
       - PulseGetDocumentUrlMethod
       - PulsePutCloseItemMethod
+      - PulseGetReportMethod
+      - PulseRunPulseCheckMethod
+      - PulseGetPulseCheckMethod
+      - PulseSavePCDecisionsMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 

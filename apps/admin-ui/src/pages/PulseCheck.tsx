@@ -126,6 +126,7 @@ export default function PulseCheck() {
   const [conflictError, setConflictError] = useState('');
   const [isClosingAndRunning, setIsClosingAndRunning] = useState(false);
   const [closeRunError, setCloseRunError] = useState('');
+  const [rerunError, setRerunError] = useState('');
 
   // ── Load item (for name) ────────────────────────────────────────────────────
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
@@ -148,6 +149,20 @@ export default function PulseCheck() {
     { enabled: Boolean(itemId), retry: false }
   );
   const pc = pcResp?.data;
+
+  // ── Load sessions to detect newly completed ones since last run ─────────────
+  interface Session { sessionId: string; status: string; completedAt?: string }
+  const { data: sessionsResp } = useAuthedQuery<{ data: Session[] }>(
+    ['item-sessions', itemId],
+    `/api/manage/items/${itemId}/sessions`,
+    { enabled: Boolean(itemId) && Boolean(pcResp) }
+  );
+  const newlyCompletedCount = (() => {
+    if (!pc?.generatedAt || !sessionsResp?.data) return 0;
+    return sessionsResp.data.filter(
+      s => s.status === 'completed' && s.completedAt && s.completedAt > pc.generatedAt
+    ).length;
+  })();
 
   // ── Sync decisions from loaded pulse check ──────────────────────────────────
   useEffect(() => {
@@ -177,6 +192,7 @@ export default function PulseCheck() {
         refetch();
         setGenerateError('');
         setConflictError('');
+        setRerunError('');
       },
       onError: (err) => {
         const status = (err as Error & { status?: number }).status;
@@ -184,6 +200,7 @@ export default function PulseCheck() {
           setConflictError(labels.pulseCheck.sessionsStillOpenError);
         } else {
           setGenerateError(labels.pulseCheck.generateError);
+          setRerunError(labels.pulseCheck.rerunError);
         }
       },
     }
@@ -263,17 +280,14 @@ export default function PulseCheck() {
         <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
         {itemName && <p className={styles.subheading}>{itemName}</p>}
 
-        {conflictError && (
-          <div className={styles.conflictError} role="alert" aria-live="polite">
-            {conflictError}
-          </div>
-        )}
-
         <div className={styles.generatePrompt}>
           {itemIsActive ? (
             <>
               <p className={styles.generatePromptText}>
                 {labels.pulseCheck.closeAndRunPromptText}
+              </p>
+              <p className={styles.generatePromptWarning}>
+                {labels.pulseCheck.closeAndRunWarning}
               </p>
               <button
                 type="button"
@@ -302,7 +316,12 @@ export default function PulseCheck() {
               >
                 {isPending ? labels.pulseCheck.generating : labels.pulseCheck.generateButton}
               </button>
-              {generateError && (
+              {conflictError && (
+                <p className={styles.conflictError} role="alert" aria-live="polite">
+                  {conflictError}
+                </p>
+              )}
+              {!conflictError && generateError && (
                 <p className={styles.error} role="alert" aria-live="polite">
                   {generateError}
                 </p>
@@ -326,6 +345,31 @@ export default function PulseCheck() {
         .replace('{total}', String(pc.sessionCount))}
     </p>
   ) : null;
+
+  // ── Re-run footer (shared across both views) ────────────────────────────────
+  const isRerunPending = generateMutation.isPending;
+  const RerunFooter = (
+    <div className={newlyCompletedCount > 0 ? styles.rerunBanner : styles.rerunRow}>
+      {newlyCompletedCount > 0 ? (
+        <p className={styles.rerunBannerText}>
+          {labels.pulseCheck.newSessionsNotice.replace('{count}', String(newlyCompletedCount))}
+        </p>
+      ) : (
+        <p className={styles.rerunNote}>{labels.pulseCheck.rerunNote}</p>
+      )}
+      <button
+        type="button"
+        className={newlyCompletedCount > 0 ? styles.rerunBannerButton : styles.rerunButton}
+        onClick={() => { setRerunError(''); generateMutation.mutate(undefined); }}
+        disabled={isRerunPending}
+      >
+        {isRerunPending ? labels.pulseCheck.generating : labels.pulseCheck.rerunButton}
+      </button>
+      {rerunError && (
+        <p className={styles.error} role="alert" aria-live="polite">{rerunError}</p>
+      )}
+    </div>
+  );
 
   // ── Single-session view ─────────────────────────────────────────────────────
   if (!isMultiSession) {
@@ -411,6 +455,7 @@ export default function PulseCheck() {
             new Date(pc.generatedAt).toLocaleString()
           )}
         </p>
+        {RerunFooter}
       </div>
     );
   }
@@ -571,6 +616,7 @@ export default function PulseCheck() {
           new Date(pc.generatedAt).toLocaleString()
         )}
       </p>
+      {RerunFooter}
     </div>
   );
 }

@@ -361,13 +361,15 @@ export default function ItemDetail() {
         </h1>
         {isEditMode && (
           <div className={styles.pageHeaderActions}>
-            <button
-              type="button"
-              className={styles.headerActionInvite}
-              onClick={() => setShowInviteModal(true)}
-            >
-              {labels.items.inviteButton}
-            </button>
+            {itemData?.status !== 'closed' && itemData?.status !== 'revised' && (
+              <button
+                type="button"
+                className={styles.headerActionInvite}
+                onClick={() => setShowInviteModal(true)}
+              >
+                {labels.items.inviteButton}
+              </button>
+            )}
             <button
               type="button"
               className={styles.headerActionPulse}

@@ -270,6 +270,7 @@ export const labels = {
     incompleteSessionsNotice: '{incomplete} of {total} reviewers didn\u2019t finish — their partial feedback is included.',
     generatePromptText: 'All sessions are closed. Run a Pulse Check to consolidate feedback into a single view.',
     closeAndRunPromptText: 'Ready to wrap up? Closing this item will stop new reviewers from entering and run your Pulse Check.',
+    closeAndRunWarning: 'Any reviewers currently in a session won\u2019t be cut off \u2014 they can still finish. If sessions complete after you run, you can re-run the Pulse Check to include them.',
     closeAndRunButton: 'Close & Run Pulse Check',
     closeAndRunError: 'Something went wrong. Try again.',
     generateButton: 'Run Pulse Check',
@@ -294,5 +295,9 @@ export const labels = {
     decisionsSaved: 'Decisions saved.',
     saveDecisionsError: 'Failed to save decisions. Please try again.',
     generatedAt: 'Generated {date}',
+    rerunButton: 'Re-run Pulse Check',
+    rerunNote: 'Re-running will incorporate any sessions that completed since the last run.',
+    rerunError: 'Failed to re-run pulse check. Please try again.',
+    newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
   },
 } as const;
