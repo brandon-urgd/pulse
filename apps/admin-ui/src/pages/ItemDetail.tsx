@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
@@ -19,7 +19,6 @@ type DocumentStatus =
   | 'extraction_failed';
 
 type FileUploadStatus = 'uploading' | 'scanning' | 'extracting' | 'ready' | 'rejected' | 'extraction_failed' | 'error';
-type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired' | 'discarded';
 
 interface FileUploadState {
   status: FileUploadStatus;
@@ -36,15 +35,6 @@ interface Item {
   documentStatus?: DocumentStatus;
   sessionCount: number;
   updatedAt: string;
-}
-
-interface Session {
-  sessionId: string;
-  reviewerEmail: string;
-  status: SessionStatus;
-  createdAt: string;
-  expiresAt?: string;
-  isPublic?: boolean;
 }
 
 interface CreateItemPayload {
@@ -107,22 +97,7 @@ export default function ItemDetail() {
   const [deleteError, setDeleteError] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
 
-  // Invitation state
-  const [inviteEmails, setInviteEmails] = useState('');
-  const [inviteError, setInviteError] = useState('');
-  const [inviteSuccess, setInviteSuccess] = useState('');
-  const [isInviting, setIsInviting] = useState(false);
-  const [resendingId, setResendingId] = useState<string | null>(null);
-  const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
-  const [extendDate, setExtendDate] = useState('');
-  const [isExtending, setIsExtending] = useState(false);
-  const [extendMessage, setExtendMessage] = useState('');
-
   // Close item state — removed (flow moved to Pulse Check page)
-
-  // Cancel session state
-  const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
-  const [cancelMessages, setCancelMessages] = useState<Record<string, string>>({});
 
   // Upload state — per-file map: filename → { status, error }
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
@@ -229,115 +204,6 @@ export default function ItemDetail() {
       },
     }
   );
-
-  // ── Sessions query (edit mode only) ────────────────────────────────────────
-  const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
-    ['sessions', itemId],
-    `/api/manage/items/${itemId}/sessions`,
-    { enabled: isEditMode }
-  );
-  const sessions = sessionsData?.data ?? [];
-
-  // ── Invitation handlers ─────────────────────────────────────────────────────
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    setInviteError('');
-    setInviteSuccess('');
-
-    const emails = inviteEmails
-      .split(',')
-      .map(e => e.trim())
-      .filter(Boolean);
-
-    if (!emails.length) {
-      setInviteError('Please enter at least one email address.');
-      return;
-    }
-
-    setIsInviting(true);
-    try {
-      await authedMutate(`/api/manage/items/${itemId}/invite`, 'POST', { emails }, navigate);
-      setInviteEmails('');
-      setInviteSuccess(labels.invitation.inviteSuccess);
-      refetchSessions();
-      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status ?? 500;
-      if (status === 403) {
-        setInviteError(labels.invitation.inviteLimitError);
-      } else {
-        setInviteError(labels.invitation.inviteError);
-      }
-    } finally {
-      setIsInviting(false);
-    }
-  }
-
-  async function handleResend(sessionId: string) {
-    setResendMessages(prev => ({ ...prev, [sessionId]: '' }));
-    setResendingId(sessionId);
-    try {
-      await authedMutate(
-        `/api/manage/items/${itemId}/sessions/${sessionId}/resend`,
-        'POST',
-        {},
-        navigate
-      );
-      setResendMessages(prev => ({ ...prev, [sessionId]: labels.invitation.resendSuccess }));
-    } catch {
-      setResendMessages(prev => ({ ...prev, [sessionId]: labels.invitation.resendError }));
-    } finally {
-      setResendingId(null);
-    }
-  }
-
-  async function handleExtendDeadline(e: React.FormEvent) {
-    e.preventDefault();
-    setExtendMessage('');
-    if (!extendDate) return;
-
-    setIsExtending(true);
-    try {
-      await authedMutate(`/api/manage/items/${itemId}/deadline`, 'PUT', { closeDate: extendDate }, navigate);
-      setExtendMessage(labels.invitation.extendSuccess);
-      setExtendDate('');
-      refetchSessions();
-      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
-    } catch {
-      setExtendMessage(labels.invitation.extendError);
-    } finally {
-      setIsExtending(false);
-    }
-  }
-
-  function sessionStatusLabel(status: SessionStatus): string {
-    switch (status) {
-      case 'not_started': return labels.invitation.statusNotStarted;
-      case 'in_progress': return labels.invitation.statusInProgress;
-      case 'completed': return labels.invitation.statusCompleted;
-      case 'expired': return labels.invitation.statusExpired;
-      case 'discarded': return labels.invitation.statusDiscarded;
-    }
-  }
-
-  async function handleCancelSession(sessionId: string) {
-    setCancelMessages(prev => ({ ...prev, [sessionId]: '' }));
-    setCancellingSessionId(sessionId);
-    try {
-      await authedMutate(
-        `/api/manage/items/${itemId}/sessions/${sessionId}`,
-        'DELETE',
-        undefined,
-        navigate
-      );
-      setCancelMessages(prev => ({ ...prev, [sessionId]: labels.itemDetail.cancelSessionSuccess }));
-      refetchSessions();
-    } catch {
-      setCancelMessages(prev => ({ ...prev, [sessionId]: labels.itemDetail.cancelSessionError }));
-    } finally {
-      setCancellingSessionId(null);
-    }
-  }
 
   // ── Form submit ─────────────────────────────────────────────────────────────
   function handleSubmit(e: React.FormEvent) {
@@ -685,138 +551,6 @@ export default function ItemDetail() {
           </div>
         )}
       </form>
-
-      {/* Invitation section — edit mode only, item must exist */}
-      {isEditMode && (
-        <section className={styles.invitationSection} aria-label={labels.invitation.sectionTitle}>
-          <h2 className={styles.sectionHeading}>{labels.invitation.sectionTitle}</h2>
-
-          {/* Invite form */}
-          <form onSubmit={handleInvite} noValidate className={styles.inviteForm}>
-            <label htmlFor="inviteEmails" className={styles.label}>
-              {labels.invitation.emailsLabel}
-            </label>
-            <p className={styles.contentHint}>{labels.invitation.emailsHint}</p>
-            <textarea
-              id="inviteEmails"
-              className={styles.textarea}
-              value={inviteEmails}
-              onChange={e => setInviteEmails(e.target.value)}
-              rows={2}
-              placeholder={labels.invitation.emailsPlaceholder}
-              disabled={isInviting}
-            />
-            {(inviteError || inviteSuccess) && (
-              <p
-                role="alert"
-                aria-live="polite"
-                className={inviteError ? styles.formError : styles.successMessage}
-              >
-                {inviteError || inviteSuccess}
-              </p>
-            )}
-            <button
-              type="submit"
-              className={styles.saveButton}
-              disabled={isInviting}
-            >
-              {isInviting ? labels.invitation.inviting : labels.invitation.inviteButton}
-            </button>
-          </form>
-
-          {/* Session list */}
-          {sessions.length === 0 ? (
-            <p className={styles.emptyState}>{labels.invitation.noSessions}</p>
-          ) : (
-            <ul className={styles.sessionList} aria-label="Reviewer sessions">
-              {sessions.map(session => (
-                <li key={session.sessionId} className={styles.sessionRow}>
-                  <div className={styles.sessionInfo}>
-                    <span className={styles.maskedEmail}>{session.reviewerEmail}</span>
-                    <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
-                      {sessionStatusLabel(session.status)}
-                    </span>
-                  </div>
-                  <div className={styles.sessionMeta}>
-                    <span className={styles.sessionDate}>
-                      Invited {new Date(session.createdAt).toLocaleDateString()}
-                    </span>
-                    {session.status === 'not_started' && (
-                      <button
-                        type="button"
-                        className={styles.resendButton}
-                        onClick={() => handleResend(session.sessionId)}
-                        disabled={resendingId === session.sessionId}
-                      >
-                        {resendingId === session.sessionId
-                          ? labels.invitation.resending
-                          : labels.invitation.resendButton}
-                      </button>
-                    )}
-                    {session.status === 'not_started' && !session.isPublic && (
-                      <button
-                        type="button"
-                        className={styles.cancelSessionButton}
-                        onClick={() => handleCancelSession(session.sessionId)}
-                        disabled={cancellingSessionId === session.sessionId}
-                      >
-                        {labels.itemDetail.cancelSessionButton}
-                      </button>
-                    )}
-                    {session.status === 'completed' && (
-                      <Link
-                        to={`/admin/items/${itemId}/sessions/${session.sessionId}/report`}
-                        className={styles.resendButton}
-                      >
-                        {labels.invitation.viewReportButton}
-                      </Link>
-                    )}
-                  </div>
-                  {resendMessages[session.sessionId] && (
-                    <p aria-live="polite" className={styles.resendMessage}>
-                      {resendMessages[session.sessionId]}
-                    </p>
-                  )}
-                  {cancelMessages[session.sessionId] && (
-                    <p aria-live="polite" className={styles.resendMessage}>
-                      {cancelMessages[session.sessionId]}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Extend deadline form */}
-          <form onSubmit={handleExtendDeadline} noValidate className={styles.extendForm}>
-            <h3 className={styles.subSectionHeading}>{labels.invitation.extendDeadlineTitle}</h3>
-            <label htmlFor="extendDate" className={styles.label}>
-              {labels.invitation.extendDeadlineLabel}
-            </label>
-            <div className={styles.extendRow}>
-              <input
-                id="extendDate"
-                type="date"
-                className={styles.input}
-                value={extendDate}
-                onChange={e => setExtendDate(e.target.value)}
-                min={todayIso()}
-                disabled={isExtending}
-              />
-              <button
-                type="submit"
-                className={styles.saveButton}
-                disabled={isExtending || !extendDate}
-              >
-                {isExtending ? labels.invitation.extending : labels.invitation.extendDeadlineButton}
-              </button>
-            </div>
-            {extendMessage && (
-              <p aria-live="polite" className={styles.successMessage}>{extendMessage}</p>
-            )}
-          </form>
-        </section>
-      )}
 
       {/* Delete button — edit mode only */}
       {isEditMode && (
