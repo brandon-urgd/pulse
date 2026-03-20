@@ -490,7 +490,7 @@ export default function PulseCheck() {
         </section>
 
         {themes.length > 0 && (
-          <section aria-labelledby="decisions-heading">
+          <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
             <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
             <ul className={styles.themeDecisionList}>
               {themes.map((theme) => (

@@ -120,7 +120,10 @@
 
   --color-surface-hover: rgba(255, 255, 255, 0.06);
 
-  --color-error-bg: #2c1a1a;
+  /* Dark theme accent overrides */
+  --color-accent-pulse: #a3c4af;
+  --color-accent-pulse-hover: #8fb89d;
+  --color-accent-pulse-subtle: rgba(163, 196, 175, 0.12);
 
   /* Status colors — dark mode */
   --color-status-draft: #868e96;

@@ -289,7 +289,7 @@ export const labels = {
     matrixHeading: 'Signal Matrix',
     matrixAriaLabel: 'Cross-reviewer feedback signal matrix',
     synthesisHeading: 'Synthesis',
-    decisionsHeading: 'Decisions',
+    decisionsHeading: 'Proposed Revisions',
     saveDecisionsButton: 'Save Decisions',
     savingDecisions: 'Saving…',
     decisionsSaved: 'Decisions saved.',
