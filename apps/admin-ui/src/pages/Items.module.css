@@ -233,6 +233,22 @@
   border-color: var(--color-accent-pulse);
 }
 
+.actionPulseCheck {
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-secondary);
+}
+
+.actionPulseCheck:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
 .actionDelete {
   color: var(--color-error);
   border-color: transparent;

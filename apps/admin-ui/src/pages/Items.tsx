@@ -81,10 +81,11 @@ interface ItemCardProps {
   item: Item;
   onOpen: () => void;
   onInvite: () => void;
+  onPulseCheck: () => void;
   onDeleted: () => void;
 }
 
-function ItemCard({ item, onOpen, onInvite, onDeleted }: ItemCardProps) {
+function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -142,6 +143,9 @@ function ItemCard({ item, onOpen, onInvite, onDeleted }: ItemCardProps) {
         <button type="button" className={styles.actionInvite} onClick={onInvite}>
           {labels.items.inviteButton}
         </button>
+        <button type="button" className={styles.actionPulseCheck} onClick={onPulseCheck}>
+          {labels.items.pulseCheckButton}
+        </button>
         {confirming ? (
           <div className={styles.deleteConfirmRow}>
             {deleteError && <span className={styles.deleteErrMsg}>{deleteError}</span>}
@@ -184,6 +188,7 @@ export default function Items() {
     ['items'],
     '/api/manage/items'
   );
+  const navigate = useNavigate();
 
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
@@ -263,6 +268,7 @@ export default function Items() {
               item={item}
               onOpen={() => setModalTarget(item.itemId)}
               onInvite={() => setInviteTarget(item)}
+              onPulseCheck={() => navigate(`/admin/pulse-check/${item.itemId}`)}
               onDeleted={() => {}}
             />
           ))}
