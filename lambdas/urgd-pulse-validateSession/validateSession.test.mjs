@@ -311,6 +311,12 @@ describe('urgd-pulse-validateSession', () => {
 
   describe('input validation', () => {
     it('returns 400 when email is missing', async () => {
+      dynamoSendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [SESSION_RECORD] })
+        return Promise.resolve({})
+      })
+
       const res = await handler(makeEvent({ pulseCode: 'ABCD1234' }))
       expect(res.statusCode).toBe(400)
       expect(JSON.parse(res.body).message).toMatch(/email/i)

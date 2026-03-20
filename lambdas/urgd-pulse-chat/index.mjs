@@ -229,6 +229,12 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
     const bedrockMessages = [...history]
     if (message === '__session_end__') {
       bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
+    } else if (!isSpecial) {
+      // Regular message — add to Bedrock context (will be written atomically on success)
+      bedrockMessages.push({ role: 'user', content: message })
+    } else if (message === '__session_start__' || message === '__session_resume__') {
+      // Seed Bedrock with the trigger so it has a user turn to respond to
+      bedrockMessages.push({ role: 'user', content: transcriptContent })
     }
 
     // Coalesce consecutive same-role messages — Bedrock requires strictly alternating

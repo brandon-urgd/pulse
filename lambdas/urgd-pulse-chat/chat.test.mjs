@@ -146,8 +146,8 @@ function makeBedrockResponse(text = 'Agent response') {
   }
 }
 
-// DynamoDB call order for normal message:
-// 0: GetItem session, 1: PutItem reviewer, 2: Query transcripts, 3: GetItem item, 4: PutItem agent, 5: UpdateItem session
+// DynamoDB call order for normal message (new atomic flow):
+// 0: GetItem session, 1: Query transcripts, 2: GetItem item, [Bedrock], 3: TransactWriteItems, 4: UpdateItem session
 // S3 calls (s3SendSpy) happen between Query transcripts and GetItem item but use a separate spy
 
 describe('urgd-pulse-chat', () => {
@@ -166,12 +166,11 @@ describe('urgd-pulse-chat', () => {
     it('returns 200 with agent message for valid chat', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() }) // GetItem session
-        .mockResolvedValueOnce({})                       // PutItem reviewer
-        .mockResolvedValueOnce({ Items: [                // Query transcripts (includes just-saved reviewer message)
+        .mockResolvedValueOnce({ Items: [               // Query transcripts
           { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
         ] })
         .mockResolvedValueOnce(makeItemRecord())         // GetItem item
-        .mockResolvedValueOnce({})                       // PutItem agent
+        .mockResolvedValueOnce({})                       // TransactWriteItems
         .mockResolvedValueOnce({})                       // UpdateItem session
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Hello! How can I help?'))
@@ -187,12 +186,9 @@ describe('urgd-pulse-chat', () => {
     it('handles __session_start__ and saves reviewer message to transcript', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession({ status: { S: 'not_started' } }) })
-        .mockResolvedValueOnce({})                        // PutItem reviewer [__session_start__]
-        .mockResolvedValueOnce({ Items: [                 // Query transcripts
-          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: '[__session_start__]' } },
-        ] })
+        .mockResolvedValueOnce({ Items: [] })             // Query transcripts (empty — first message)
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
-        .mockResolvedValueOnce({})                        // PutItem agent
+        .mockResolvedValueOnce({})                        // TransactWriteItems
         .mockResolvedValueOnce({})                        // UpdateItem session
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Welcome!'))
@@ -200,22 +196,24 @@ describe('urgd-pulse-chat', () => {
       const res = await handler(makeEvent({ message: '__session_start__' }))
       expect(res.statusCode).toBe(200)
 
-      // GetItem session(0), PutItem reviewer(1), Query(2), GetItem item(3), PutItem agent(4), UpdateItem(5) = 6 calls
-      expect(sendSpy).toHaveBeenCalledTimes(6)
-      const reviewerPutCall = sendSpy.mock.calls[1][0]
-      expect(reviewerPutCall.input.Item.role.S).toBe('reviewer')
-      expect(reviewerPutCall.input.Item.content.S).toBe('[__session_start__]')
+      // GetItem session(0), Query(1), GetItem item(2), TransactWriteItems(3), UpdateItem(4) = 5 calls
+      expect(sendSpy).toHaveBeenCalledTimes(5)
+      // Reviewer message is in the TransactWriteItems call
+      const { TransactWriteItemsCommand } = await import('@aws-sdk/client-dynamodb')
+      const transactCall = sendSpy.mock.calls.find(([cmd]) => cmd instanceof TransactWriteItemsCommand)
+      expect(transactCall).toBeDefined()
+      expect(transactCall[0].input.TransactItems[0].Put.Item.role.S).toBe('reviewer')
+      expect(transactCall[0].input.TransactItems[0].Put.Item.content.S).toBe('[__session_start__]')
     })
 
     it('handles __session_resume__ and saves reviewer message to transcript', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })
-        .mockResolvedValueOnce({})                        // PutItem reviewer [__session_resume__]
         .mockResolvedValueOnce({ Items: [                 // Query transcripts
           { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: '[__session_resume__]' } },
         ] })
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
-        .mockResolvedValueOnce({})                        // PutItem agent
+        .mockResolvedValueOnce({})                        // TransactWriteItems
         .mockResolvedValueOnce({})                        // UpdateItem session
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Welcome back!'))
@@ -229,8 +227,7 @@ describe('urgd-pulse-chat', () => {
         .mockResolvedValueOnce({ Item: makeSession() })  // GetItem session
         .mockResolvedValueOnce({ Items: [] })             // Query transcripts
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
-        .mockResolvedValueOnce({})                        // PutItem reviewer [__session_end__]
-        .mockResolvedValueOnce({})                        // PutItem agent
+        .mockResolvedValueOnce({})                        // TransactWriteItems
         .mockResolvedValueOnce({})                        // UpdateItem session
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Thank you for your feedback.'))
@@ -244,12 +241,11 @@ describe('urgd-pulse-chat', () => {
     it('detects section transition from agent response', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })  // GetItem session
-        .mockResolvedValueOnce({})                        // PutItem reviewer
         .mockResolvedValueOnce({ Items: [                 // Query transcripts
           { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
         ] })
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
-        .mockResolvedValueOnce({})                        // PutItem agent
+        .mockResolvedValueOnce({})                        // TransactWriteItems
         .mockResolvedValueOnce({})                        // UpdateItem session
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Great! [SECTION:2] Now let\'s discuss...'))
@@ -331,7 +327,6 @@ describe('urgd-pulse-chat', () => {
     it('returns 500 on Bedrock failure', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })  // GetItem session
-        .mockResolvedValueOnce({})                        // PutItem reviewer
         .mockResolvedValueOnce({ Items: [                 // Query transcripts
           { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
         ] })
