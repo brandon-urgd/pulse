@@ -44,6 +44,7 @@ interface Session {
   status: SessionStatus;
   createdAt: string;
   expiresAt?: string;
+  isPublic?: boolean;
 }
 
 interface CreateItemPayload {
