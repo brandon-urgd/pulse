@@ -88,9 +88,10 @@ export const handler = async (event) => {
     }
 
     // 2. Validate all sessions are completed or expired
+    const TERMINAL_STATUSES = new Set(['completed', 'expired', 'cancelled', 'discarded'])
     const openSessions = sessions.filter(s => {
       const status = s.status?.S
-      return status !== 'completed' && status !== 'expired'
+      return !TERMINAL_STATUSES.has(status)
     })
 
     if (openSessions.length > 0) {
