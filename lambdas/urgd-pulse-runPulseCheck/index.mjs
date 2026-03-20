@@ -116,6 +116,7 @@ export const handler = async (event) => {
       conversationShape: item.conversationShape?.S,
       themes: (item.themes?.L || []).map(t => t.S),
       isSelfReview: item.isSelfReview?.BOOL === true,
+      incomplete: item.incomplete?.BOOL === true,
     }))
 
     if (reports.length === 0) {
@@ -126,9 +127,11 @@ export const handler = async (event) => {
     const selfReviewReports = reports.filter(r => r.isSelfReview)
     const externalReports = reports.filter(r => !r.isSelfReview)
     const hasSelfReview = selfReviewReports.length > 0
+    const incompleteReports = reports.filter(r => r.incomplete)
+    const completeReports = reports.filter(r => !r.incomplete)
 
     const formatReport = (r, idx) => `
-Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}:
+Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}${r.incomplete ? ' (Session incomplete — reviewer did not finish)' : ''}:
 - Verdict: ${r.verdict}
 - Energy: ${r.energy}
 - Conversation Shape: ${r.conversationShape}
@@ -139,9 +142,13 @@ Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}:
 
     const allReportsText = reports.map((r, i) => formatReport(r, i)).join('\n')
 
+    const incompleteNote = incompleteReports.length > 0
+      ? `\nNote: ${incompleteReports.length} of ${reports.length} session${reports.length > 1 ? 's' : ''} were incomplete (reviewer did not finish). Their partial feedback is included but should be weighted less heavily than complete sessions.`
+      : ''
+
     const prompt = `You are synthesizing feedback from ${reports.length} reviewer session${reports.length > 1 ? 's' : ''} into a consolidated Pulse Check.
 
-${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review (the item creator reviewing their own work). Separate self-review signals from external reviewer signals where relevant.` : ''}
+${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review (the item creator reviewing their own work). Separate self-review signals from external reviewer signals where relevant.` : ''}${incompleteNote}
 
 Individual Reports:
 ${allReportsText}
@@ -282,6 +289,7 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
         openQuestions: { L: openQuestions.map(s => ({ S: s })) },
         reviewerVerdicts: { L: serializeReviewerVerdicts },
         sessionCount: { N: String(reports.length) },
+        incompleteCount: { N: String(incompleteReports.length) },
         generatedAt: { S: generatedAt },
         status: { S: 'complete' },
       },
@@ -303,13 +311,16 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
       openQuestions,
       reviewerVerdicts,
       sessionCount: reports.length,
+      incompleteCount: incompleteReports.length,
       generatedAt,
       status: 'complete',
     }
 
     log('info', 'RunPulseCheck: pulse check stored', {
       requestId, tenantId, itemId,
-      sessionCount: reports.length, verdict,
+      sessionCount: reports.length,
+      incompleteCount: incompleteReports.length,
+      verdict,
       bedrockLatency, tokensIn, tokensOut,
     })
 

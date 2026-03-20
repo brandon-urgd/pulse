@@ -2,14 +2,20 @@
 // Triggered by EventBridge every 6 hours
 // Scans sessions where expiresAt has passed and status is not "completed"
 // Updates status to "expired" — never modifies "completed" sessions
+// For in_progress sessions with ≥ 4 reviewer messages, invokes generateReport async
+// before expiring so partial feedback is captured in the pulse check
 
-import { DynamoDBClient, ScanCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
+
+const MIN_REVIEWER_MESSAGES = 4
 
 export const handler = async (event) => {
   log('info', 'ExpireSessions: job started', { trigger: event?.source ?? 'unknown' })
@@ -53,6 +59,37 @@ export const handler = async (event) => {
       if (currentStatus === 'completed') {
         totalSkipped++
         continue
+      }
+
+      // For in_progress sessions with enough transcript, fire generateReport before expiring
+      // so partial feedback is captured. Fire-and-forget (async) — don't block expiry.
+      if (currentStatus === 'in_progress') {
+        const generateReportFnName = process.env.GENERATE_REPORT_FUNCTION_NAME
+        const transcriptsTable = process.env.TRANSCRIPTS_TABLE
+        if (generateReportFnName && transcriptsTable) {
+          try {
+            const transcriptResult = await dynamo.send(new QueryCommand({
+              TableName: transcriptsTable,
+              KeyConditionExpression: 'sessionId = :sid',
+              ExpressionAttributeValues: { ':sid': { S: sessionId } },
+              ProjectionExpression: 'messageId, #r',
+              ExpressionAttributeNames: { '#r': 'role' },
+            }))
+            const reviewerMessages = (transcriptResult.Items ?? []).filter(m => m.role?.S === 'reviewer')
+            if (reviewerMessages.length >= MIN_REVIEWER_MESSAGES) {
+              await lambda.send(new InvokeCommand({
+                FunctionName: generateReportFnName,
+                InvocationType: 'Event',
+                Payload: JSON.stringify({ sessionId, tenantId, incomplete: true }),
+              }))
+              log('info', 'ExpireSessions: triggered partial report', { tenantId, sessionId, reviewerMessages: reviewerMessages.length })
+            } else {
+              log('info', 'ExpireSessions: skipping partial report — too few messages', { tenantId, sessionId, reviewerMessages: reviewerMessages.length })
+            }
+          } catch (err) {
+            log('warn', 'ExpireSessions: failed to trigger partial report', { tenantId, sessionId, errorName: err.name })
+          }
+        }
       }
 
       try {

@@ -101,7 +101,7 @@ export const handler = async (event) => {
       }
     }
 
-    // Load item context
+    // Load item context — also enforces closed-item gate
     let itemContext = {}
     if (itemId && tenantId) {
       try {
@@ -114,6 +114,12 @@ export const handler = async (event) => {
         }))
 
         if (itemResult.Item) {
+          const itemStatus = itemResult.Item.status?.S
+          // Block new session entry if item is closed — in_progress sessions can finish naturally
+          if (itemStatus === 'closed' && status === 'not_started') {
+            log('info', 'ValidateSession: item is closed, rejecting not_started session', { requestId, sessionId: foundSessionId, tenantId, itemId })
+            return errorResponse(410, 'This item is no longer accepting feedback', {}, origin)
+          }
           itemContext = {
             itemId,
             itemName: itemResult.Item.itemName?.S ?? '',

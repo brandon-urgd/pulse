@@ -115,6 +115,15 @@ export default function ItemDetail() {
   const [isExtending, setIsExtending] = useState(false);
   const [extendMessage, setExtendMessage] = useState('');
 
+  // Close item state
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [closeItemMessage, setCloseItemMessage] = useState('');
+
+  // Cancel session state
+  const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
+  const [cancelMessages, setCancelMessages] = useState<Record<string, string>>({});
+
   // Upload state — per-file map: filename → { status, error }
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
   const [isUploading, setIsUploading] = useState(false);
@@ -307,6 +316,41 @@ export default function ItemDetail() {
       case 'in_progress': return labels.invitation.statusInProgress;
       case 'completed': return labels.invitation.statusCompleted;
       case 'expired': return labels.invitation.statusExpired;
+    }
+  }
+
+  async function handleCloseItem() {
+    setIsClosing(true);
+    setCloseItemMessage('');
+    try {
+      await authedMutate(`/api/manage/items/${itemId}/close`, 'PUT', {}, navigate);
+      setCloseItemMessage(labels.itemDetail.closeItemSuccess);
+      setShowCloseModal(false);
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    } catch {
+      setCloseItemMessage(labels.itemDetail.closeItemError);
+    } finally {
+      setIsClosing(false);
+    }
+  }
+
+  async function handleCancelSession(sessionId: string) {
+    setCancelMessages(prev => ({ ...prev, [sessionId]: '' }));
+    setCancellingSessionId(sessionId);
+    try {
+      await authedMutate(
+        `/api/manage/items/${itemId}/sessions/${sessionId}`,
+        'DELETE',
+        undefined,
+        navigate
+      );
+      setCancelMessages(prev => ({ ...prev, [sessionId]: labels.itemDetail.cancelSessionSuccess }));
+      refetchSessions();
+    } catch {
+      setCancelMessages(prev => ({ ...prev, [sessionId]: labels.itemDetail.cancelSessionError }));
+    } finally {
+      setCancellingSessionId(null);
     }
   }
 
@@ -704,6 +748,16 @@ export default function ItemDetail() {
                           : labels.invitation.resendButton}
                       </button>
                     )}
+                    {session.status === 'not_started' && !session.isPublic && (
+                      <button
+                        type="button"
+                        className={styles.cancelSessionButton}
+                        onClick={() => handleCancelSession(session.sessionId)}
+                        disabled={cancellingSessionId === session.sessionId}
+                      >
+                        {labels.itemDetail.cancelSessionButton}
+                      </button>
+                    )}
                     {session.status === 'completed' && (
                       <Link
                         to={`/admin/items/${itemId}/sessions/${session.sessionId}/report`}
@@ -716,6 +770,11 @@ export default function ItemDetail() {
                   {resendMessages[session.sessionId] && (
                     <p aria-live="polite" className={styles.resendMessage}>
                       {resendMessages[session.sessionId]}
+                    </p>
+                  )}
+                  {cancelMessages[session.sessionId] && (
+                    <p aria-live="polite" className={styles.resendMessage}>
+                      {cancelMessages[session.sessionId]}
                     </p>
                   )}
                 </li>
@@ -757,6 +816,20 @@ export default function ItemDetail() {
       {/* Delete button — edit mode only */}
       {isEditMode && (
         <div className={styles.dangerZone}>
+          {itemData?.status === 'active' && (
+            <>
+              <button
+                type="button"
+                className={styles.closeItemButton}
+                onClick={() => setShowCloseModal(true)}
+              >
+                {labels.itemDetail.closeItemButton}
+              </button>
+              {closeItemMessage && (
+                <p aria-live="polite" className={styles.successMessage}>{closeItemMessage}</p>
+              )}
+            </>
+          )}
           <button
             type="button"
             className={styles.deleteButton}
@@ -764,6 +837,43 @@ export default function ItemDetail() {
           >
             {labels.itemDetail.deleteButton}
           </button>
+        </div>
+      )}
+
+      {/* Close item confirmation modal */}
+      {showCloseModal && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="close-modal-title"
+        >
+          <div className={styles.modal}>
+            <h2 id="close-modal-title" className={styles.modalTitle}>
+              {labels.itemDetail.closeItemConfirmTitle}
+            </h2>
+            <p className={styles.modalMessage}>
+              {labels.itemDetail.closeItemConfirmMessage.replace('{itemName}', itemName)}
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={() => setShowCloseModal(false)}
+                disabled={isClosing}
+              >
+                {labels.itemDetail.closeItemConfirmCancel}
+              </button>
+              <button
+                type="button"
+                className={styles.destructiveButton}
+                onClick={handleCloseItem}
+                disabled={isClosing}
+              >
+                {isClosing ? '…' : labels.itemDetail.closeItemConfirmClose}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

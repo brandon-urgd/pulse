@@ -69,6 +69,7 @@ interface PulseCheck {
   feedbackPoints: FeedbackPoint[];
   decisions: Record<string, { action: string; tenantNote?: string; decidedAt: string }>;
   sessionCount: number;
+  incompleteCount?: number;
   generatedAt: string;
   status: 'generating' | 'complete';
 }
@@ -271,6 +272,16 @@ export default function PulseCheck() {
 
   const isMultiSession = pc.sessionCount >= 2;
   const summary = pc.aggregateSummary;
+  const incompleteCount = pc.incompleteCount ?? 0;
+
+  // ── Incomplete sessions notice (shared across both views) ───────────────────
+  const IncompleteNotice = incompleteCount > 0 ? (
+    <p className={styles.incompleteNotice} role="note">
+      {labels.pulseCheck.incompleteSessionsNotice
+        .replace('{incomplete}', String(incompleteCount))
+        .replace('{total}', String(pc.sessionCount))}
+    </p>
+  ) : null;
 
   // ── Single-session view ─────────────────────────────────────────────────────
   if (!isMultiSession) {
@@ -287,6 +298,7 @@ export default function PulseCheck() {
         </Link>
         <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
         {itemName && <p className={styles.subheading}>{itemName}</p>}
+        {IncompleteNotice}
 
         {/* Verdict */}
         <div className={styles.verdictBlock}>
@@ -375,6 +387,7 @@ export default function PulseCheck() {
       </Link>
       <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
       {itemName && <p className={styles.subheading}>{itemName}</p>}
+      {IncompleteNotice}
 
       {/* ── Signal Matrix ── */}
       {themeRows.length > 0 && reviewerCols.length > 0 && (

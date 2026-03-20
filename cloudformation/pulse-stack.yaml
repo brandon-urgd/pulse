@@ -186,6 +186,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-expirePublicSession/latest.zip
     Description: S3 key for urgd-pulse-expirePublicSession Lambda ZIP
 
+  CloseItemCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-closeItem/latest.zip
+    Description: S3 key for urgd-pulse-closeItem Lambda ZIP
+
   ChatCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-chat/latest.zip
@@ -360,9 +365,9 @@ Mappings:
       CreatePublicSession: 3
       GetPublicSessionQr: 3
       ExpirePublicSession: 3
+      CloseItem: 3
       Chat: 3
       GetSessionState: 3
-      GetSessionSummary: 3
       GenerateSessionSummary: 3
       DeleteSessionTranscript: 3
       GetSessionFile: 3
@@ -403,6 +408,7 @@ Mappings:
       CreatePublicSession: 5
       GetPublicSessionQr: 5
       ExpirePublicSession: 5
+      CloseItem: 5
       Chat: 5
       GetSessionState: 5
       GetSessionSummary: 5
@@ -446,6 +452,7 @@ Mappings:
       CreatePublicSession: 10
       GetPublicSessionQr: 10
       ExpirePublicSession: 10
+      CloseItem: 5
       Chat: 15
       GetSessionState: 10
       GetSessionSummary: 10
@@ -950,6 +957,7 @@ Resources:
       - PulseDeleteSessionTranscriptMethod
       - PulseGetSessionFileMethod
       - PulseGetDocumentUrlMethod
+      - PulsePutCloseItemMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -3283,6 +3291,19 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/urgd-pulse-expirePublicSession-${Environment}'
       RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
       Tags:
+
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseCloseItemLogGroup:
+    # checkov:skip=CKV_AWS_158:KMS encryption not required for Lambda execution logs — consistent with all other Pulse log groups
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-closeItem-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
         - Key: project
           Value: pulse
         - Key: environment
@@ -3696,8 +3717,47 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
 
-  # ══════════════════════════════════════════════════════════════════════════════
-  # S3: Lambda Functions
+  PulseCloseItemFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-closeItem-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndDynamoDB
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub '${PulseSessionsTable.Arn}/index/item-index'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+
   # ══════════════════════════════════════════════════════════════════════════════
 
   PulseInviteReviewerFunction:
@@ -4137,6 +4197,49 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
+  PulseCloseItemFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCloseItemLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-closeItem-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCloseItemFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CloseItemCodeKey
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CloseItem]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCloseItemFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCloseItemFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
   # ══════════════════════════════════════════════════════════════════════════════
   # S3: API Gateway Resources
   # ══════════════════════════════════════════════════════════════════════════════
@@ -4310,6 +4413,27 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseExpirePublicSessionFunction.Arn}/invocations'
 
+  # PUT /api/manage/items/{itemId}/close
+  PulseManageItemCloseResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: close
+
+  PulsePutCloseItemMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemCloseResource
+      HttpMethod: PUT
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCloseItemFunction.Arn}/invocations'
+
   # /api/session
   PulseSessionResource:
     Type: AWS::ApiGateway::Resource
@@ -4480,6 +4604,14 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulseGenerateReportFunction.Arn
 
   PulseSendReminderFunction:
     # checkov:skip=CKV_AWS_117:Lambda VPC not required — scheduled job accesses DynamoDB/SES/SNS via AWS service endpoints
@@ -4543,6 +4675,8 @@ Resources:
       Environment:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          GENERATE_REPORT_FUNCTION_NAME: !Ref PulseGenerateReportFunction
       Tags:
         - Key: project
           Value: pulse

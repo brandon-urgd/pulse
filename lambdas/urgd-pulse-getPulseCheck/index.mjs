@@ -88,6 +88,7 @@ export const handler = async (event) => {
       reviewerVerdicts: deserializeReviewerVerdicts(item.reviewerVerdicts?.L),
       decisions: deserializeDecisions(item.decisions?.M),
       sessionCount: item.sessionCount?.N ? parseInt(item.sessionCount.N, 10) : 0,
+      incompleteCount: item.incompleteCount?.N ? parseInt(item.incompleteCount.N, 10) : 0,
       generatedAt: item.generatedAt?.S,
       status: item.status?.S,
     }

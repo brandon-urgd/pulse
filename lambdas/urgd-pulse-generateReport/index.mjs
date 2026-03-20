@@ -42,7 +42,7 @@ async function putMetrics(metrics) {
 }
 
 export const handler = async (event) => {
-  const { sessionId, tenantId } = event
+  const { sessionId, tenantId, incomplete = false } = event
 
   if (!sessionId || !tenantId) {
     log('error', 'GenerateReport: missing sessionId or tenantId', { sessionId, tenantId })
@@ -207,6 +207,7 @@ For themes: extract the actual topics discussed (e.g., "pricing model", "team st
         conversationShape: { S: conversationShape },
         themes: { L: themes.map(t => ({ S: t })) },
         isSelfReview: { BOOL: isSelfReview },
+        incomplete: { BOOL: incomplete },
         generatedAt: { S: generatedAt },
       },
     }))
@@ -221,6 +222,7 @@ For themes: extract the actual topics discussed (e.g., "pricing model", "team st
     log('info', 'GenerateReport: report stored', {
       sessionId, tenantId, itemId,
       verdict, energy, conversationShape,
+      incomplete,
       bedrockLatency, tokensIn, tokensOut,
       modelId: process.env.BEDROCK_MODEL_ID,
     })
