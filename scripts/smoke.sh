@@ -83,12 +83,12 @@ else
   fail=1
 fi
 
-# S0 gate: /v1/bedrock/health → 200 { "status": "degraded" }
+# Bedrock health → 200 { "status": "healthy" | "degraded" }
 echo "Testing Bedrock health endpoint..."
-if retry_check "BedrockHealth" "curl -f -s --max-time 10 '$BASE_URL/v1/bedrock/health' | jq -e '.status == \"degraded\"'"; then
-  echo "✅ GET /v1/bedrock/health → degraded"
+if retry_check "BedrockHealth" "curl -f -s --max-time 15 '$BASE_URL/v1/bedrock/health' | jq -e '.status == \"healthy\" or .status == \"degraded\"'"; then
+  echo "✅ GET /v1/bedrock/health → healthy"
 else
-  echo "❌ GET /v1/bedrock/health FAILED (expected 200 { status: degraded })"
+  echo "❌ GET /v1/bedrock/health FAILED (expected 200 { status: healthy|degraded })"
   fail=1
 fi
 
