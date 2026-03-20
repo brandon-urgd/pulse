@@ -115,7 +115,7 @@
 
 /* Status border colors */
 .statusDraft  { border-left-color: var(--color-status-draft); }
-.statusActive { border-left-color: var(--color-accent-pulse-subtle); }
+.statusActive { border-left-color: var(--color-status-active); }
 .statusClosed { border-left-color: var(--color-status-closed); }
 .statusRevised { border-left-color: var(--color-status-revised); }
 
@@ -138,24 +138,27 @@
 
 .cardTop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
 .itemName {
   font-weight: 500;
   font-size: var(--font-size-base);
+  flex: 1;
+  min-width: 0;
 }
 
 .descriptionExcerpt {
   margin: 0 0 var(--space-2);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .cardMeta {
@@ -170,14 +173,19 @@
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: 500;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
+  background: var(--color-status-draft-bg);
+  color: var(--color-status-draft-text);
   flex-shrink: 0;
 }
 
 .statusBadge.statusActive {
-  background: var(--color-accent-pulse-subtle);
-  color: var(--color-accent-pulse-hover);
+  background: var(--color-status-active-bg);
+  color: var(--color-status-active-text);
+}
+
+.statusBadge.statusClosed {
+  background: var(--color-status-closed-bg);
+  color: var(--color-status-closed-text);
 }
 
 .statusBadge.statusRevised {
@@ -247,6 +255,44 @@
 .actionPulseCheck:hover {
   color: var(--color-text-primary);
   border-color: var(--color-text-secondary);
+}
+
+/* Draft — greyed out, not clickable */
+.actionPulseCheckDisabled {
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: not-allowed;
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+/* Closed, no pulse check yet — sage glow, call to action */
+.actionPulseCheckReady {
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--color-accent-pulse);
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse-hover);
+  box-shadow: 0 0 0 2px var(--color-accent-pulse-subtle);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.actionPulseCheckReady:hover {
+  background: var(--color-accent-pulse);
+  color: var(--color-text-inverse);
+  box-shadow: 0 0 0 3px var(--color-accent-pulse-subtle);
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--color-accent-pulse-subtle); }
+  50% { box-shadow: 0 0 0 4px var(--color-accent-pulse-subtle), 0 0 8px var(--color-accent-pulse-subtle); }
 }
 
 .actionDelete {

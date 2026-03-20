@@ -289,6 +289,7 @@
 .status_in_progress { background: var(--color-accent-pulse-subtle);  color: var(--color-accent-pulse);            }
 .status_completed   { background: var(--color-status-completed-bg);  color: var(--color-status-completed-text);   }
 .status_expired     { background: var(--color-status-expired-bg);    color: var(--color-status-expired-text);     }
+.status_discarded   { background: var(--color-surface-hover);        color: var(--color-text-secondary);          }
 
 .sessionMeta {
   display: flex;

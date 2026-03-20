@@ -30,12 +30,18 @@
   --color-surface-hover: rgba(0, 0, 0, 0.04);
 
   /* Status colors */
-  --color-status-draft: #adb5bd;
-  --color-status-active: var(--color-accent-pulse);
-  --color-status-closed: #6c757d;
-  --color-status-revised: #4ade80;
-  --color-status-revised-bg: #e6f9ec;
-  --color-status-revised-text: #2f9e44;
+  --color-status-draft: #868e96;
+  --color-status-draft-bg: #f1f3f5;
+  --color-status-draft-text: #495057;
+  --color-status-active: #2f9e44;
+  --color-status-active-bg: #d3f9d8;
+  --color-status-active-text: #1a6b2a;
+  --color-status-closed: #e67700;
+  --color-status-closed-bg: #fff3bf;
+  --color-status-closed-text: #7d4e00;
+  --color-status-revised: #1971c2;
+  --color-status-revised-bg: #dbe4ff;
+  --color-status-revised-text: #1864ab;
   --color-status-completed-bg: #d1fae5;
   --color-status-completed-text: #065f46;
   --color-status-expired-bg: #fee2e2;
@@ -115,6 +121,20 @@
   --color-surface-hover: rgba(255, 255, 255, 0.06);
 
   --color-error-bg: #2c1a1a;
+
+  /* Status colors — dark mode */
+  --color-status-draft: #868e96;
+  --color-status-draft-bg: #2c2e33;
+  --color-status-draft-text: #adb5bd;
+  --color-status-active: #51cf66;
+  --color-status-active-bg: #1a3a22;
+  --color-status-active-text: #8ce99a;
+  --color-status-closed: #ffa94d;
+  --color-status-closed-bg: #3a2800;
+  --color-status-closed-text: #ffd8a8;
+  --color-status-revised: #74c0fc;
+  --color-status-revised-bg: #1a2a4a;
+  --color-status-revised-text: #a5d8ff;
 }
 
 /* Base reset */

@@ -79,7 +79,7 @@ interface PulseCheckResponse {
 }
 
 interface ItemResponse {
-  data: { itemId: string; itemName: string; sessionCount: number };
+  data: { itemId: string; itemName: string; sessionCount: number; status: string };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -124,6 +124,8 @@ export default function PulseCheck() {
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const [generateError, setGenerateError] = useState('');
   const [conflictError, setConflictError] = useState('');
+  const [isClosingAndRunning, setIsClosingAndRunning] = useState(false);
+  const [closeRunError, setCloseRunError] = useState('');
 
   // ── Load item (for name) ────────────────────────────────────────────────────
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
@@ -132,6 +134,7 @@ export default function PulseCheck() {
     { enabled: Boolean(itemId) }
   );
   const itemName = itemResp?.data?.itemName ?? '';
+  const itemStatus = itemResp?.data?.status ?? '';
 
   // ── Load existing pulse check ───────────────────────────────────────────────
   const {
@@ -186,6 +189,23 @@ export default function PulseCheck() {
     }
   );
 
+  // ── Close & Run Pulse Check ─────────────────────────────────────────────────
+  async function handleCloseAndRun() {
+    setIsClosingAndRunning(true);
+    setCloseRunError('');
+    try {
+      // Step 1: close the item (expires all not_started sessions)
+      await authedMutate(`/api/manage/items/${itemId}/close`, 'PUT', {}, navigate);
+      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      // Step 2: run the pulse check
+      generateMutation.mutate(undefined);
+    } catch {
+      setCloseRunError(labels.pulseCheck.closeAndRunError);
+      setIsClosingAndRunning(false);
+    }
+  }
+
   // ── Save decisions ──────────────────────────────────────────────────────────
   async function handleSaveDecisions() {
     setSaveStatus('saving');
@@ -232,6 +252,9 @@ export default function PulseCheck() {
 
   // ── No pulse check yet — show generate prompt ───────────────────────────────
   if (isError || !pc) {
+    const itemIsActive = itemStatus === 'active';
+    const isPending = generateMutation.isPending || isClosingAndRunning;
+
     return (
       <div className={styles.container}>
         <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
@@ -247,23 +270,44 @@ export default function PulseCheck() {
         )}
 
         <div className={styles.generatePrompt}>
-          <p className={styles.generatePromptText}>
-            {labels.pulseCheck.generatePromptText}
-          </p>
-          <button
-            type="button"
-            className={styles.generateButton}
-            onClick={() => generateMutation.mutate(undefined)}
-            disabled={generateMutation.isPending}
-          >
-            {generateMutation.isPending
-              ? labels.pulseCheck.generating
-              : labels.pulseCheck.generateButton}
-          </button>
-          {generateError && (
-            <p className={styles.error} role="alert" aria-live="polite">
-              {generateError}
-            </p>
+          {itemIsActive ? (
+            <>
+              <p className={styles.generatePromptText}>
+                {labels.pulseCheck.closeAndRunPromptText}
+              </p>
+              <button
+                type="button"
+                className={styles.generateButton}
+                onClick={handleCloseAndRun}
+                disabled={isPending}
+              >
+                {isPending ? labels.pulseCheck.generating : labels.pulseCheck.closeAndRunButton}
+              </button>
+              {closeRunError && (
+                <p className={styles.error} role="alert" aria-live="polite">
+                  {closeRunError}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className={styles.generatePromptText}>
+                {labels.pulseCheck.generatePromptText}
+              </p>
+              <button
+                type="button"
+                className={styles.generateButton}
+                onClick={() => generateMutation.mutate(undefined)}
+                disabled={isPending}
+              >
+                {isPending ? labels.pulseCheck.generating : labels.pulseCheck.generateButton}
+              </button>
+              {generateError && (
+                <p className={styles.error} role="alert" aria-live="polite">
+                  {generateError}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

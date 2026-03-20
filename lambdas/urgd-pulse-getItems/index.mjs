@@ -41,6 +41,7 @@ function normalizeItem(raw) {
     status: raw.status ?? 'draft',
     documentStatus: raw.documentStatus ?? 'none',
     sessionCount: typeof raw.sessionCount === 'number' ? raw.sessionCount : 0,
+    hasPulseCheck: raw.hasPulseCheck === true,
     createdAt: raw.createdAt ?? '',
     updatedAt: raw.updatedAt ?? '',
     ...(raw.content !== undefined ? { content: raw.content } : {}),

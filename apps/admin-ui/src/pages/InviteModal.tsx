@@ -8,7 +8,7 @@ import styles from './InviteModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired';
+type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired' | 'discarded';
 
 interface Session {
   sessionId: string;
@@ -44,6 +44,7 @@ function sessionStatusLabel(status: SessionStatus): string {
     case 'in_progress':  return labels.invitation.statusInProgress;
     case 'completed':    return labels.invitation.statusCompleted;
     case 'expired':      return labels.invitation.statusExpired;
+    case 'discarded':    return labels.invitation.statusDiscarded;
   }
 }
 
@@ -154,8 +155,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
         undefined,
         navigate
       );
+      // Revert to not_started so the slot is visible and can be re-invited
       queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
-        data: (old?.data ?? []).filter(s => s.sessionId !== sessionId),
+        data: (old?.data ?? []).map(s =>
+          s.sessionId === sessionId ? { ...s, status: 'not_started' as SessionStatus } : s
+        ),
       }));
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch {
@@ -346,7 +350,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                     <span className={styles.sessionDate}>
                       Invited {new Date(session.createdAt).toLocaleDateString()}
                     </span>
-                    {session.status === 'not_started' && (
+                    {(session.status === 'not_started' || session.status === 'discarded') && (
                       <div className={styles.sessionActions}>
                         <button
                           type="button"

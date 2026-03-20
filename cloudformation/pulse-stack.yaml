@@ -368,6 +368,7 @@ Mappings:
       CloseItem: 3
       Chat: 3
       GetSessionState: 3
+      GetSessionSummary: 3
       GenerateSessionSummary: 3
       DeleteSessionTranscript: 3
       GetSessionFile: 3
@@ -5833,6 +5834,10 @@ Resources:
                 Resource: !GetAtt PulsePulseChecksTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
                   - bedrock:InvokeModel
                 Resource:
                   - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
@@ -6062,6 +6067,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
           ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'

@@ -17,6 +17,7 @@ interface Item {
   closeDate: string;
   updatedAt: string;
   createdAt?: string;
+  hasPulseCheck?: boolean;
 }
 
 type SortField = 'name' | 'created' | 'dueDate';
@@ -73,6 +74,25 @@ function formatCloseDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   } catch { return iso; }
+}
+
+// ─── Pulse Check button helpers ───────────────────────────────────────────────
+
+function pulseCheckButtonLabel(item: Item): string {
+  if (item.status === 'draft') return labels.items.pulseCheckButton;
+  if (item.status === 'active') return labels.items.pulseCheckInProgress;
+  if (item.status === 'closed' && !item.hasPulseCheck) return labels.items.pulseCheckStart;
+  return labels.items.pulseCheckReview;
+}
+
+function pulseCheckButtonClass(item: Item): string {
+  if (item.status === 'draft') return styles.actionPulseCheckDisabled;
+  if (item.status === 'closed' && !item.hasPulseCheck) return styles.actionPulseCheckReady;
+  return styles.actionPulseCheck;
+}
+
+function pulseCheckAriaLabel(item: Item): string {
+  return `${pulseCheckButtonLabel(item)} — ${item.itemName}`;
 }
 
 // ─── Item card ────────────────────────────────────────────────────────────────
@@ -143,8 +163,14 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
         <button type="button" className={styles.actionInvite} onClick={onInvite}>
           {labels.items.inviteButton}
         </button>
-        <button type="button" className={styles.actionPulseCheck} onClick={onPulseCheck}>
-          {labels.items.pulseCheckButton}
+        <button
+          type="button"
+          className={pulseCheckButtonClass(item)}
+          onClick={onPulseCheck}
+          disabled={item.status === 'draft'}
+          aria-label={pulseCheckAriaLabel(item)}
+        >
+          {pulseCheckButtonLabel(item)}
         </button>
         {confirming ? (
           <div className={styles.deleteConfirmRow}>

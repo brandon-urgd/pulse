@@ -7,7 +7,52 @@
 .heading {
   font-size: var(--font-size-2xl);
   font-weight: 600;
-  margin: 0 0 var(--space-6);
+  margin: 0;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.pageHeaderActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.headerActionInvite {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-accent-pulse-subtle);
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse-hover);
+}
+
+.headerActionInvite:hover {
+  border-color: var(--color-accent-pulse);
+}
+
+.headerActionPulse {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-secondary);
+}
+
+.headerActionPulse:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
 }
 
 .lockedNotice {
@@ -459,6 +504,11 @@
 
 .status_expired {
   color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+}
+
+.status_discarded {
+  color: var(--color-text-secondary);
   background: var(--color-bg-tertiary);
 }
 

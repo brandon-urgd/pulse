@@ -2,14 +2,14 @@
 // POST /api/manage/items/{itemId}/pulse-check
 // Validates all sessions are completed/expired, loads all reports, consolidates via Bedrock
 
-import { DynamoDBClient, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 requireEnv([
-  'REPORTS_TABLE', 'PULSE_CHECKS_TABLE', 'SESSIONS_TABLE',
+  'REPORTS_TABLE', 'PULSE_CHECKS_TABLE', 'SESSIONS_TABLE', 'ITEMS_TABLE',
   'BEDROCK_MODEL_ID', 'ALERTS_TOPIC_ARN', 'CORS_ALLOWED_ORIGINS',
 ])
 
@@ -251,6 +251,20 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
 
     // 7. Store pulse check — PutItem replaces existing
     const generatedAt = new Date().toISOString()
+
+    // Also stamp hasPulseCheck on the item record so getItems can surface it cheaply
+    await dynamo.send(new UpdateItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      UpdateExpression: 'SET hasPulseCheck = :t, updatedAt = :now',
+      ExpressionAttributeValues: {
+        ':t': { BOOL: true },
+        ':now': { S: new Date().toISOString() },
+      },
+    })).catch(err => {
+      // Non-fatal — pulse check still stored even if item stamp fails
+      log('warn', 'RunPulseCheck: failed to stamp hasPulseCheck on item', { requestId, tenantId, itemId, errorName: err.name })
+    })
 
     const serializeThemes = themes.map(t => ({
       M: {

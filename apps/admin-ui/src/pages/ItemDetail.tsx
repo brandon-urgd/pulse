@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import InviteModal from './InviteModal';
 import styles from './ItemDetail.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ type DocumentStatus =
   | 'extraction_failed';
 
 type FileUploadStatus = 'uploading' | 'scanning' | 'extracting' | 'ready' | 'rejected' | 'extraction_failed' | 'error';
-type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired';
+type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired' | 'discarded';
 
 interface FileUploadState {
   status: FileUploadStatus;
@@ -103,6 +104,7 @@ export default function ItemDetail() {
   const [isLocked, setIsLocked] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Invitation state
   const [inviteEmails, setInviteEmails] = useState('');
@@ -115,10 +117,7 @@ export default function ItemDetail() {
   const [isExtending, setIsExtending] = useState(false);
   const [extendMessage, setExtendMessage] = useState('');
 
-  // Close item state
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const [closeItemMessage, setCloseItemMessage] = useState('');
+  // Close item state — removed (flow moved to Pulse Check page)
 
   // Cancel session state
   const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
@@ -316,22 +315,7 @@ export default function ItemDetail() {
       case 'in_progress': return labels.invitation.statusInProgress;
       case 'completed': return labels.invitation.statusCompleted;
       case 'expired': return labels.invitation.statusExpired;
-    }
-  }
-
-  async function handleCloseItem() {
-    setIsClosing(true);
-    setCloseItemMessage('');
-    try {
-      await authedMutate(`/api/manage/items/${itemId}/close`, 'PUT', {}, navigate);
-      setCloseItemMessage(labels.itemDetail.closeItemSuccess);
-      setShowCloseModal(false);
-      queryClient.invalidateQueries({ queryKey: ['item', itemId] });
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-    } catch {
-      setCloseItemMessage(labels.itemDetail.closeItemError);
-    } finally {
-      setIsClosing(false);
+      case 'discarded': return labels.invitation.statusDiscarded;
     }
   }
 
@@ -504,9 +488,29 @@ export default function ItemDetail() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.heading}>
-        {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
-      </h1>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.heading}>
+          {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
+        </h1>
+        {isEditMode && (
+          <div className={styles.pageHeaderActions}>
+            <button
+              type="button"
+              className={styles.headerActionInvite}
+              onClick={() => setShowInviteModal(true)}
+            >
+              {labels.items.inviteButton}
+            </button>
+            <button
+              type="button"
+              className={styles.headerActionPulse}
+              onClick={() => navigate(`/admin/pulse-check/${itemId}`)}
+            >
+              Pulse Check
+            </button>
+          </div>
+        )}
+      </div>
 
       {isLocked && (
         <p className={styles.lockedNotice} role="status">
@@ -816,20 +820,6 @@ export default function ItemDetail() {
       {/* Delete button — edit mode only */}
       {isEditMode && (
         <div className={styles.dangerZone}>
-          {itemData?.status === 'active' && (
-            <>
-              <button
-                type="button"
-                className={styles.closeItemButton}
-                onClick={() => setShowCloseModal(true)}
-              >
-                {labels.itemDetail.closeItemButton}
-              </button>
-              {closeItemMessage && (
-                <p aria-live="polite" className={styles.successMessage}>{closeItemMessage}</p>
-              )}
-            </>
-          )}
           <button
             type="button"
             className={styles.deleteButton}
@@ -837,43 +827,6 @@ export default function ItemDetail() {
           >
             {labels.itemDetail.deleteButton}
           </button>
-        </div>
-      )}
-
-      {/* Close item confirmation modal */}
-      {showCloseModal && (
-        <div
-          className={styles.modalOverlay}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="close-modal-title"
-        >
-          <div className={styles.modal}>
-            <h2 id="close-modal-title" className={styles.modalTitle}>
-              {labels.itemDetail.closeItemConfirmTitle}
-            </h2>
-            <p className={styles.modalMessage}>
-              {labels.itemDetail.closeItemConfirmMessage.replace('{itemName}', itemName)}
-            </p>
-            <div className={styles.modalActions}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={() => setShowCloseModal(false)}
-                disabled={isClosing}
-              >
-                {labels.itemDetail.closeItemConfirmCancel}
-              </button>
-              <button
-                type="button"
-                className={styles.destructiveButton}
-                onClick={handleCloseItem}
-                disabled={isClosing}
-              >
-                {isClosing ? '…' : labels.itemDetail.closeItemConfirmClose}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -920,6 +873,14 @@ export default function ItemDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {showInviteModal && itemId && (
+        <InviteModal
+          itemId={itemId}
+          itemName={itemName}
+          onClose={() => setShowInviteModal(false)}
+        />
       )}
     </div>
   );
