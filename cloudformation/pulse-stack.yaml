@@ -3544,6 +3544,10 @@ Resources:
                   - !Sub '${PulseSessionsTable.Arn}/index/sessionId-index'
               - Effect: Allow
                 Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
                   - dynamodb:GetItem
                 Resource: !GetAtt PulseItemsTable.Arn
 
