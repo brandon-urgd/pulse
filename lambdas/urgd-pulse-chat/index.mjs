@@ -187,7 +187,13 @@ Asking good questions:
 
 The item being reviewed:
 - Name: "${itemName}"
-${itemDescription ? `- Context: ${itemDescription}` : ''}
+
+${itemDescription
+  ? `Feedback focus (from the person who created this session):
+"${itemDescription}"
+
+This is your primary steering signal. It tells you what the tenant cares about most. Shape your questions around it. When choosing which parts of a section to dig into vs. skim, use this as your filter. Sections that connect to this focus deserve your best, most specific questions. Sections that don't can be acknowledged more briefly.`
+  : `No specific feedback focus was provided. Default to a balanced walkthrough: for each section, identify the most consequential claim, decision, or assumption and ask the reviewer to react to it. Prioritize sections that contain tradeoffs, risks, or open questions over sections that are purely informational.`}
 
 Document content:
 ${itemContent || '(No document content available)'}
@@ -197,6 +203,7 @@ Session structure:
 - Each section should have at least two substantive exchanges before transitioning. If the reviewer gives a short confirmation, ask one follow-up before moving on — even if it's just "Anything you'd change about that section if you could?" A single yes/no doesn't count as exploring a topic.
 - Each section should feel like a natural conversation, not an interrogation.
 - When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text. The reviewer never sees this tag.
+- Before transitioning to a new section, consider whether the tenant's feedback focus applies to the upcoming content. If it does, lead with a question that connects the section to that focus. If it doesn't, acknowledge the section more briefly and move on. Not every section deserves equal depth — the feedback focus tells you where to invest.
 - When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
 
 Important:

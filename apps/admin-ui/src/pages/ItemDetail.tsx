@@ -494,6 +494,7 @@ export default function ItemDetail() {
           <label htmlFor="description" className={styles.label}>
             {labels.itemDetail.fieldDescription}
           </label>
+          <p className={styles.subLabel}>{labels.itemDetail.fieldDescriptionHint}</p>
           <textarea
             id="description"
             className={styles.textarea}

@@ -432,6 +432,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                       <label htmlFor="description" className={styles.label}>
                         {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
                       </label>
+                      <p className={styles.subLabel}>{labels.itemDetail.fieldDescriptionHint}</p>
                       <textarea
                         id="description"
                         className={styles.textarea}
