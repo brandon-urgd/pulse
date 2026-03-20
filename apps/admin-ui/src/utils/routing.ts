@@ -14,21 +14,21 @@ export function getPostLoginRoute(onboardingComplete: boolean): '/admin/welcome'
 
 /**
  * Determines whether a route under /admin/* requires authentication.
- * All /admin/* routes require auth except /admin/login and /admin/register.
+ * All /admin/* routes require auth — there are no public admin routes.
  * Property 11: Protected Route Redirect Property
  * Requirements: 3.25
  */
-export const PUBLIC_ADMIN_ROUTES = new Set(['/admin/login', '/admin/register']);
+export const PUBLIC_ADMIN_ROUTES = new Set<string>([]);
 
 export function getProtectedRouteDestination(
   path: string,
   hasValidTokens: boolean
-): { redirect: true; to: '/admin/login' } | { redirect: false } {
+): { redirect: true; to: '/' } | { redirect: false } {
   const isAdminRoute = path.startsWith('/admin/');
   const isPublic = PUBLIC_ADMIN_ROUTES.has(path);
 
   if (isAdminRoute && !isPublic && !hasValidTokens) {
-    return { redirect: true, to: '/admin/login' };
+    return { redirect: true, to: '/' };
   }
   return { redirect: false };
 }

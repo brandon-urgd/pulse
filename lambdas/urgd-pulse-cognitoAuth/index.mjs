@@ -1,7 +1,6 @@
 // ur/gd pulse — Cognito JWT Authorizer
 // Validates RS256 Cognito JWT, caches JWKS 5 min, extracts tenantId
 
-import { createHash } from 'crypto'
 import { log } from './shared/utils.mjs'
 
 // Fail-fast env var validation

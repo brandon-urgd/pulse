@@ -7,78 +7,22 @@ import styles from './SessionReport.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type OverallSentiment = 'positive' | 'mixed' | 'negative';
-
-interface ReportSection {
-  sectionName: string;
-  sentiment: string;
-  quotes: string[];
-  suggestions: string[];
-  concerns: string[];
-}
-
 interface Report {
   sessionId: string;
   itemId: string;
-  sections: ReportSection[];
-  overallSentiment: OverallSentiment;
+  verdict: string;
+  conviction: string[];
+  tension: string[];
+  uncertainty: string[];
+  energy: EnergyLevel;
+  conversationShape: string;
+  themes: string[];
+  isSelfReview: boolean;
   generatedAt: string;
-  /** Optional one-line verdict synthesized by Bedrock */
-  verdict?: string;
-  /** Optional energy level */
-  energy?: EnergyLevel;
 }
 
 interface ReportResponse {
   data: Report;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Derive a one-line verdict from the report when the API doesn't provide one.
- * Uses overallSentiment as a fallback.
- */
-function deriveVerdict(report: Report): string {
-  if (report.verdict) return report.verdict;
-  switch (report.overallSentiment) {
-    case 'positive': return 'Overall positive — reviewer found strong conviction in the work.';
-    case 'negative': return 'Overall critical — reviewer raised significant concerns.';
-    default: return 'Mixed signals — conviction and tension present in roughly equal measure.';
-  }
-}
-
-/**
- * Derive energy level from sentiment when not explicitly provided.
- */
-function deriveEnergy(report: Report): EnergyLevel {
-  if (report.energy) return report.energy;
-  switch (report.overallSentiment) {
-    case 'positive': return 'engaged';
-    case 'negative': return 'resistant';
-    default: return 'neutral';
-  }
-}
-
-/**
- * Collect all quotes (conviction items) from sections.
- */
-function collectConvictions(sections: ReportSection[]): string[] {
-  return sections.flatMap((s) => s.quotes ?? []);
-}
-
-/**
- * Collect all concerns (tension items) from sections.
- */
-function collectTensions(sections: ReportSection[]): string[] {
-  return sections.flatMap((s) => s.concerns ?? []);
-}
-
-/**
- * Collect all suggestions (uncertainty / open questions) from sections.
- */
-function collectUncertainties(sections: ReportSection[]): string[] {
-  return sections.flatMap((s) => s.suggestions ?? []);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -132,11 +76,11 @@ export default function SessionReport() {
     );
   }
 
-  const verdict = deriveVerdict(report);
-  const energy = deriveEnergy(report);
-  const convictions = collectConvictions(report.sections);
-  const tensions = collectTensions(report.sections);
-  const uncertainties = collectUncertainties(report.sections);
+  const verdict = report.verdict;
+  const energy = report.energy;
+  const convictions = report.conviction;
+  const tensions = report.tension;
+  const uncertainties = report.uncertainty;
 
   return (
     <div className={styles.container}>
