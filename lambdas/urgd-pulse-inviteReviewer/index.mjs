@@ -291,7 +291,7 @@ export const handler = async (event) => {
       createdSessions.push({ sessionId, pulseCode, status: 'not_started' })
     }
 
-    // Update item status to "active" and set lockedAt if this is the first invitation
+    // Update item: always increment sessionCount; on first invitation also set status → active
     if (isFirstInvitation) {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.ITEMS_TABLE,
@@ -299,15 +299,29 @@ export const handler = async (event) => {
           tenantId: { S: tenantId },
           itemId: { S: itemId },
         },
-        UpdateExpression: 'SET #status = :active, lockedAt = :lockedAt, updatedAt = :now',
+        UpdateExpression: 'SET #status = :active, lockedAt = :lockedAt, updatedAt = :now ADD sessionCount :n',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':active': { S: 'active' },
           ':lockedAt': { S: now },
           ':now': { S: now },
+          ':n': { N: String(createdSessions.length) },
         },
       }))
       log('info', 'InviteReviewer: item status updated to active', { requestId, tenantId, itemId })
+    } else {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          itemId: { S: itemId },
+        },
+        UpdateExpression: 'SET updatedAt = :now ADD sessionCount :n',
+        ExpressionAttributeValues: {
+          ':now': { S: now },
+          ':n': { N: String(createdSessions.length) },
+        },
+      }))
     }
 
     log('info', 'InviteReviewer: completed', { requestId, tenantId, itemId, sessionCount: createdSessions.length })
