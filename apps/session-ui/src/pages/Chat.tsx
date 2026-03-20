@@ -670,13 +670,17 @@ export default function Chat() {
             )
           }
 
-          // agent
-          return (
-            <div key={i} style={styles.messageRow}>
-              <PulseDot state="idle" />
-              <ChatBubble type="agent">{msg.content}</ChatBubble>
+          // agent — split on double newlines for multi-bubble rendering
+          const paragraphs = msg.content.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
+          return paragraphs.map((para, pi) => (
+            <div key={`${i}-${pi}`} style={{
+              ...styles.messageRow,
+              ...(pi > 0 ? { marginTop: '-0.5rem' } : {}),
+            }}>
+              {pi === 0 ? <PulseDot state="idle" /> : <div style={{ width: '28px', flexShrink: 0 }} />}
+              <ChatBubble type="agent">{para}</ChatBubble>
             </div>
-          )
+          ))
         })}
 
         {isThinking && <ThinkingIndicator />}
