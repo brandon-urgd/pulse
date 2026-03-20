@@ -8,66 +8,45 @@ import { labels } from '../config/labels-registry';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import SignalMatrix, { type ThemeRow, type ReviewerColumn } from '../components/SignalMatrix';
 import FeedbackActionPills, { type FeedbackAction } from '../components/FeedbackActionPills';
+import PulseCheckOverlay from '../components/PulseCheckOverlay';
 import styles from './PulseCheck.module.css';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types (matching actual lambda response shape) ────────────────────────────
 
-interface FeedbackPoint {
-  feedbackPointId: string;
-  section: string;
-  text: string;
-  agreementLevel: string;
-  reviewerCount: number;
-}
-
-interface Decision {
-  feedbackPointId: string;
-  action: Exclude<FeedbackAction, null>;
-  tenantNote?: string;
+interface ReviewerSignal {
+  sessionId: string;
+  signalType: 'conviction' | 'tension' | 'uncertainty';
+  quote: string;
 }
 
 interface PulseCheckTheme {
   themeId: string;
-  theme: string;
-  /** Per-reviewer signals keyed by reviewerId */
-  signals?: Record<string, { signal: 'conviction' | 'tension' | 'uncertainty'; quote: string }>;
-  /** Aggregate signal type for single-session view */
-  signal?: 'conviction' | 'tension' | 'uncertainty';
-  quotes?: string[];
+  label: string;
+  reviewerSignals: ReviewerSignal[];
 }
 
-interface ReviewerSummary {
-  reviewerId: string;
-  name: string;
+interface ReviewerVerdict {
+  sessionId: string;
   verdict: string;
   energy: EnergyLevel;
+  isSelfReview: boolean;
 }
 
-interface AggregateSummary {
-  themes: PulseCheckTheme[];
-  agreementDistribution: Record<string, number>;
-  feedbackPoints: FeedbackPoint[];
-  /** Synthesized verdict (multi-session) */
-  verdict?: string;
-  /** Shared convictions */
-  sharedConvictions?: string[];
-  /** Repeated tensions */
-  repeatedTensions?: string[];
-  /** Open questions */
-  openQuestions?: string[];
-  /** Per-reviewer summaries (multi-session) */
-  reviewers?: ReviewerSummary[];
-  /** Single-session energy */
-  energy?: EnergyLevel;
-  /** Single-session one-line verdict */
-  singleVerdict?: string;
+interface DecisionRecord {
+  action: string;
+  tenantNote?: string;
+  decidedAt: string;
 }
 
 interface PulseCheck {
   itemId: string;
-  aggregateSummary: AggregateSummary;
-  feedbackPoints: FeedbackPoint[];
-  decisions: Record<string, { action: string; tenantNote?: string; decidedAt: string }>;
+  verdict: string;
+  themes: PulseCheckTheme[];
+  sharedConviction: string[];
+  repeatedTension: string[];
+  openQuestions: string[];
+  reviewerVerdicts: ReviewerVerdict[];
+  decisions: Record<string, DecisionRecord>;
   sessionCount: number;
   incompleteCount?: number;
   generatedAt: string;
@@ -86,39 +65,33 @@ interface ItemResponse {
 
 function buildMatrixData(
   themes: PulseCheckTheme[],
-  reviewers: ReviewerSummary[]
+  reviewerVerdicts: ReviewerVerdict[]
 ): { themeRows: ThemeRow[]; reviewerCols: ReviewerColumn[] } {
-  const reviewerCols: ReviewerColumn[] = reviewers.map((r) => ({
-    reviewerId: r.reviewerId,
-    name: r.name,
-    verdict: r.verdict,
-    energy: r.energy,
+  const reviewerCols: ReviewerColumn[] = reviewerVerdicts.map((rv, i) => ({
+    reviewerId: rv.sessionId,
+    name: rv.isSelfReview ? 'Self-review' : `Reviewer ${i + 1}`,
+    verdict: rv.verdict,
+    energy: rv.energy,
   }));
 
-  const themeRows: ThemeRow[] = themes.map((t) => ({
-    themeId: t.themeId,
-    theme: t.theme,
-    signals: t.signals ?? {},
-  }));
+  const themeRows: ThemeRow[] = themes.map((t) => {
+    const signals: ThemeRow['signals'] = {};
+    for (const rs of t.reviewerSignals) {
+      signals[rs.sessionId] = { signal: rs.signalType, quote: rs.quote };
+    }
+    return { themeId: t.themeId, theme: t.label, signals };
+  });
 
   return { themeRows, reviewerCols };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-/**
- * Pulse Check page — single-session and multi-session views.
- * Calls POST to generate or GET to load existing pulse check.
- * Multi-session: SignalMatrix + synthesized verdict + FeedbackActionPills per theme.
- * Single-session: Verdict → What Landed → Where It Struggled → Open Questions → Energy.
- * Requirements: 7.4, 7.5, 7.6, 7.7, 7.10
- */
 export default function PulseCheck() {
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Decisions state: feedbackPointId → action
   const [decisions, setDecisions] = useState<Record<string, FeedbackAction>>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
@@ -127,8 +100,10 @@ export default function PulseCheck() {
   const [isClosingAndRunning, setIsClosingAndRunning] = useState(false);
   const [closeRunError, setCloseRunError] = useState('');
   const [rerunError, setRerunError] = useState('');
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayDone, setOverlayDone] = useState(false);
+  const [overlayError, setOverlayError] = useState('');
 
-  // ── Load item (for name) ────────────────────────────────────────────────────
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
     `/api/manage/items/${itemId}`,
@@ -137,20 +112,13 @@ export default function PulseCheck() {
   const itemName = itemResp?.data?.itemName ?? '';
   const itemStatus = itemResp?.data?.status ?? '';
 
-  // ── Load existing pulse check ───────────────────────────────────────────────
-  const {
-    data: pcResp,
-    isLoading,
-    isError,
-    refetch,
-  } = useAuthedQuery<PulseCheckResponse>(
+  const { data: pcResp, isLoading, isError, refetch } = useAuthedQuery<PulseCheckResponse>(
     ['pulse-check', itemId],
     `/api/manage/items/${itemId}/pulse-check`,
     { enabled: Boolean(itemId), retry: false }
   );
   const pc = pcResp?.data;
 
-  // ── Load sessions to detect newly completed ones since last run ─────────────
   interface Session { sessionId: string; status: string; completedAt?: string }
   const { data: sessionsResp } = useAuthedQuery<{ data: Session[] }>(
     ['item-sessions', itemId],
@@ -164,30 +132,34 @@ export default function PulseCheck() {
     ).length;
   })();
 
-  // ── Sync decisions from loaded pulse check ──────────────────────────────────
   useEffect(() => {
     if (pc?.decisions) {
       const synced: Record<string, FeedbackAction> = {};
-      for (const [id, d] of Object.entries(pc.decisions)) {
-        synced[id] = d.action as FeedbackAction;
+      for (const [themeId, d] of Object.entries(pc.decisions)) {
+        synced[themeId] = d.action.toLowerCase() as FeedbackAction;
       }
       setDecisions(synced);
     }
   }, [pc]);
 
-  // ── Document title ──────────────────────────────────────────────────────────
   useEffect(() => {
     document.title = itemName
       ? labels.pulseCheck.documentTitle.replace('{itemName}', itemName)
       : labels.pulseCheck.documentTitleDefault;
   }, [itemName]);
 
-  // ── Generate mutation ───────────────────────────────────────────────────────
+  function showOverlay() {
+    setOverlayVisible(true);
+    setOverlayDone(false);
+    setOverlayError('');
+  }
+
   const generateMutation = useAuthedMutation<PulseCheckResponse, undefined>(
     `/api/manage/items/${itemId}/pulse-check`,
     'POST',
     {
       onSuccess: () => {
+        setOverlayDone(true);
         queryClient.invalidateQueries({ queryKey: ['pulse-check', itemId] });
         refetch();
         setGenerateError('');
@@ -196,9 +168,12 @@ export default function PulseCheck() {
       },
       onError: (err) => {
         const status = (err as Error & { status?: number }).status;
+        setOverlayVisible(false);
+        setOverlayDone(false);
         if (status === 409) {
           setConflictError(labels.pulseCheck.sessionsStillOpenError);
         } else {
+          setOverlayError(labels.pulseCheck.generateError);
           setGenerateError(labels.pulseCheck.generateError);
           setRerunError(labels.pulseCheck.rerunError);
         }
@@ -206,16 +181,14 @@ export default function PulseCheck() {
     }
   );
 
-  // ── Close & Run Pulse Check ─────────────────────────────────────────────────
   async function handleCloseAndRun() {
     setIsClosingAndRunning(true);
     setCloseRunError('');
     try {
-      // Step 1: close the item (expires all not_started sessions)
       await authedMutate(`/api/manage/items/${itemId}/close`, 'PUT', {}, navigate);
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
-      // Step 2: run the pulse check
+      showOverlay();
       generateMutation.mutate(undefined);
     } catch {
       setCloseRunError(labels.pulseCheck.closeAndRunError);
@@ -223,18 +196,15 @@ export default function PulseCheck() {
     }
   }
 
-  // ── Save decisions ──────────────────────────────────────────────────────────
   async function handleSaveDecisions() {
     setSaveStatus('saving');
     setSaveErrorMsg('');
-
-    const payload: Decision[] = Object.entries(decisions)
-      .filter(([, action]) => action !== null)
-      .map(([feedbackPointId, action]) => ({
-        feedbackPointId,
-        action: action as Exclude<FeedbackAction, null>,
-      }));
-
+    const payload: Record<string, { action: string; tenantNote?: string }> = {};
+    for (const [themeId, action] of Object.entries(decisions)) {
+      if (action !== null) {
+        payload[themeId] = { action: action.charAt(0).toUpperCase() + action.slice(1) };
+      }
+    }
     try {
       await authedMutate(
         `/api/manage/items/${itemId}/pulse-check/decisions`,
@@ -247,97 +217,88 @@ export default function PulseCheck() {
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
-      if (status === 409) {
-        setSaveErrorMsg(labels.pulseCheck.sessionsStillOpenError);
-      } else {
-        setSaveErrorMsg(labels.pulseCheck.saveDecisionsError);
-      }
+      setSaveErrorMsg(status === 409 ? labels.pulseCheck.sessionsStillOpenError : labels.pulseCheck.saveDecisionsError);
       setSaveStatus('error');
     }
   }
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+  // ── Overlay (rendered regardless of page state) ─────────────────────────────
+  const Overlay = overlayVisible ? (
+    <PulseCheckOverlay
+      itemName={itemName}
+      done={overlayDone}
+      error={overlayError}
+      onErrorDismiss={() => { setOverlayVisible(false); setOverlayError(''); }}
+    />
+  ) : null;
+
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <p className={styles.loading} aria-busy="true">
-          {labels.pulseCheck.loading}
-        </p>
+        <p className={styles.loading} aria-busy="true">{labels.pulseCheck.loading}</p>
       </div>
     );
   }
 
-  // ── No pulse check yet — show generate prompt ───────────────────────────────
   if (isError || !pc) {
     const itemIsActive = itemStatus === 'active';
     const isPending = generateMutation.isPending || isClosingAndRunning;
 
     return (
-      <div className={styles.container}>
-        <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
-          ← {labels.pulseCheck.backToItem}
-        </Link>
-        <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
-        {itemName && <p className={styles.subheading}>{itemName}</p>}
+      <>
+        {Overlay}
+        <div className={styles.container}>
+          <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+            ← {labels.pulseCheck.backToItem}
+          </Link>
+          <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
+          {itemName && <p className={styles.subheading}>{itemName}</p>}
 
-        <div className={styles.generatePrompt}>
-          {itemIsActive ? (
-            <>
-              <p className={styles.generatePromptText}>
-                {labels.pulseCheck.closeAndRunPromptText}
-              </p>
-              <p className={styles.generatePromptWarning}>
-                {labels.pulseCheck.closeAndRunWarning}
-              </p>
-              <button
-                type="button"
-                className={styles.generateButton}
-                onClick={handleCloseAndRun}
-                disabled={isPending}
-              >
-                {isPending ? labels.pulseCheck.generating : labels.pulseCheck.closeAndRunButton}
-              </button>
-              {closeRunError && (
-                <p className={styles.error} role="alert" aria-live="polite">
-                  {closeRunError}
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <p className={styles.generatePromptText}>
-                {labels.pulseCheck.generatePromptText}
-              </p>
-              <button
-                type="button"
-                className={styles.generateButton}
-                onClick={() => generateMutation.mutate(undefined)}
-                disabled={isPending}
-              >
-                {isPending ? labels.pulseCheck.generating : labels.pulseCheck.generateButton}
-              </button>
-              {conflictError && (
-                <p className={styles.conflictError} role="alert" aria-live="polite">
-                  {conflictError}
-                </p>
-              )}
-              {!conflictError && generateError && (
-                <p className={styles.error} role="alert" aria-live="polite">
-                  {generateError}
-                </p>
-              )}
-            </>
-          )}
+          <div className={styles.generatePrompt}>
+            {itemIsActive ? (
+              <>
+                <p className={styles.generatePromptText}>{labels.pulseCheck.closeAndRunPromptText}</p>
+                <p className={styles.generatePromptWarning}>{labels.pulseCheck.closeAndRunWarning}</p>
+                <button
+                  type="button"
+                  className={styles.generateButton}
+                  onClick={handleCloseAndRun}
+                  disabled={isPending}
+                >
+                  {isPending ? labels.pulseCheck.generating : labels.pulseCheck.closeAndRunButton}
+                </button>
+                {closeRunError && (
+                  <p className={styles.error} role="alert" aria-live="polite">{closeRunError}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className={styles.generatePromptText}>{labels.pulseCheck.generatePromptText}</p>
+                <button
+                  type="button"
+                  className={styles.generateButton}
+                  onClick={() => { showOverlay(); generateMutation.mutate(undefined); }}
+                  disabled={isPending}
+                >
+                  {isPending ? labels.pulseCheck.generating : labels.pulseCheck.generateButton}
+                </button>
+                {conflictError && (
+                  <p className={styles.conflictError} role="alert" aria-live="polite">{conflictError}</p>
+                )}
+                {!conflictError && generateError && (
+                  <p className={styles.error} role="alert" aria-live="polite">{generateError}</p>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   const isMultiSession = pc.sessionCount >= 2;
-  const summary = pc.aggregateSummary;
   const incompleteCount = pc.incompleteCount ?? 0;
 
-  // ── Incomplete sessions notice (shared across both views) ───────────────────
   const IncompleteNotice = incompleteCount > 0 ? (
     <p className={styles.incompleteNotice} role="note">
       {labels.pulseCheck.incompleteSessionsNotice
@@ -346,7 +307,6 @@ export default function PulseCheck() {
     </p>
   ) : null;
 
-  // ── Re-run footer (shared across both views) ────────────────────────────────
   const isRerunPending = generateMutation.isPending;
   const RerunFooter = (
     <div className={newlyCompletedCount > 0 ? styles.rerunBanner : styles.rerunRow}>
@@ -360,7 +320,7 @@ export default function PulseCheck() {
       <button
         type="button"
         className={newlyCompletedCount > 0 ? styles.rerunBannerButton : styles.rerunButton}
-        onClick={() => { setRerunError(''); generateMutation.mutate(undefined); }}
+        onClick={() => { setRerunError(''); showOverlay(); generateMutation.mutate(undefined); }}
         disabled={isRerunPending}
       >
         {isRerunPending ? labels.pulseCheck.generating : labels.pulseCheck.rerunButton}
@@ -373,13 +333,96 @@ export default function PulseCheck() {
 
   // ── Single-session view ─────────────────────────────────────────────────────
   if (!isMultiSession) {
-    const verdict = summary.singleVerdict ?? summary.verdict ?? labels.pulseCheck.noVerdict;
-    const energy = summary.energy ?? 'neutral';
-    const convictions = summary.sharedConvictions ?? [];
-    const tensions = summary.repeatedTensions ?? [];
-    const questions = summary.openQuestions ?? [];
+    const singleReviewer = pc.reviewerVerdicts?.[0];
+    const verdict = pc.verdict ?? labels.pulseCheck.noVerdict;
+    const energy = singleReviewer?.energy ?? 'neutral';
+    const convictions = pc.sharedConviction ?? [];
+    const tensions = pc.repeatedTension ?? [];
+    const questions = pc.openQuestions ?? [];
 
     return (
+      <>
+        {Overlay}
+        <div className={styles.container}>
+          <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+            ← {labels.pulseCheck.backToItem}
+          </Link>
+          <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
+          {itemName && <p className={styles.subheading}>{itemName}</p>}
+          {IncompleteNotice}
+
+          <div className={styles.verdictBlock}>
+            <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
+            <p className={styles.verdictText}>{verdict}</p>
+            <div className={styles.energyRow}>
+              <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
+              <SignalBadge variant={energy} />
+            </div>
+          </div>
+
+          <section className={styles.section} aria-labelledby="pc-convictions-heading">
+            <h2 id="pc-convictions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="conviction" />
+              {labels.pulseCheck.convictionsHeading}
+            </h2>
+            {convictions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {convictions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="pc-tensions-heading">
+            <h2 id="pc-tensions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="tension" />
+              {labels.pulseCheck.tensionsHeading}
+            </h2>
+            {tensions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {tensions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="pc-questions-heading">
+            <h2 id="pc-questions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="uncertainty" />
+              {labels.pulseCheck.questionsHeading}
+            </h2>
+            {questions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {questions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
+            )}
+          </section>
+
+          <p className={styles.meta}>
+            {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString())}
+          </p>
+          {RerunFooter}
+        </div>
+      </>
+    );
+  }
+
+  // ── Multi-session view ──────────────────────────────────────────────────────
+  const reviewerVerdicts = pc.reviewerVerdicts ?? [];
+  const { themeRows, reviewerCols } = buildMatrixData(pc.themes ?? [], reviewerVerdicts);
+  const synthesizedVerdict = pc.verdict ?? labels.pulseCheck.noVerdict;
+  const sharedConvictions = pc.sharedConviction ?? [];
+  const repeatedTensions = pc.repeatedTension ?? [];
+  const openQuestions = pc.openQuestions ?? [];
+  const themes = pc.themes ?? [];
+
+  return (
+    <>
+      {Overlay}
       <div className={styles.container}>
         <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
           ← {labels.pulseCheck.backToItem}
@@ -388,235 +431,112 @@ export default function PulseCheck() {
         {itemName && <p className={styles.subheading}>{itemName}</p>}
         {IncompleteNotice}
 
-        {/* Verdict */}
-        <div className={styles.verdictBlock}>
-          <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
-          <p className={styles.verdictText}>{verdict}</p>
-          <div className={styles.energyRow}>
-            <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
-            <SignalBadge variant={energy} />
+        {themeRows.length > 0 && reviewerCols.length > 0 && (
+          <section className={styles.matrixSection} aria-labelledby="matrix-heading">
+            <h2 id="matrix-heading" className={styles.matrixHeading}>{labels.pulseCheck.matrixHeading}</h2>
+            <SignalMatrix themes={themeRows} reviewers={reviewerCols} ariaLabel={labels.pulseCheck.matrixAriaLabel} />
+          </section>
+        )}
+
+        <section className={styles.synthesisSection} aria-labelledby="synthesis-heading">
+          <h2 id="synthesis-heading" className={styles.synthesisHeading}>{labels.pulseCheck.synthesisHeading}</h2>
+
+          <div className={styles.verdictBlock}>
+            <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
+            <p className={styles.verdictText}>{synthesizedVerdict}</p>
           </div>
-        </div>
 
-        {/* What Landed */}
-        <section className={styles.section} aria-labelledby="pc-convictions-heading">
-          <h2 id="pc-convictions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="conviction" />
-            {labels.pulseCheck.convictionsHeading}
-          </h2>
-          {convictions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {convictions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
-          )}
+          <section className={styles.section} aria-labelledby="multi-convictions-heading">
+            <h3 id="multi-convictions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="conviction" />
+              {labels.pulseCheck.convictionsHeading}
+            </h3>
+            {sharedConvictions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {sharedConvictions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="multi-tensions-heading">
+            <h3 id="multi-tensions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="tension" />
+              {labels.pulseCheck.tensionsHeading}
+            </h3>
+            {repeatedTensions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {repeatedTensions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
+            )}
+          </section>
+
+          <section className={styles.section} aria-labelledby="multi-questions-heading">
+            <h3 id="multi-questions-heading" className={styles.sectionHeading}>
+              <SignalBadge variant="uncertainty" />
+              {labels.pulseCheck.questionsHeading}
+            </h3>
+            {openQuestions.length > 0 ? (
+              <ul className={styles.quoteList}>
+                {openQuestions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+              </ul>
+            ) : (
+              <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
+            )}
+          </section>
         </section>
 
-        {/* Where It Struggled */}
-        <section className={styles.section} aria-labelledby="pc-tensions-heading">
-          <h2 id="pc-tensions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="tension" />
-            {labels.pulseCheck.tensionsHeading}
-          </h2>
-          {tensions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {tensions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
+        {themes.length > 0 && (
+          <section aria-labelledby="decisions-heading">
+            <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
+            <ul className={styles.themeDecisionList}>
+              {themes.map((theme) => (
+                <li key={theme.themeId} className={styles.themeDecisionRow}>
+                  <div className={styles.themeDecisionHeader}>
+                    <div style={{ flex: 1 }}>
+                      <p className={styles.themeDecisionText}>{theme.label}</p>
+                      <p className={styles.themeDecisionMeta}>
+                        {theme.reviewerSignals.length}{' '}
+                        {theme.reviewerSignals.length === 1 ? 'reviewer' : 'reviewers'}
+                      </p>
+                    </div>
+                    <FeedbackActionPills
+                      value={decisions[theme.themeId] ?? null}
+                      onChange={(action) => setDecisions((prev) => ({ ...prev, [theme.themeId]: action }))}
+                      ariaLabel={`Decision for: ${theme.label}`}
+                    />
+                  </div>
+                </li>
               ))}
             </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
-          )}
-        </section>
 
-        {/* Open Questions */}
-        <section className={styles.section} aria-labelledby="pc-questions-heading">
-          <h2 id="pc-questions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="uncertainty" />
-            {labels.pulseCheck.questionsHeading}
-          </h2>
-          {questions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {questions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
-          )}
-        </section>
+            <div className={styles.saveRow}>
+              <button
+                type="button"
+                className={styles.saveButton}
+                onClick={handleSaveDecisions}
+                disabled={saveStatus === 'saving'}
+              >
+                {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
+              </button>
+              {saveStatus === 'saved' && (
+                <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
+              )}
+              {saveStatus === 'error' && (
+                <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
+              )}
+            </div>
+          </section>
+        )}
 
         <p className={styles.meta}>
-          {labels.pulseCheck.generatedAt.replace(
-            '{date}',
-            new Date(pc.generatedAt).toLocaleString()
-          )}
+          {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString())}
         </p>
         {RerunFooter}
       </div>
-    );
-  }
-
-  // ── Multi-session view ──────────────────────────────────────────────────────
-  const reviewers = summary.reviewers ?? [];
-  const { themeRows, reviewerCols } = buildMatrixData(summary.themes ?? [], reviewers);
-  const feedbackPoints = pc.feedbackPoints ?? [];
-  const synthesizedVerdict = summary.verdict ?? labels.pulseCheck.noVerdict;
-  const sharedConvictions = summary.sharedConvictions ?? [];
-  const repeatedTensions = summary.repeatedTensions ?? [];
-  const openQuestions = summary.openQuestions ?? [];
-
-  return (
-    <div className={styles.container}>
-      <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
-        ← {labels.pulseCheck.backToItem}
-      </Link>
-      <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
-      {itemName && <p className={styles.subheading}>{itemName}</p>}
-      {IncompleteNotice}
-
-      {/* ── Signal Matrix ── */}
-      {themeRows.length > 0 && reviewerCols.length > 0 && (
-        <section className={styles.matrixSection} aria-labelledby="matrix-heading">
-          <h2 id="matrix-heading" className={styles.matrixHeading}>
-            {labels.pulseCheck.matrixHeading}
-          </h2>
-          <SignalMatrix
-            themes={themeRows}
-            reviewers={reviewerCols}
-            ariaLabel={labels.pulseCheck.matrixAriaLabel}
-          />
-        </section>
-      )}
-
-      {/* ── Synthesized verdict + signal sections ── */}
-      <section className={styles.synthesisSection} aria-labelledby="synthesis-heading">
-        <h2 id="synthesis-heading" className={styles.synthesisHeading}>
-          {labels.pulseCheck.synthesisHeading}
-        </h2>
-
-        {/* Verdict */}
-        <div className={styles.verdictBlock}>
-          <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
-          <p className={styles.verdictText}>{synthesizedVerdict}</p>
-        </div>
-
-        {/* Shared convictions */}
-        <section className={styles.section} aria-labelledby="multi-convictions-heading">
-          <h3 id="multi-convictions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="conviction" />
-            {labels.pulseCheck.convictionsHeading}
-          </h3>
-          {sharedConvictions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {sharedConvictions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
-          )}
-        </section>
-
-        {/* Repeated tensions */}
-        <section className={styles.section} aria-labelledby="multi-tensions-heading">
-          <h3 id="multi-tensions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="tension" />
-            {labels.pulseCheck.tensionsHeading}
-          </h3>
-          {repeatedTensions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {repeatedTensions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
-          )}
-        </section>
-
-        {/* Open questions */}
-        <section className={styles.section} aria-labelledby="multi-questions-heading">
-          <h3 id="multi-questions-heading" className={styles.sectionHeading}>
-            <SignalBadge variant="uncertainty" />
-            {labels.pulseCheck.questionsHeading}
-          </h3>
-          {openQuestions.length > 0 ? (
-            <ul className={styles.quoteList}>
-              {openQuestions.map((q, i) => (
-                <li key={i} className={styles.quoteItem}>{q}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
-          )}
-        </section>
-      </section>
-
-      {/* ── Feedback decisions per theme ── */}
-      {feedbackPoints.length > 0 && (
-        <section aria-labelledby="decisions-heading">
-          <h2 id="decisions-heading" className={styles.synthesisHeading}>
-            {labels.pulseCheck.decisionsHeading}
-          </h2>
-          <ul className={styles.themeDecisionList}>
-            {feedbackPoints.map((fp) => (
-              <li key={fp.feedbackPointId} className={styles.themeDecisionRow}>
-                <div className={styles.themeDecisionHeader}>
-                  <div style={{ flex: 1 }}>
-                    <p className={styles.themeDecisionText}>{fp.text}</p>
-                    <p className={styles.themeDecisionMeta}>
-                      {fp.reviewerCount} {fp.reviewerCount === 1 ? 'reviewer' : 'reviewers'} · {fp.section}
-                    </p>
-                  </div>
-                  <FeedbackActionPills
-                    value={decisions[fp.feedbackPointId] ?? null}
-                    onChange={(action) =>
-                      setDecisions((prev) => ({ ...prev, [fp.feedbackPointId]: action }))
-                    }
-                    ariaLabel={`Decision for: ${fp.text}`}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {/* Save decisions */}
-          <div className={styles.saveRow}>
-            <button
-              type="button"
-              className={styles.saveButton}
-              onClick={handleSaveDecisions}
-              disabled={saveStatus === 'saving'}
-            >
-              {saveStatus === 'saving'
-                ? labels.pulseCheck.savingDecisions
-                : labels.pulseCheck.saveDecisionsButton}
-            </button>
-            {saveStatus === 'saved' && (
-              <span className={styles.saveSuccess} aria-live="polite">
-                {labels.pulseCheck.decisionsSaved}
-              </span>
-            )}
-            {saveStatus === 'error' && (
-              <span className={styles.saveError} role="alert" aria-live="polite">
-                {saveErrorMsg}
-              </span>
-            )}
-          </div>
-        </section>
-      )}
-
-      <p className={styles.meta}>
-        {labels.pulseCheck.generatedAt.replace(
-          '{date}',
-          new Date(pc.generatedAt).toLocaleString()
-        )}
-      </p>
-      {RerunFooter}
-    </div>
+    </>
   );
 }
