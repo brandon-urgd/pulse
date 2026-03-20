@@ -163,15 +163,16 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
         <button type="button" className={styles.actionInvite} onClick={onInvite}>
           {labels.items.inviteButton}
         </button>
-        <button
-          type="button"
-          className={pulseCheckButtonClass(item)}
-          onClick={onPulseCheck}
-          disabled={item.status === 'draft'}
-          aria-label={pulseCheckAriaLabel(item)}
-        >
-          {pulseCheckButtonLabel(item)}
-        </button>
+        {item.status !== 'draft' && (
+          <button
+            type="button"
+            className={pulseCheckButtonClass(item)}
+            onClick={onPulseCheck}
+            aria-label={pulseCheckAriaLabel(item)}
+          >
+            {pulseCheckButtonLabel(item)}
+          </button>
+        )}
         {confirming ? (
           <div className={styles.deleteConfirmRow}>
             {deleteError && <span className={styles.deleteErrMsg}>{deleteError}</span>}
