@@ -1,0 +1,56 @@
+.group {
+  display: inline-flex;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.pill {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  line-height: 1.5;
+}
+
+.pill:last-child {
+  border-right: none;
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--color-accent-pulse);
+  outline-offset: -2px;
+  z-index: 1;
+  position: relative;
+}
+
+.pill:hover:not(.active):not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Selected states */
+.accept.active {
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
+}
+
+.revise.active {
+  background: var(--color-warning-bg);
+  color: #b45309;
+}
+
+.override.active {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}

@@ -390,18 +390,31 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       ExpressionAttributeValues: updateValues,
     }))
 
-    // 13. Invoke generateSessionSummary async if complete
+    // 13. Invoke generateSessionSummary and generateReport async if complete
     if (sessionComplete) {
-      const generateFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
-      if (generateFnName) {
+      const generateSummaryFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
+      if (generateSummaryFnName) {
         try {
           await lambda.send(new InvokeCommand({
-            FunctionName: generateFnName,
+            FunctionName: generateSummaryFnName,
             InvocationType: 'Event',
             Payload: JSON.stringify({ sessionId, tenantId }),
           }))
         } catch (err) {
           log('warn', 'Chat: failed to invoke generateSessionSummary', { requestId, sessionId, tenantId, errorName: err.name })
+        }
+      }
+
+      const generateReportFnName = process.env.GENERATE_REPORT_FUNCTION_NAME
+      if (generateReportFnName) {
+        try {
+          await lambda.send(new InvokeCommand({
+            FunctionName: generateReportFnName,
+            InvocationType: 'Event',
+            Payload: JSON.stringify({ sessionId, tenantId }),
+          }))
+        } catch (err) {
+          log('warn', 'Chat: failed to invoke generateReport', { requestId, sessionId, tenantId, errorName: err.name })
         }
       }
     }

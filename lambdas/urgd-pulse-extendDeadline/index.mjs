@@ -80,7 +80,13 @@ export const handler = async (event) => {
 
     const currentItem = unmarshal(existing.Item)
 
-    // Only validate the new date is in the future — same date or any forward date is fine
+    // Validate the new date is after the current closeDate (if one exists)
+    if (currentItem.closeDate) {
+      const currentCloseDate = new Date(currentItem.closeDate)
+      if (newCloseDate.getTime() <= currentCloseDate.getTime()) {
+        return errorResponse(400, 'New close date must be after the current close date', {}, origin)
+      }
+    }
 
     const nowIso = now.toISOString()
 

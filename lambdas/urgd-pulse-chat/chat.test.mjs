@@ -337,5 +337,33 @@ describe('urgd-pulse-chat', () => {
       const res = await handler(makeEvent())
       expect(res.statusCode).toBe(500)
     })
+
+    it('returns 503 on Bedrock AccessDeniedException', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })
+        .mockResolvedValueOnce({ Items: [] })
+        .mockResolvedValueOnce(makeItemRecord())
+
+      const err = Object.assign(new Error('Access denied'), { name: 'AccessDeniedException' })
+      bedrockSendSpy.mockRejectedValueOnce(err)
+      cwSendSpy.mockResolvedValue({})
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(503)
+    })
+
+    it('returns 503 on Bedrock ThrottlingException', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })
+        .mockResolvedValueOnce({ Items: [] })
+        .mockResolvedValueOnce(makeItemRecord())
+
+      const err = Object.assign(new Error('Throttled'), { name: 'ThrottlingException' })
+      bedrockSendSpy.mockRejectedValueOnce(err)
+      cwSendSpy.mockResolvedValue({})
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(503)
+    })
   })
 })

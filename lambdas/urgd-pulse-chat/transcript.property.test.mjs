@@ -1,6 +1,6 @@
 // Property test for urgd-pulse-chat
 // Feature: pulse, Property 19: Transcript Write Invariant
-// Validates: Requirements 5.x (transcript persistence)
+// Validates: Requirements 6.1 (transcript persistence, atomic write)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
@@ -19,17 +19,14 @@ const bedrockSendSpy = vi.fn()
 const cwSendSpy = vi.fn()
 const lambdaSendSpy = vi.fn()
 
-// Track ULID calls to verify sequential ordering
-const ulidValues = []
-let ulidCallCount = 0
-
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return sendSpy(...args) } }
   class GetItemCommand { constructor(input) { this.input = input } }
   class PutItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand }
+  class TransactWriteItemsCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -56,14 +53,12 @@ vi.mock('@aws-sdk/client-lambda', () => {
   return { LambdaClient, InvokeCommand }
 })
 
-vi.mock('ulid', () => ({
-  ulid: () => {
-    ulidCallCount++
-    const val = `01HTEST${String(ulidCallCount).padStart(18, '0')}`
-    ulidValues.push(val)
-    return val
+vi.mock('ulid', () => {
+  let count = 0
+  return {
+    ulid: () => `01HTEST${String(++count).padStart(18, '0')}`,
   }
-}))
+})
 
 const { handler } = await import('./index.mjs')
 
@@ -90,13 +85,25 @@ function makeSession() {
   }
 }
 
-function makeBedrockResponse(text = 'Agent response') {
+function makeBedrockResponse(text) {
   return {
     body: Buffer.from(JSON.stringify({
-      content: [{ text }],
+      content: [{ text: text || 'Agent response' }],
       usage: { input_tokens: 100, output_tokens: 50 },
     })),
   }
+}
+
+// Standard mock setup for a normal chat exchange
+// Call order: GetItem(session), Query(history), GetItem(item), TransactWrite, UpdateItem
+function setupNormalMocks() {
+  sendSpy
+    .mockResolvedValueOnce({ Item: makeSession() })
+    .mockResolvedValueOnce({ Items: [] })
+    .mockResolvedValueOnce({ Item: { itemName: { S: 'Test Item' }, description: { S: '' } } })
+    .mockResolvedValueOnce({})
+    .mockResolvedValueOnce({})
+  bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse())
 }
 
 describe('Property 19: Transcript Write Invariant', () => {
@@ -106,78 +113,84 @@ describe('Property 19: Transcript Write Invariant', () => {
     bedrockSendSpy.mockReset()
     cwSendSpy.mockReset()
     lambdaSendSpy.mockReset()
-    ulidValues.length = 0
-    ulidCallCount = 0
     s3SendSpy.mockRejectedValue(new Error('NoSuchKey'))
     cwSendSpy.mockResolvedValue({})
     lambdaSendSpy.mockResolvedValue({})
   })
 
-  it('for any valid non-special chat message, exactly 2 transcript records are written', async () => {
+  it('for any valid non-special chat message, exactly 2 transcript records are written atomically via TransactWriteItems', async () => {
     await fc.assert(
       fc.asyncProperty(
-        // Generate valid non-special messages
         fc.string({ minLength: 1, maxLength: 200 })
           .filter(s => !['__session_start__', '__session_resume__', '__session_end__'].includes(s))
           .filter(s => s.trim().length > 0),
         async (message) => {
           sendSpy.mockReset()
           bedrockSendSpy.mockReset()
-          ulidValues.length = 0
-          ulidCallCount = 0
-
-          // GetItem for session
-          sendSpy.mockResolvedValueOnce({ Item: makeSession() })
-          // PutItem for reviewer message (comes BEFORE query in handler)
-          sendSpy.mockResolvedValueOnce({})
-          // Query for transcript history
-          sendSpy.mockResolvedValueOnce({ Items: [] })
-          // PutItem for agent message
-          sendSpy.mockResolvedValueOnce({})
-          // UpdateItem for session
-          sendSpy.mockResolvedValueOnce({})
-
-          bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse())
+          setupNormalMocks()
 
           const result = await handler(makeEvent(message))
           expect(result.statusCode).toBe(200)
 
-          // Count PutItem calls (transcript writes)
-          // sendSpy calls: GetItem(0), PutItem-reviewer(1), Query(2), PutItem-agent(3), UpdateItem(4)
-          // Verify exactly 2 PutItem calls (reviewer + agent)
-          expect(sendSpy).toHaveBeenCalledTimes(5)
-          const reviewerPut = sendSpy.mock.calls[1][0]
-          const agentPut = sendSpy.mock.calls[3][0]
-          expect(reviewerPut.input.Item.role.S).toBe('reviewer')
-          expect(agentPut.input.Item.role.S).toBe('agent')
+          // Verify TransactWriteItemsCommand was called with 2 items (reviewer + agent)
+          const transactCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'TransactWriteItemsCommand')
+          expect(transactCall).toBeDefined()
+          const transactItems = transactCall[0].input.TransactItems
+          expect(transactItems).toHaveLength(2)
+          expect(transactItems[0].Put.Item.role.S).toBe('reviewer')
+          expect(transactItems[1].Put.Item.role.S).toBe('agent')
         }
       ),
       { numRuns: 100 }
     )
   })
 
-  it('for __session_start__ message, only 1 transcript record (agent) is written', async () => {
+  it('for __session_start__ message, both reviewer and agent records are written with correct content', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.constant('__session_start__'),
         async (message) => {
           sendSpy.mockReset()
           bedrockSendSpy.mockReset()
-
-          sendSpy.mockResolvedValueOnce({ Item: makeSession() })
-          sendSpy.mockResolvedValueOnce({ Items: [] })
-          sendSpy.mockResolvedValueOnce({}) // PutItem agent
-          sendSpy.mockResolvedValueOnce({}) // UpdateItem session
-
-          bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse())
+          setupNormalMocks()
 
           const result = await handler(makeEvent(message))
           expect(result.statusCode).toBe(200)
 
-          // GetItem(0), Query(1), PutItem-agent(2), UpdateItem(3) = 4 calls total
-          expect(sendSpy).toHaveBeenCalledTimes(4)
-          const agentPut = sendSpy.mock.calls[2][0]
-          expect(agentPut.input.Item.role.S).toBe('agent')
+          // TransactWriteItems is called with 2 items — reviewer content is [__session_start__]
+          const transactCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'TransactWriteItemsCommand')
+          expect(transactCall).toBeDefined()
+          const transactItems = transactCall[0].input.TransactItems
+          expect(transactItems).toHaveLength(2)
+          expect(transactItems[0].Put.Item.role.S).toBe('reviewer')
+          expect(transactItems[0].Put.Item.content.S).toBe('[__session_start__]')
+          expect(transactItems[1].Put.Item.role.S).toBe('agent')
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+
+  it('ULID ordering: reviewer messageId is lexicographically before agent messageId', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.string({ minLength: 1, maxLength: 100 })
+          .filter(s => !['__session_start__', '__session_resume__', '__session_end__'].includes(s))
+          .filter(s => s.trim().length > 0),
+        async (message) => {
+          sendSpy.mockReset()
+          bedrockSendSpy.mockReset()
+          setupNormalMocks()
+
+          await handler(makeEvent(message))
+
+          const transactCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'TransactWriteItemsCommand')
+          const transactItems = transactCall[0].input.TransactItems
+          const reviewerMsgId = transactItems[0].Put.Item.messageId.S
+          const agentMsgId = transactItems[1].Put.Item.messageId.S
+
+          // ULIDs are lexicographically sortable — reviewer comes before agent
+          expect(reviewerMsgId < agentMsgId).toBe(true)
         }
       ),
       { numRuns: 100 }

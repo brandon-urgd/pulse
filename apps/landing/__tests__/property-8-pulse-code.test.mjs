@@ -26,13 +26,13 @@ const tooShort = fc
   .chain(len =>
     len === 0
       ? fc.constant('')
-      : fc.stringMatching(new RegExp(`^[A-Za-z0-9]{${len}}$`))
+      : fc.stringMatching(new RegExp(`^[A-Za-z0-9]{${len}}$`)) // nosemgrep: detect-non-literal-regexp
   );
 
 /** Generates a string that is too long (9–20 chars), alphanumeric. */
 const tooLong = fc
   .integer({ min: 9, max: 20 })
-  .chain(len => fc.stringMatching(new RegExp(`^[A-Za-z0-9]{${len}}$`)));
+  .chain(len => fc.stringMatching(new RegExp(`^[A-Za-z0-9]{${len}}$`))); // nosemgrep: detect-non-literal-regexp
 
 /** Generates an 8-char string that contains at least one special character. */
 const withSpecialChars = fc

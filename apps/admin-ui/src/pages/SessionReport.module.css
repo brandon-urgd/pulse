@@ -1,0 +1,133 @@
+.container {
+  padding: var(--space-8);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  margin-bottom: var(--space-6);
+}
+
+.backLink:hover {
+  color: var(--color-text-primary);
+}
+
+/* Verdict */
+.verdictBlock {
+  margin-bottom: var(--space-8);
+  padding: var(--space-5) var(--space-6);
+  border-left: 3px solid var(--color-accent-pulse);
+  background: var(--color-accent-pulse-subtle);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.verdictLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent-pulse);
+  margin: 0 0 var(--space-2);
+}
+
+.verdictText {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Energy badge row */
+.energyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.energyLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* Signal sections */
+.section {
+  margin-bottom: var(--space-8);
+}
+
+.sectionHeading {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.quoteList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.quoteItem {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.quoteItem::before {
+  content: '\201C';
+  color: var(--color-text-muted);
+  margin-right: 2px;
+}
+
+.quoteItem::after {
+  content: '\201D';
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.emptySection {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Loading / error */
+.loading {
+  padding: var(--space-8);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-10);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}

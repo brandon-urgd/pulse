@@ -10,6 +10,7 @@ import * as fc from 'fast-check'
 
 vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
+vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
@@ -27,10 +28,13 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
       this.input = input
     }
   }
+  class QueryCommand {
+    constructor(input) { this.input = input }
+  }
   class UpdateItemCommand {
     constructor(input) { this.input = input }
   }
-  return { DynamoDBClient, GetItemCommand, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand }
 })
 
 const { handler: getSettings } = await import('../urgd-pulse-getSettings/index.mjs')

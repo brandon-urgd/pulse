@@ -1,0 +1,229 @@
+.wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Desktop table ─────────────────────────────────────────────────────────── */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  vertical-align: top;
+  text-align: left;
+}
+
+.table th {
+  background: var(--color-bg-secondary);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* Summary column (leftmost) */
+.summaryHeader {
+  min-width: 140px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summaryCell {
+  min-width: 140px;
+  vertical-align: middle;
+}
+
+/* Reviewer column header */
+.reviewerHeader {
+  min-width: 160px;
+  text-align: center;
+}
+
+.reviewerHeaderInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reviewerName {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* Theme row */
+.themeCell {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  min-width: 160px;
+}
+
+/* Signal cell */
+.signalCell {
+  text-align: center;
+  vertical-align: top;
+}
+
+.signalCellInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.signalQuote {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  line-height: 1.5;
+  text-align: left;
+  max-width: 200px;
+}
+
+.expandToggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.expandToggle:focus-visible {
+  outline: 2px solid var(--color-accent-pulse);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Aggregate signal bar */
+.signalBar {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  width: 100%;
+  min-width: 80px;
+}
+
+.barConviction {
+  background: var(--color-accent-pulse);
+}
+
+.barTension {
+  background: var(--color-warning);
+}
+
+.barUncertainty {
+  background: var(--color-border);
+}
+
+.signalBarLegend {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.legendDotConviction { background: var(--color-accent-pulse); }
+.legendDotTension { background: var(--color-warning); }
+.legendDotUncertainty { background: var(--color-border); }
+
+/* ── Mobile stacked cards ──────────────────────────────────────────────────── */
+
+.mobileCards {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.themeCard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.themeCardHeader {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.themeCardTitle {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
+}
+
+.themeCardBody {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reviewerSignalRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.reviewerSignalName {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  min-width: 80px;
+  padding-top: 2px;
+}
+
+.reviewerSignalContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+/* Responsive breakpoint */
+@media (max-width: 640px) {
+  .wrapper {
+    overflow-x: visible;
+  }
+
+  .table {
+    display: none;
+  }
+
+  .mobileCards {
+    display: flex;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .expandToggle {
+    transition: none;
+  }
+}

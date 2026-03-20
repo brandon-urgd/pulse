@@ -7,6 +7,8 @@ import SplashEntry from './pages/SplashEntry';
 import Welcome from './pages/Welcome';
 import Items from './pages/Items';
 import ItemDetail from './pages/ItemDetail';
+import SessionReport from './pages/SessionReport';
+import PulseCheck from './pages/PulseCheck';
 import Settings from './pages/Settings';
 
 configureAmplify();
@@ -53,6 +55,8 @@ export default function App() {
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemDetail />} />
             <Route path="items/:itemId" element={<ItemDetail />} />
+            <Route path="items/:itemId/sessions/:sessionId/report" element={<SessionReport />} />
+            <Route path="pulse-check/:itemId" element={<PulseCheck />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 

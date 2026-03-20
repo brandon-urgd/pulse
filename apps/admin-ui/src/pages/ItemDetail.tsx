@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
@@ -703,6 +703,14 @@ export default function ItemDetail() {
                           ? labels.invitation.resending
                           : labels.invitation.resendButton}
                       </button>
+                    )}
+                    {session.status === 'completed' && (
+                      <Link
+                        to={`/admin/items/${itemId}/sessions/${session.sessionId}/report`}
+                        className={styles.resendButton}
+                      >
+                        {labels.invitation.viewReportButton}
+                      </Link>
                     )}
                   </div>
                   {resendMessages[session.sessionId] && (

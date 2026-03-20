@@ -67,7 +67,7 @@ describe('urgd-pulse-getUploadUrl', () => {
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body.data.uploadUrl).toBe(MOCK_UPLOAD_URL)
-      expect(body.data.key).toMatch(new RegExp(`document\\${ext}$`))
+      expect(body.data.key).toMatch(new RegExp(`document\\${ext}$`)) // nosemgrep: detect-non-literal-regexp
     })
 
     it('returns 200 for uppercase extension (case-insensitive)', async () => {

@@ -92,6 +92,19 @@ export default function AdminLayout() {
             {labels.layout.navItems}
           </NavLink>
           <NavLink
+            to="/admin/pulse-check"
+            style={({ isActive }) => ({
+              padding: 'var(--space-2) var(--space-3)',
+              textDecoration: 'none',
+              color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+              fontWeight: isActive ? 600 : 400,
+              borderBottom: isActive ? '2px solid var(--color-accent-pulse)' : '2px solid transparent',
+              paddingBottom: 'calc(var(--space-2) - 2px)',
+            })}
+          >
+            {labels.layout.navPulseCheck}
+          </NavLink>
+          <NavLink
             to="/admin/settings"
             style={({ isActive }) => ({
               padding: 'var(--space-2) var(--space-3)',

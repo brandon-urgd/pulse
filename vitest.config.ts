@@ -43,8 +43,19 @@ export default defineConfig({
         'lambdas/urgd-pulse-deleteSessionTranscript/**/*.mjs',
         'lambdas/urgd-pulse-getSessionFile/**/*.mjs',
         'lambdas/urgd-pulse-getDocumentUrl/**/*.mjs',
+        // S5
+        'lambdas/urgd-pulse-generateReport/**/*.mjs',
+        'lambdas/urgd-pulse-getReport/**/*.mjs',
+        'lambdas/urgd-pulse-runPulseCheck/**/*.mjs',
+        'lambdas/urgd-pulse-getPulseCheck/**/*.mjs',
+        'lambdas/urgd-pulse-savePCDecisions/**/*.mjs',
+        'lambdas/urgd-pulse-usageReport/**/*.mjs',
       ],
-      exclude: ['lambdas/**/*.test.mjs', 'lambdas/**/*.property.test.mjs'],
+      exclude: [
+        'lambdas/**/*.test.mjs',
+        'lambdas/**/*.property.test.mjs',
+        'lambdas/**/shared/utils.mjs',
+      ],
       reporter: ['text', 'json-summary'],
       thresholds: {
         lines: 90,

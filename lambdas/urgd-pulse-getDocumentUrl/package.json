@@ -1,0 +1,10 @@
+{
+  "name": "urgd-pulse-getdocumenturl",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ur/gd Pulse — Get Document URL Lambda",
+  "main": "index.mjs",
+  "dependencies": {
+    "@aws-sdk/s3-request-presigner": "^3.0.0"
+  }
+}

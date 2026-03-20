@@ -63,6 +63,17 @@ check_delete() {
   fi
 }
 
+check_put() {
+  local name="$1" url="$2" expect="$3" data="$4"
+  echo "Testing $name..."
+  if retry_check "$name" "curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X PUT -H 'Content-Type: application/json' -d '$data' '$url' | grep -q '$expect'"; then
+    echo "✅ $name ($expect)"
+  else
+    echo "❌ $name FAILED (expected $expect)"
+    fail=1
+  fi
+}
+
 # S0 gate: /v1/health → 200 { "status": "healthy" }
 echo "Testing Health endpoint..."
 if retry_check "Health" "curl -f -s --max-time 10 '$BASE_URL/v1/health' | jq -e '.status == \"healthy\"'"; then
@@ -89,6 +100,12 @@ check "S4 GET /api/session/{id}/summary reachable"        "$BASE_URL/api/session
 check_delete "S4 DELETE /api/session/{id}/transcript reachable" "$BASE_URL/api/session/smoke-test/transcript" "401"
 check "S4 GET /api/session/{id}/files/{fid} reachable"    "$BASE_URL/api/session/smoke-test/files/abc123"  "401"
 check "S4 GET /api/manage/items/{id}/document-url reachable" "$BASE_URL/api/manage/items/smoke-test/document-url" "401"
+
+# S5 gate: report and pulse check routes exist and reject unauthenticated requests (401)
+check "S5 GET /api/manage/items/{id}/sessions/{sid}/report reachable" "$BASE_URL/api/manage/items/smoke-test/sessions/smoke-test/report" "401"
+check_post "S5 POST /api/manage/items/{id}/pulse-check reachable"     "$BASE_URL/api/manage/items/smoke-test/pulse-check"              "401" "{}"
+check "S5 GET /api/manage/items/{id}/pulse-check reachable"           "$BASE_URL/api/manage/items/smoke-test/pulse-check"              "401"
+check_put "S5 PUT /api/manage/items/{id}/pulse-check/decisions reachable" "$BASE_URL/api/manage/items/smoke-test/pulse-check/decisions" "401" "{}"
 
 # Summary
 echo ""

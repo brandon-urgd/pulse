@@ -221,6 +221,36 @@ Parameters:
     Default: lambda-packages/urgd-pulse-getDocumentUrl/latest.zip
     Description: S3 key for urgd-pulse-getDocumentUrl Lambda ZIP
 
+  GenerateReportCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-generateReport/latest.zip
+    Description: S3 key for urgd-pulse-generateReport Lambda ZIP
+
+  GetReportCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getReport/latest.zip
+    Description: S3 key for urgd-pulse-getReport Lambda ZIP
+
+  RunPulseCheckCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-runPulseCheck/latest.zip
+    Description: S3 key for urgd-pulse-runPulseCheck Lambda ZIP
+
+  GetPulseCheckCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getPulseCheck/latest.zip
+    Description: S3 key for urgd-pulse-getPulseCheck Lambda ZIP
+
+  SavePCDecisionsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-savePCDecisions/latest.zip
+    Description: S3 key for urgd-pulse-savePCDecisions Lambda ZIP
+
+  UsageReportCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-usageReport/latest.zip
+    Description: S3 key for urgd-pulse-usageReport Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -337,6 +367,12 @@ Mappings:
       DeleteSessionTranscript: 3
       GetSessionFile: 3
       GetDocumentUrl: 3
+      GenerateReport: 3
+      GetReport: 3
+      RunPulseCheck: 3
+      GetPulseCheck: 3
+      SavePCDecisions: 3
+      UsageReport: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -374,6 +410,12 @@ Mappings:
       DeleteSessionTranscript: 5
       GetSessionFile: 5
       GetDocumentUrl: 5
+      GenerateReport: 5
+      GetReport: 5
+      RunPulseCheck: 5
+      GetPulseCheck: 5
+      SavePCDecisions: 5
+      UsageReport: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -411,6 +453,12 @@ Mappings:
       DeleteSessionTranscript: 5
       GetSessionFile: 10
       GetDocumentUrl: 10
+      GenerateReport: 25
+      GetReport: 10
+      RunPulseCheck: 25
+      GetPulseCheck: 10
+      SavePCDecisions: 10
+      UsageReport: 5
 
 # ─── Resources ────────────────────────────────────────────────────────────────
 Resources:
@@ -4697,7 +4745,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt PulseGenerateSessionSummaryFunction.Arn
+                Resource:
+                  - !GetAtt PulseGenerateSessionSummaryFunction.Arn
+                  - !GetAtt PulseGenerateReportFunction.Arn
 
   PulseGetSessionStateFunctionRole:
     Type: AWS::IAM::Role
@@ -4999,6 +5049,7 @@ Resources:
           DATA_BUCKET: !Ref PulseDataBucket
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
           GENERATE_SESSION_SUMMARY_FUNCTION_NAME: !Ref PulseGenerateSessionSummaryFunction
+          GENERATE_REPORT_FUNCTION_NAME: !Ref PulseGenerateReportFunction
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -5436,6 +5487,662 @@ Resources:
         - !Ref PulseAlertsTopic
       TreatMissingData: notBreaching
 
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S5: CloudWatch Log Groups
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseGenerateReportLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-generateReport-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetReportLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getReport-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseRunPulseCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-runPulseCheck-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetPulseCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getPulseCheck-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSavePCDecisionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-savePCDecisions-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseUsageReportLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-usageReport-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S5: IAM Execution Roles
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseGenerateReportFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-generateReport-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGenerateReportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulseReportsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  PulseGetReportFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getReport-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetReportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseReportsTable.Arn
+
+  PulseRunPulseCheckFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-runPulseCheck-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseRunPulseCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+                  - !GetAtt PulseReportsTable.Arn
+                  - !Sub '${PulseReportsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulsePulseChecksTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseGetPulseCheckFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getPulseCheck-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseGetPulseCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulsePulseChecksTable.Arn
+
+  PulseSavePCDecisionsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-savePCDecisions-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseSavePCDecisionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulsePulseChecksTable.Arn
+
+  PulseUsageReportFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-usageReport-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseUsageReportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt PulseTenantsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S5: Lambda Functions
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseGenerateReportFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGenerateReportLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-generateReport-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 1024
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateReport]
+      Role: !GetAtt PulseGenerateReportFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GenerateReportCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          REPORTS_TABLE: !Ref PulseReportsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetReportFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetReportLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getReport-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetReport]
+      Role: !GetAtt PulseGetReportFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetReportCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          REPORTS_TABLE: !Ref PulseReportsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetReportFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetReportFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseRunPulseCheckFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseRunPulseCheckLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-runPulseCheck-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 1024
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RunPulseCheck]
+      Role: !GetAtt PulseRunPulseCheckFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref RunPulseCheckCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          REPORTS_TABLE: !Ref PulseReportsTable
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseRunPulseCheckFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseRunPulseCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetPulseCheckFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetPulseCheckLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getPulseCheck-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetPulseCheck]
+      Role: !GetAtt PulseGetPulseCheckFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref GetPulseCheckCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetPulseCheckFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetPulseCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseSavePCDecisionsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSavePCDecisionsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-savePCDecisions-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SavePCDecisions]
+      Role: !GetAtt PulseSavePCDecisionsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref SavePCDecisionsCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSavePCDecisionsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseSavePCDecisionsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseUsageReportFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseUsageReportLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-usageReport-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, UsageReport]
+      Role: !GetAtt PulseUsageReportFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref UsageReportCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseUsageReportFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseUsageReportFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PulseUsageReportRule.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S5: EventBridge Rule — Daily Usage Report
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseUsageReportRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'urgd-pulse-${Environment}-usage-report'
+      Description: Daily usage report — scans tenants and sessions, publishes CloudWatch metrics
+      ScheduleExpression: 'cron(0 6 * * ? *)'
+      State: ENABLED
+      Targets:
+        - Id: PulseUsageReportTarget
+          Arn: !GetAtt PulseUsageReportFunction.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S5: API Gateway Resources
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # GET /api/manage/items/{itemId}/sessions/{sessionId}/report
+  PulseManageItemSessionReportResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemSessionResource
+      PathPart: report
+
+  PulseGetReportMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSessionReportResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetReportFunction.Arn}/invocations'
+
+  # POST /api/manage/items/{itemId}/pulse-check
+  PulseManageItemPulseCheckResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: pulse-check
+
+  PulseRunPulseCheckMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemPulseCheckResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseRunPulseCheckFunction.Arn}/invocations'
+
+  # GET /api/manage/items/{itemId}/pulse-check
+  PulseGetPulseCheckMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemPulseCheckResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetPulseCheckFunction.Arn}/invocations'
+
+  # PUT /api/manage/items/{itemId}/pulse-check/decisions
+  PulseManageItemPulseCheckDecisionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemPulseCheckResource
+      PathPart: decisions
+
+  PulseSavePCDecisionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemPulseCheckDecisionsResource
+      HttpMethod: PUT
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSavePCDecisionsFunction.Arn}/invocations'
 
 # ─── Outputs ──────────────────────────────────────────────────────────────────
 Outputs:

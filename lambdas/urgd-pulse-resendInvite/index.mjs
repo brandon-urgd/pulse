@@ -2,7 +2,8 @@
 // POST /api/manage/items/{itemId}/sessions/{sessionId}/resend
 
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { SESClient, SendEmailCommand, SendRawEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
@@ -10,6 +11,7 @@ import { createResponse, errorResponse, log, requireEnv } from './shared/utils.m
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL', 'ALERTS_TOPIC_ARN'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
@@ -164,20 +166,79 @@ export const handler = async (event) => {
 
     const htmlBody = buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, sessionLink, pulseCode, appUrl, inviterEmail })
 
+    // Try to load QR code from S3
+    let qrCodeBuffer = null
+    if (process.env.DATA_BUCKET) {
+      const qrKey = `pulse/${tenantId}/items/${itemId}/qr/${sessionId}.png`
+      try {
+        const s3Res = await s3.send(new GetObjectCommand({
+          Bucket: process.env.DATA_BUCKET,
+          Key: qrKey,
+        }))
+        const chunks = []
+        for await (const chunk of s3Res.Body) chunks.push(chunk)
+        qrCodeBuffer = Buffer.concat(chunks)
+      } catch {
+        // QR code not available — fall back to plain email
+      }
+    }
+
     // Send invitation email via SES
     try {
-      await ses.send(new SendEmailCommand({
-        Source: FROM_ADDRESS,
-        Destination: { ToAddresses: [reviewerEmail] },
-        ReplyToAddresses: [replyTo],
-        Message: {
-          Subject: { Data: subject, Charset: 'UTF-8' },
-          Body: {
-            Text: { Data: textBody, Charset: 'UTF-8' },
-            Html: { Data: htmlBody, Charset: 'UTF-8' },
+      if (qrCodeBuffer) {
+        // Build MIME multipart email with QR code attachment
+        const boundary = `boundary_${Date.now()}`
+        const qrBase64 = qrCodeBuffer.toString('base64')
+        const rawMessage = [
+          `From: ${FROM_ADDRESS}`,
+          `To: ${reviewerEmail}`,
+          `Reply-To: ${replyTo}`,
+          `Subject: ${subject}`,
+          'MIME-Version: 1.0',
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          '',
+          `--${boundary}`,
+          'Content-Type: multipart/alternative; boundary="alt_boundary"',
+          '',
+          '--alt_boundary',
+          'Content-Type: text/plain; charset=UTF-8',
+          '',
+          textBody,
+          '',
+          '--alt_boundary',
+          'Content-Type: text/html; charset=UTF-8',
+          '',
+          htmlBody,
+          '',
+          '--alt_boundary--',
+          '',
+          `--${boundary}`,
+          'Content-Type: image/png',
+          'Content-Transfer-Encoding: base64',
+          `Content-Disposition: attachment; filename="pulse-qr-${pulseCode}.png"`,
+          '',
+          qrBase64,
+          '',
+          `--${boundary}--`,
+        ].join('\r\n')
+
+        await ses.send(new SendRawEmailCommand({
+          RawMessage: { Data: Buffer.from(rawMessage) },
+        }))
+      } else {
+        await ses.send(new SendEmailCommand({
+          Source: FROM_ADDRESS,
+          Destination: { ToAddresses: [reviewerEmail] },
+          ReplyToAddresses: [replyTo],
+          Message: {
+            Subject: { Data: subject, Charset: 'UTF-8' },
+            Body: {
+              Text: { Data: textBody, Charset: 'UTF-8' },
+              Html: { Data: htmlBody, Charset: 'UTF-8' },
+            },
           },
-        },
-      }))
+        }))
+      }
       log('info', 'ResendInvite: invitation email sent', { requestId, tenantId, itemId, sessionId })
     } catch (sesErr) {
       log('error', 'ResendInvite: SES send failed', { requestId, tenantId, itemId, sessionId, errorName: sesErr.name })
