@@ -50,11 +50,17 @@ export const handler = async (event) => {
       ScanIndexForward: true,
     }))
 
-    const messages = (transcriptResult.Items || []).map(item => ({
+    let messages = (transcriptResult.Items || []).map(item => ({
       role: item.role?.S || 'agent',
       content: item.content?.S || '',
       timestamp: item.timestamp?.S || '',
     }))
+
+    // Defensive: strip unpaired trailing reviewer message (orphan from failed Bedrock call)
+    if (messages.length > 0 && messages[messages.length - 1].role === 'reviewer') {
+      log('warn', 'GetSessionState: stripping orphaned reviewer message', { requestId, sessionId, tenantId })
+      messages = messages.slice(0, -1)
+    }
 
     // 3. Get item record to build files array
     let files = []

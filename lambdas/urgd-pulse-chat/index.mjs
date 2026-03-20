@@ -2,7 +2,7 @@
 // POST /api/session/{sessionId}/chat
 // Handles AI-guided feedback conversation via Bedrock
 
-import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
@@ -111,26 +111,10 @@ export const handler = async (event) => {
     let currentSection = parseInt(session.currentSection?.N || '1', 10)
     const totalSections = parseInt(session.totalSections?.N || '5', 10)
 
-    // 4. Save reviewer message
+    // 4. Prepare reviewer message — written atomically with agent response after Bedrock succeeds
     const reviewerMessageId = ulid()
-    // Save all messages to transcript — including special messages as their bracket form
-    // so conversation history always has alternating user/assistant roles
     const isSpecial = SPECIAL_MESSAGES.includes(message)
     const transcriptContent = isSpecial ? `[${message}]` : message
-
-    // Skip saving __session_end__ as reviewer message (saved before Bedrock call below)
-    if (message !== '__session_end__') {
-      await dynamo.send(new PutItemCommand({
-        TableName: process.env.TRANSCRIPTS_TABLE,
-        Item: {
-          sessionId: { S: sessionId },
-          messageId: { S: reviewerMessageId },
-          role: { S: 'reviewer' },
-          content: { S: transcriptContent },
-          timestamp: { S: new Date().toISOString() },
-        },
-      }))
-    }
 
     // 5. Load full conversation history
     const transcriptResult = await dynamo.send(new QueryCommand({
@@ -241,22 +225,9 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       systemPrompt += '\n\nThe reviewer has chosen to end the session early. Thank them genuinely for the time they gave. Briefly mention what you covered together (one sentence). Keep it warm and short — no more than three sentences total.'
     }
 
-    // Build messages for Bedrock
-    // For __session_end__, save the reviewer message now (before Bedrock) so transcript
-    // has the complete user→assistant pair written before status transitions to completed
+    // Build messages for Bedrock — reviewer message written atomically after Bedrock succeeds
     const bedrockMessages = [...history]
     if (message === '__session_end__') {
-      const endMessageId = ulid()
-      await dynamo.send(new PutItemCommand({
-        TableName: process.env.TRANSCRIPTS_TABLE,
-        Item: {
-          sessionId: { S: sessionId },
-          messageId: { S: endMessageId },
-          role: { S: 'reviewer' },
-          content: { S: '[__session_end__]' },
-          timestamp: { S: new Date().toISOString() },
-        },
-      }))
       bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
     }
 
@@ -314,17 +285,36 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       bedrockTokensOut: tokensOut,
     })
 
-    // 9. Save agent response
+    // 9. Atomically write reviewer + agent messages — nothing written if Bedrock failed
     const agentMessageId = ulid()
-    await dynamo.send(new PutItemCommand({
-      TableName: process.env.TRANSCRIPTS_TABLE,
-      Item: {
-        sessionId: { S: sessionId },
-        messageId: { S: agentMessageId },
-        role: { S: 'agent' },
-        content: { S: agentText },
-        timestamp: { S: new Date().toISOString() },
-      },
+    const now = new Date().toISOString()
+    await dynamo.send(new TransactWriteItemsCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: process.env.TRANSCRIPTS_TABLE,
+            Item: {
+              sessionId: { S: sessionId },
+              messageId: { S: reviewerMessageId },
+              role: { S: 'reviewer' },
+              content: { S: transcriptContent },
+              timestamp: { S: now },
+            },
+          },
+        },
+        {
+          Put: {
+            TableName: process.env.TRANSCRIPTS_TABLE,
+            Item: {
+              sessionId: { S: sessionId },
+              messageId: { S: agentMessageId },
+              role: { S: 'agent' },
+              content: { S: agentText },
+              timestamp: { S: now },
+            },
+          },
+        },
+      ],
     }))
 
     // 10. Update currentSection if agent signals section transition

@@ -2,8 +2,9 @@
 // POST /api/session/validate (public — no auth)
 // Validates a reviewer's session via pulseCode or sessionId + email match
 
-import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
@@ -124,14 +125,40 @@ export const handler = async (event) => {
       }
     }
 
-    // Generate session token: {tenantId}:{sessionId} — matches sessionAuth authorizer format
-    const sessionToken = `${tenantId}:${foundSessionId}`
+    // Public sessions: fork a new child session per visitor so each person gets their own
+    let activeSessionId = foundSessionId
+    if (isPublic) {
+      const childSessionId = randomUUID()
+      const childItem = {
+        tenantId: { S: tenantId },
+        sessionId: { S: childSessionId },
+        parentSessionId: { S: foundSessionId },
+        itemId: { S: itemId || '' },
+        isPublic: { BOOL: true },
+        status: { S: 'not_started' },
+        totalSections: sessionRecord.totalSections ?? { N: '5' },
+        timeLimitMinutes: sessionRecord.timeLimitMinutes ?? { N: '30' },
+        expiresAt: sessionRecord.expiresAt ?? { S: '' },
+        createdAt: { S: new Date().toISOString() },
+        updatedAt: { S: new Date().toISOString() },
+      }
+      if (name) childItem.reviewerName = { S: name.trim() }
+      await dynamo.send(new PutItemCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        Item: childItem,
+      }))
+      activeSessionId = childSessionId
+      log('info', 'ValidateSession: forked public child session', { requestId, parentSessionId: foundSessionId, childSessionId, tenantId })
+    }
 
-    log('info', 'ValidateSession: success', { requestId, sessionId: foundSessionId, tenantId })
+    // Generate session token: {tenantId}:{sessionId} — matches sessionAuth authorizer format
+    const sessionToken = `${tenantId}:${activeSessionId}`
+
+    log('info', 'ValidateSession: success', { requestId, sessionId: activeSessionId, tenantId })
 
     return createResponse(200, {
       sessionToken,
-      sessionId: foundSessionId,
+      sessionId: activeSessionId,
       tenantId,
       item: itemContext,
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
