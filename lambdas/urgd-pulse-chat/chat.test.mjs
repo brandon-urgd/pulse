@@ -21,7 +21,57 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class PutItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand }
+  class TransactWriteItemsCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand }
+  describe('atomic transcript writes (23.1)', () => {
+    it('writes both reviewer and agent messages via TransactWriteItems on success', async () => {
+      const { TransactWriteItemsCommand } = await import('@aws-sdk/client-dynamodb')
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })   // GetItem session
+        .mockResolvedValueOnce({ Items: [] })              // Query transcripts (empty)
+        .mockResolvedValueOnce(makeItemRecord())           // GetItem item
+        .mockResolvedValueOnce({})                         // TransactWriteItems
+        .mockResolvedValueOnce({})                         // UpdateItem session
+
+      s3SendSpy.mockRejectedValue(new Error('no file'))
+      bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Hello reviewer!'))
+      cwSendSpy.mockResolvedValue({})
+      lambdaSendSpy.mockResolvedValue({})
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(200)
+
+      const transactCall = sendSpy.mock.calls.find(
+        ([cmd]) => cmd instanceof TransactWriteItemsCommand
+      )
+      expect(transactCall).toBeDefined()
+      const items = transactCall[0].input.TransactItems
+      expect(items).toHaveLength(2)
+      expect(items[0].Put.Item.role.S).toBe('reviewer')
+      expect(items[1].Put.Item.role.S).toBe('agent')
+    })
+
+    it('writes nothing to DynamoDB when Bedrock fails', async () => {
+      const { TransactWriteItemsCommand, PutItemCommand } = await import('@aws-sdk/client-dynamodb')
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })   // GetItem session
+        .mockResolvedValueOnce({ Items: [] })              // Query transcripts
+        .mockResolvedValueOnce(makeItemRecord())           // GetItem item
+
+      s3SendSpy.mockRejectedValue(new Error('no file'))
+      bedrockSendSpy.mockRejectedValueOnce(new Error('Bedrock unavailable'))
+      cwSendSpy.mockResolvedValue({})
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(500)
+
+      const writeCalls = sendSpy.mock.calls.filter(
+        ([cmd]) => cmd instanceof TransactWriteItemsCommand || cmd instanceof PutItemCommand
+      )
+      expect(writeCalls).toHaveLength(0)
+    })
+  })
+
 })
 
 vi.mock('@aws-sdk/client-s3', () => {

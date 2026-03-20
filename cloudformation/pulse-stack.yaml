@@ -499,6 +499,8 @@ Resources:
           AttributeType: S
         - AttributeName: pulseCode
           AttributeType: S
+        - AttributeName: parentSessionId
+          AttributeType: S
       KeySchema:
         - AttributeName: tenantId
           KeyType: HASH
@@ -522,6 +524,12 @@ Resources:
         - IndexName: sessionId-index
           KeySchema:
             - AttributeName: sessionId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: parentSessionId-index
+          KeySchema:
+            - AttributeName: parentSessionId
               KeyType: HASH
           Projection:
             ProjectionType: ALL

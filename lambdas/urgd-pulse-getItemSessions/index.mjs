@@ -55,18 +55,37 @@ export const handler = async (event) => {
       ExpressionAttributeValues: { ':iid': { S: itemId } },
     }))
 
-    const sessions = (sessionsResult.Items ?? [])
-      .filter((item) => item.status?.S !== 'cancelled')
+    const allItems = sessionsResult.Items ?? []
+
+    // Separate parent public sessions from child sessions (forked per visitor)
+    const childSessionIds = new Set(
+      allItems
+        .filter(i => i.parentSessionId?.S)
+        .map(i => i.parentSessionId.S)
+    )
+    const childCountByParent = allItems.reduce((acc, i) => {
+      if (i.parentSessionId?.S) {
+        acc[i.parentSessionId.S] = (acc[i.parentSessionId.S] || 0) + 1
+      }
+      return acc
+    }, {})
+
+    const sessions = allItems
+      .filter((item) => item.status?.S !== 'cancelled' && !item.parentSessionId?.S)
       .map((item) => {
+        const sid = item.sessionId?.S ?? ''
+        const isPublic = item.isPublic?.BOOL === true
         const session = {
-          sessionId: item.sessionId?.S ?? '',
+          sessionId: sid,
           pulseCode: item.pulseCode?.S ?? '',
           reviewerEmail: item.reviewerEmail?.S ?? '',
           status: item.status?.S ?? 'not_started',
           createdAt: item.createdAt?.S ?? '',
           expiresAt: item.expiresAt?.S ?? '',
-          isPublic: item.isPublic?.BOOL === true,
+          isPublic,
         }
+        // For parent public sessions, surface visitor count from child sessions
+        if (isPublic) session.visitorCount = childCountByParent[sid] || 0
         if (item.sessionName?.S) session.sessionName = item.sessionName.S
         if (item.startedAt?.S) session.startedAt = item.startedAt.S
         if (item.completedAt?.S) session.completedAt = item.completedAt.S

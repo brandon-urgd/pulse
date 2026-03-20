@@ -13,6 +13,97 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class GetItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
   return { DynamoDBClient, GetItemCommand, QueryCommand }
+  describe('public session forking (23.4)', () => {
+    const PUBLIC_SESSION = {
+      tenantId: { S: 'tenant-1' },
+      sessionId: { S: 'parent-session-id' },
+      itemId: { S: 'item-1' },
+      pulseCode: { S: 'PUBLIC01' },
+      isPublic: { BOOL: true },
+      status: { S: 'not_started' },
+      expiresAt: { S: '2099-01-01' },
+      totalSections: { N: '5' },
+      timeLimitMinutes: { N: '30' },
+    }
+
+    it('creates a new child session for each public session visitor', async () => {
+      let putCallCount = 0
+      dynamoSendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [PUBLIC_SESSION] })
+        if (name === 'GetItemCommand') return Promise.resolve({ Item: ITEM_RECORD })
+        if (name === 'PutItemCommand') { putCallCount++; return Promise.resolve({}) }
+        return Promise.resolve({})
+      })
+
+      const res1 = await handler(makeEvent({ pulseCode: 'PUBLIC01' }))
+      const res2 = await handler(makeEvent({ pulseCode: 'PUBLIC01' }))
+
+      expect(res1.statusCode).toBe(200)
+      expect(res2.statusCode).toBe(200)
+
+      const body1 = JSON.parse(res1.body)
+      const body2 = JSON.parse(res2.body)
+
+      // Each visitor gets a different sessionId
+      expect(body1.sessionId).not.toBe(body2.sessionId)
+      // Neither is the original parent session
+      expect(body1.sessionId).not.toBe('parent-session-id')
+      expect(body2.sessionId).not.toBe('parent-session-id')
+    })
+
+    it('child session starts as not_started with parentSessionId set', async () => {
+      let capturedPut = null
+      dynamoSendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [PUBLIC_SESSION] })
+        if (name === 'GetItemCommand') return Promise.resolve({ Item: ITEM_RECORD })
+        if (name === 'PutItemCommand') { capturedPut = cmd.input.Item; return Promise.resolve({}) }
+        return Promise.resolve({})
+      })
+
+      await handler(makeEvent({ pulseCode: 'PUBLIC01' }))
+
+      expect(capturedPut).not.toBeNull()
+      expect(capturedPut.status.S).toBe('not_started')
+      expect(capturedPut.parentSessionId.S).toBe('parent-session-id')
+    })
+
+    it('original public session record is not modified', async () => {
+      const updateCalls = []
+      dynamoSendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [PUBLIC_SESSION] })
+        if (name === 'GetItemCommand') return Promise.resolve({ Item: ITEM_RECORD })
+        if (name === 'PutItemCommand') return Promise.resolve({})
+        if (name === 'UpdateItemCommand') { updateCalls.push(cmd); return Promise.resolve({}) }
+        return Promise.resolve({})
+      })
+
+      await handler(makeEvent({ pulseCode: 'PUBLIC01' }))
+
+      // No UpdateItem calls on the original session
+      const originalUpdates = updateCalls.filter(
+        c => c.input?.Key?.sessionId?.S === 'parent-session-id'
+      )
+      expect(originalUpdates).toHaveLength(0)
+    })
+
+    it('skips email validation for public sessions', async () => {
+      dynamoSendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [PUBLIC_SESSION] })
+        if (name === 'GetItemCommand') return Promise.resolve({ Item: ITEM_RECORD })
+        if (name === 'PutItemCommand') return Promise.resolve({})
+        return Promise.resolve({})
+      })
+
+      // No email provided — should still succeed for public session
+      const res = await handler(makeEvent({ pulseCode: 'PUBLIC01', email: undefined }))
+      expect(res.statusCode).toBe(200)
+    })
+  })
+
 })
 
 const { handler } = await import('./index.mjs')

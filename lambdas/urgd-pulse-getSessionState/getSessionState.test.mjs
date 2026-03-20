@@ -14,6 +14,52 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class GetItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
   return { DynamoDBClient, GetItemCommand, QueryCommand }
+  describe('orphan filter (23.2)', () => {
+    it('strips unpaired trailing reviewer message from transcript', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })
+        .mockResolvedValueOnce({ Items: [
+          makeMessage('01HTEST000000000000000001', 'reviewer', 'Hello'),
+          makeMessage('01HTEST000000000000000002', 'agent', 'Hi there!'),
+          makeMessage('01HTEST000000000000000003', 'reviewer', 'orphan — no agent reply'),
+        ]})
+        .mockResolvedValueOnce({ Item: makeItemRecord() })
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.data.messages).toHaveLength(2)
+      expect(body.data.messages[1].role).toBe('agent')
+    })
+
+    it('returns messages unchanged when transcript is properly paired', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })
+        .mockResolvedValueOnce({ Items: [
+          makeMessage('01HTEST000000000000000001', 'reviewer', 'Hello'),
+          makeMessage('01HTEST000000000000000002', 'agent', 'Hi there!'),
+        ]})
+        .mockResolvedValueOnce({ Item: makeItemRecord() })
+
+      const res = await handler(makeEvent())
+      const body = JSON.parse(res.body)
+      expect(body.data.messages).toHaveLength(2)
+    })
+
+    it('returns empty messages when only an orphan exists', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession() })
+        .mockResolvedValueOnce({ Items: [
+          makeMessage('01HTEST000000000000000001', 'reviewer', 'orphan'),
+        ]})
+        .mockResolvedValueOnce({ Item: makeItemRecord() })
+
+      const res = await handler(makeEvent())
+      const body = JSON.parse(res.body)
+      expect(body.data.messages).toHaveLength(0)
+    })
+  })
+
 })
 
 const { handler } = await import('./index.mjs')
@@ -38,6 +84,23 @@ function makeSession(overrides = {}) {
     timeLimitMinutes: { N: '30' },
     itemId: { S: 'item-1' },
     ...overrides,
+  }
+}
+
+function makeMessage(messageId, role, text) {
+  return {
+    sessionId: { S: 'session-1' },
+    messageId: { S: messageId },
+    role: { S: role },
+    content: { S: text },
+    timestamp: { S: new Date().toISOString() },
+  }
+}
+
+function makeItemRecord() {
+  return {
+    tenantId: { S: 'tenant-1' },
+    itemId: { S: 'item-1' },
   }
 }
 
