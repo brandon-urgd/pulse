@@ -163,6 +163,7 @@ export default function Settings() {
   const [nameSaving, setNameSaving] = useState(false);
 
   // Change password
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -242,11 +243,22 @@ export default function Settings() {
       setPasswordStatus('saved');
       setCurrentPassword('');
       setNewPassword('');
-      setTimeout(() => setPasswordStatus('idle'), 3000);
+      setTimeout(() => {
+        setPasswordStatus('idle');
+        setPasswordOpen(false);
+      }, 2000);
     } catch (err) {
       setPasswordError(mapCognitoPasswordError(err));
       setPasswordStatus('error');
     }
+  }
+
+  function cancelPasswordChange() {
+    setPasswordOpen(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setPasswordStatus('idle');
+    setPasswordError('');
   }
 
   // ── Sign out ───────────────────────────────────────────────────────────────
@@ -356,6 +368,59 @@ export default function Settings() {
                   </span>
                 </span>
               </div>
+              <div className={styles.fieldRow}>
+                <span className={styles.fieldLabel}>{labels.settings.changePasswordHeading}</span>
+                {passwordOpen ? (
+                  <form onSubmit={handleChangePassword} noValidate className={styles.passwordInlineForm}>
+                    <input
+                      type="password"
+                      className={styles.passwordInlineInput}
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      autoComplete="current-password"
+                      placeholder={labels.settings.currentPasswordLabel}
+                      disabled={passwordStatus === 'saving'}
+                      autoFocus
+                      aria-label={labels.settings.currentPasswordLabel}
+                    />
+                    <input
+                      type="password"
+                      className={styles.passwordInlineInput}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                      placeholder={labels.settings.newPasswordLabel}
+                      disabled={passwordStatus === 'saving'}
+                      aria-label={labels.settings.newPasswordLabel}
+                    />
+                    <div className={styles.passwordInlineActions}>
+                      <button
+                        type="submit"
+                        className={styles.inlineSaveButton}
+                        disabled={passwordStatus === 'saving' || !currentPassword || !newPassword}
+                      >
+                        {passwordStatus === 'saving' ? labels.settings.updatingPassword : labels.settings.updatePasswordButton}
+                      </button>
+                      <button type="button" className={styles.inlineCancelButton} onClick={cancelPasswordChange} disabled={passwordStatus === 'saving'}>
+                        {labels.settings.cancelButton}
+                      </button>
+                    </div>
+                    {passwordStatus === 'saved' && (
+                      <p className={styles.passwordSuccess} aria-live="polite">{labels.settings.passwordUpdated}</p>
+                    )}
+                    {passwordStatus === 'error' && passwordError && (
+                      <p className={styles.passwordError} role="alert" aria-live="polite">{passwordError}</p>
+                    )}
+                  </form>
+                ) : (
+                  <div className={styles.inlineEditRow}>
+                    <span className={styles.fieldValue}>••••••••</span>
+                    <button type="button" className={styles.editButton} onClick={() => setPasswordOpen(true)}>
+                      Change
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -418,56 +483,6 @@ export default function Settings() {
             {themeSaveState === 'saving' ? labels.settings.themeSaving : labels.settings.themeSaved}
           </p>
         )}
-      </section>
-
-      {/* ── Password ── */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>{labels.settings.changePasswordHeading}</h2>
-        <form onSubmit={handleChangePassword} noValidate className={styles.passwordForm}>
-          <div className={styles.passwordField}>
-            <label htmlFor="current-password" className={styles.passwordLabel}>
-              {labels.settings.currentPasswordLabel}
-            </label>
-            <input
-              id="current-password"
-              type="password"
-              className={styles.passwordInput}
-              value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              disabled={passwordStatus === 'saving'}
-            />
-          </div>
-          <div className={styles.passwordField}>
-            <label htmlFor="new-password" className={styles.passwordLabel}>
-              {labels.settings.newPasswordLabel}
-            </label>
-            <input
-              id="new-password"
-              type="password"
-              className={styles.passwordInput}
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              disabled={passwordStatus === 'saving'}
-            />
-          </div>
-          <div className={styles.passwordFeedback} aria-live="polite">
-            {passwordStatus === 'saved' && (
-              <p className={styles.passwordSuccess}>{labels.settings.passwordUpdated}</p>
-            )}
-            {passwordStatus === 'error' && passwordError && (
-              <p className={styles.passwordError} role="alert">{passwordError}</p>
-            )}
-          </div>
-          <button
-            type="submit"
-            className={styles.updatePasswordButton}
-            disabled={passwordStatus === 'saving' || !currentPassword || !newPassword}
-          >
-            {passwordStatus === 'saving' ? labels.settings.updatingPassword : labels.settings.updatePasswordButton}
-          </button>
-        </form>
       </section>
 
       {/* ── Sign out ── */}

@@ -288,27 +288,16 @@
   text-decoration: underline;
 }
 
-/* ── Password section ────────────────────────────────────────────────────── */
+/* ── Password inline ─────────────────────────────────────────────────────── */
 
-.passwordForm {
+.passwordInlineForm {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 360px;
+  gap: var(--space-2);
+  flex: 1;
 }
 
-.passwordField {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.passwordLabel {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.passwordInput {
+.passwordInlineInput {
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   background: var(--color-surface);
@@ -317,53 +306,37 @@
   padding: var(--space-2) var(--space-3);
   outline: none;
   transition: border-color 0.15s;
+  width: 100%;
+  max-width: 240px;
+  box-sizing: border-box;
 }
 
-.passwordInput:focus {
+.passwordInlineInput:focus {
   border-color: var(--color-interactive);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-interactive) 20%, transparent);
 }
 
-.passwordInput:disabled {
+.passwordInlineInput:disabled {
   opacity: 0.5;
 }
 
-.passwordFeedback {
-  min-height: 1.4em;
+.passwordInlineActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .passwordSuccess {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--color-success);
   margin: 0;
 }
 
 .passwordError {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--color-error);
   margin: 0;
-}
-
-.updatePasswordButton {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-md);
-  background: var(--color-interactive);
-  color: var(--color-text-inverse);
-  border: none;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.updatePasswordButton:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.updatePasswordButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ── Danger zone ─────────────────────────────────────────────────────────── */
