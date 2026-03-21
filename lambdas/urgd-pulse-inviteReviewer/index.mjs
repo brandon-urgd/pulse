@@ -47,19 +47,19 @@ function buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, session
     <strong>${inviterDisplay}</strong> has invited you to provide feedback on <strong>${itemName}</strong>.
   </p>
   ${closeDateFormatted ? `<p style="font-size:14px;color:#4b5563;margin:0 0 12px;">Feedback will close on <strong>${closeDateFormatted}</strong>.</p>` : ''}
-  ${inviterEmail ? `<p style="font-size:14px;color:#4b5563;margin:0 0 20px;">For questions, contact <a href="mailto:${inviterEmail}" style="color:#4f46e5;">${inviterEmail}</a>.</p>` : ''}
+  ${inviterEmail ? `<p style="font-size:14px;color:#4b5563;margin:0 0 20px;">For questions, contact <a href="mailto:${inviterEmail}" style="color:#7a9e87;">${inviterEmail}</a>.</p>` : ''}
   <table cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
     <tr>
-      <td style="background-color:#4f46e5;border-radius:8px;padding:12px 24px;">
+      <td style="background-color:#7a9e87;border-radius:8px;padding:12px 24px;">
         <a href="${sessionLink}" style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;font-family:'Rubik',sans-serif;">
           Start Your Review
         </a>
       </td>
     </tr>
   </table>
-  <p style="font-size:14px;color:#4b5563;margin:0 0 8px;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#4f46e5;">pulse.urgdstudios.com</a>:</p>
+  <p style="font-size:14px;color:#4b5563;margin:0 0 8px;">Or enter your Pulse Code at <a href="${appUrl}" style="color:#7a9e87;">pulse.urgdstudios.com</a>:</p>
   <p style="font-size:28px;font-weight:700;letter-spacing:4px;font-family:monospace;color:#111827;margin:8px 0 24px;">${pulseCode}</p>
-  <p style="font-size:13px;color:#4b5563;margin:0 0 28px;">Direct link: <a href="${sessionLink}" style="color:#4f46e5;">${sessionLink}</a></p>
+  <p style="font-size:13px;color:#4b5563;margin:0 0 28px;">Direct link: <a href="${sessionLink}" style="color:#7a9e87;">${sessionLink}</a></p>
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px;">
   <p style="font-size:11px;color:#6b7280;margin:4px 0;">
     Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#6b7280;">ur/gd Studios</a>

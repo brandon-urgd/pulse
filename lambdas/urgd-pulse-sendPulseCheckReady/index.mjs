@@ -87,7 +87,7 @@ export const handler = async (event) => {
   <!-- CTA Button -->
   <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
     <tr>
-      <td style="background-color:#4f46e5;border-radius:8px;padding:12px 24px;">
+      <td style="background-color:#7a9e87;border-radius:8px;padding:12px 24px;">
         <a href="${pulseCheckUrl}"
            style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;font-family:'Rubik',sans-serif;">
           View your Pulse Check
@@ -97,7 +97,7 @@ export const handler = async (event) => {
   </table>
 
   <p style="font-size:13px;color:#4b5563;margin:0 0 28px;">
-    Or copy this link: <a href="${pulseCheckUrl}" style="color:#4f46e5;">${pulseCheckUrl}</a>
+    Or copy this link: <a href="${pulseCheckUrl}" style="color:#7a9e87;">${pulseCheckUrl}</a>
   </p>
 
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 16px;">
