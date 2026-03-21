@@ -41,37 +41,85 @@
 }
 
 /* ── Generate prompt ── */
+
+/* Shared card shell */
 .generatePrompt {
-  padding: var(--space-8);
-  border: 1px dashed var(--color-border);
+  padding: var(--space-8) var(--space-8);
   border-radius: var(--radius-lg);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Active item — warm accent, action-forward */
+.generatePromptActive {
+  background: var(--color-accent-pulse-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-accent-pulse) 30%, transparent);
+}
+
+/* Closed item — neutral, informational */
+.generatePromptClosed {
   background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border);
+  text-align: center;
+  align-items: center;
+}
+
+.generatePromptEyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent-pulse);
+  margin: 0;
+}
+
+.generatePromptHeading {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.35;
 }
 
 .generatePromptText {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin: 0 0 var(--space-3);
+  margin: 0;
   line-height: 1.6;
+  max-width: 520px;
 }
 
 .generatePromptWarning {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
-  margin: 0 0 var(--space-5);
+  margin: 0;
   line-height: 1.5;
+  max-width: 520px;
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--color-border) 30%, transparent);
+  border-radius: var(--radius-md);
 }
 
 .generateButton {
+  align-self: flex-start;
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-md);
   background: var(--color-interactive);
   color: var(--color-text-inverse);
   border: none;
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.generatePromptClosed .generateButton {
+  align-self: center;
+}
+
+.generateButton:hover:not(:disabled) {
+  opacity: 0.88;
 }
 
 .generateButton:disabled {

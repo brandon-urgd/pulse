@@ -6,9 +6,15 @@
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   margin-bottom: var(--space-6);
+}
+
+.greeting {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-1);
 }
 
 .title {
@@ -18,14 +24,15 @@
 }
 
 .newItemButton {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-md);
   cursor: pointer;
   background: var(--color-interactive);
   color: var(--color-text-inverse);
   border: none;
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .newItemButton:hover {
@@ -33,9 +40,39 @@
 }
 
 .emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: var(--space-12) 0;
+  padding: var(--space-16) var(--space-8);
+  gap: var(--space-3);
+}
+
+.emptyStateHeading {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.emptyStateBody {
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+.emptyStateCta {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
 .error {

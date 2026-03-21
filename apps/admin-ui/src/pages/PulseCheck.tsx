@@ -290,10 +290,11 @@ export default function PulseCheck() {
           <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
           {itemName && <p className={styles.subheading}>{itemName}</p>}
 
-          <div className={styles.generatePrompt}>
+          <div className={`${styles.generatePrompt} ${itemIsActive ? styles.generatePromptActive : styles.generatePromptClosed}`}>
             {itemIsActive ? (
               <>
-                <p className={styles.generatePromptText}>{labels.pulseCheck.closeAndRunPromptText}</p>
+                <p className={styles.generatePromptEyebrow}>Ready to wrap up?</p>
+                <p className={styles.generatePromptHeading}>{labels.pulseCheck.closeAndRunPromptText}</p>
                 <p className={styles.generatePromptWarning}>{labels.pulseCheck.closeAndRunWarning}</p>
                 <button
                   type="button"

@@ -259,7 +259,10 @@ export default function Items() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>{labels.items.title}</h1>
+        <div>
+          <p className={styles.greeting}>What are we reviewing today?</p>
+          <h1 className={styles.title}>{labels.items.title}</h1>
+        </div>
         <button type="button" className={styles.newItemButton} onClick={() => setModalTarget('new')}>
           {labels.items.newItemButton}
         </button>
@@ -286,7 +289,13 @@ export default function Items() {
       )}
 
       {items.length === 0 ? (
-        <div className={styles.emptyState}><p>{labels.items.emptyState}</p></div>
+        <div className={styles.emptyState}>
+          <p className={styles.emptyStateHeading}>Nothing here yet.</p>
+          <p className={styles.emptyStateBody}>Create your first item to start collecting feedback.</p>
+          <button type="button" className={styles.emptyStateCta} onClick={() => setModalTarget('new')}>
+            {labels.items.newItemButton}
+          </button>
+        </div>
       ) : (
         <ul className={styles.itemList}>
           {items.map((item) => (

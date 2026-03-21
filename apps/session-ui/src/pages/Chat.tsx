@@ -632,9 +632,26 @@ export default function Chat() {
                 <p style={styles.completionBody}>
                   Thank you for your time. You can view a summary of your session below.
                 </p>
-                <a href={`/s/${sessionId}/summary`} style={styles.completionLink}>
-                  View session summary →
-                </a>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <a href={`/s/${sessionId}/summary`} style={styles.completionLink}>
+                    View session summary →
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => window.close()}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid #3a3a3a',
+                      color: '#888',
+                      fontSize: '0.875rem',
+                      borderRadius: '8px',
+                      padding: '0.25rem 0.75rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             )
           }
@@ -678,14 +695,14 @@ export default function Chat() {
           const paragraphs = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
 
           // Group short consecutive paragraphs into a single bubble to avoid over-fragmentation.
-          // A paragraph under 80 chars merges with the next one (up to 2 merges) unless the
-          // next paragraph starts a new thought (question mark = standalone bubble).
+          // Paragraphs under 160 chars merge unless the current buffer ends with a question
+          // (questions are natural pause points and should stand alone).
           const grouped: string[] = []
           let buffer = ''
           for (const para of paragraphs) {
             if (!buffer) {
               buffer = para
-            } else if (buffer.length < 120 && para.length < 120 && !buffer.endsWith('?')) {
+            } else if (buffer.length < 160 && para.length < 160 && !buffer.endsWith('?')) {
               buffer += '\n\n' + para
             } else {
               grouped.push(buffer)
