@@ -1,82 +1,21 @@
 // ur/gd pulse — Run Pulse Check Lambda
 // POST /api/manage/items/{itemId}/pulse-check
 //
-// Validates all sessions are terminal, loads all reports, consolidates via Bedrock,
-// stores result in pulseChecks table, returns 200 with full pulse check data.
+// Gate + dispatcher: validates sessions, writes status:'generating' to DynamoDB,
+// fires processPulseCheck async (InvocationType: Event), returns 202 immediately.
+// The frontend polls GET /pulse-check until status flips to 'complete' or 'failed'.
 
 import { DynamoDBClient, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
-import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 requireEnv([
-  'REPORTS_TABLE', 'PULSE_CHECKS_TABLE', 'SESSIONS_TABLE',
-  'BEDROCK_MODEL_ID', 'CORS_ALLOWED_ORIGINS',
+  'SESSIONS_TABLE', 'PULSE_CHECKS_TABLE',
+  'PROCESS_FUNCTION_NAME', 'CORS_ALLOWED_ORIGINS',
 ])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
-const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
-const cw = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
-const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-const TERMINAL_STATUSES = new Set(['completed', 'expired', 'cancelled', 'discarded'])
-
-function buildConsolidationPrompt(reports) {
-  const reportSections = reports.map((r, idx) => {
-    const isSelf = r.isSelfReview?.BOOL === true
-    const label = isSelf ? `Self-Review (Reviewer ${idx + 1})` : `Reviewer ${idx + 1}`
-    const verdict = r.verdict?.S || 'Unknown'
-    const conviction = (r.conviction?.L || []).map(x => x.S).join('; ')
-    const tension = (r.tension?.L || []).map(x => x.S).join('; ')
-    const uncertainty = (r.uncertainty?.L || []).map(x => x.S).join('; ')
-    const energy = r.energy?.S || 'unknown'
-    const shape = r.conversationShape?.S || 'unknown'
-    return `--- ${label} ---\nVerdict: ${verdict}\nEnergy: ${energy}\nConversation shape: ${shape}\nConviction: ${conviction || 'none'}\nTension: ${tension || 'none'}\nUncertainty: ${uncertainty || 'none'}`
-  }).join('\n\n')
-
-  return `You are synthesizing feedback from ${reports.length} reviewer(s) into a consolidated Pulse Check.
-
-${reportSections}
-
-Return a JSON object with:
-- verdict: one-line synthesized verdict ("Worth developing further" | "Not there yet" | "Unclear / needs clarity")
-- themes: array of { themeId, label, reviewerSignals } objects
-- sharedConviction: array of strings (themes where multiple reviewers showed conviction)
-- repeatedTension: array of strings (themes where tension appeared across reviewers)
-- openQuestions: array of strings (unresolved questions across sessions)
-- reviewerVerdicts: array of { sessionId, verdict, energy, isSelfReview } per reviewer
-
-Preserve reviewer voice. Compress aggressively. Separate self-review signals from external signals.`
-}
-
-async function publishMetrics(latencyMs, tokensIn, tokensOut) {
-  try {
-    await cw.send(new PutMetricDataCommand({
-      Namespace: 'Pulse/Bedrock',
-      MetricData: [
-        { MetricName: 'BedrockLatency', Value: latencyMs, Unit: 'Milliseconds' },
-        { MetricName: 'BedrockTokensIn', Value: tokensIn, Unit: 'Count' },
-        { MetricName: 'BedrockTokensOut', Value: tokensOut, Unit: 'Count' },
-      ],
-    }))
-  } catch { /* non-fatal */ }
-}
-
-async function publishAlert(message, tenantId, itemId) {
-  if (!process.env.ALERTS_TOPIC_ARN) return
-  try {
-    await sns.send(new PublishCommand({
-      TopicArn: process.env.ALERTS_TOPIC_ARN,
-      Message: message,
-      Subject: 'Pulse Check Alert',
-      MessageAttributes: {
-        tenantId: { DataType: 'String', StringValue: tenantId },
-        itemId: { DataType: 'String', StringValue: itemId },
-      },
-    }))
-  } catch { /* non-fatal */ }
-}
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -101,118 +40,43 @@ export const handler = async (event) => {
     const sessions = sessionsResult.Items || []
     if (sessions.length === 0) return errorResponse(404, 'No sessions found for this item', {}, origin)
 
-    // 2. Block only if there are not_started sessions — those haven't begun and would be
-    //    excluded from the report entirely. in_progress sessions are underway and will
-    //    complete naturally; the re-run banner handles including them after they finish.
+    // 2. Block only on not_started sessions — they haven't begun and would be excluded
+    //    from reports entirely. in_progress sessions are underway and will complete
+    //    naturally; the re-run banner handles including them after they finish.
     const notStartedSessions = sessions.filter(s => s.status?.S === 'not_started')
     if (notStartedSessions.length > 0) {
       log('warn', 'RunPulseCheck: not_started sessions remain', { requestId, tenantId, itemId, notStartedCount: notStartedSessions.length })
       return errorResponse(409, 'Not all sessions are closed. Wait for remaining sessions to complete or expire.', {}, origin)
     }
 
-    // Count in_progress sessions so the pulse check record can surface them as incomplete
     const inProgressCount = sessions.filter(s => s.status?.S === 'in_progress').length
+    const startedAt = new Date().toISOString()
 
-    // 3. Load all reports for this item
-    const reportsResult = await dynamo.send(new QueryCommand({
-      TableName: process.env.REPORTS_TABLE,
-      IndexName: 'item-index',
-      KeyConditionExpression: 'itemId = :itemId',
-      ExpressionAttributeValues: { ':itemId': { S: itemId } },
-    }))
-
-    const reports = reportsResult.Items || []
-
-    // 4. Consolidate via Bedrock
-    const prompt = buildConsolidationPrompt(reports)
-    const bedrockStart = Date.now()
-
-    let bedrockResult
-    try {
-      bedrockResult = await bedrock.send(new InvokeModelCommand({
-        modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 2048,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      }))
-    } catch (bedrockErr) {
-      log('error', 'RunPulseCheck: Bedrock error', { requestId, tenantId, itemId, errorName: bedrockErr.name })
-      await publishAlert(`Bedrock error in runPulseCheck: ${bedrockErr.message}`, tenantId, itemId)
-      return errorResponse(503, 'Pulse check generation temporarily unavailable', {}, origin)
-    }
-
-    const bedrockLatency = Date.now() - bedrockStart
-    const bedrockBody = JSON.parse(Buffer.from(bedrockResult.body).toString())
-    const usage = bedrockBody.usage || {}
-    await publishMetrics(bedrockLatency, usage.input_tokens || 0, usage.output_tokens || 0)
-
-    // 5. Parse Bedrock response
-    let parsed
-    try {
-      parsed = JSON.parse(bedrockBody.content[0].text)
-    } catch {
-      parsed = {}
-    }
-
-    const VALID_VERDICTS = ['Worth developing further', 'Not there yet', 'Unclear / needs clarity']
-    const verdict = VALID_VERDICTS.includes(parsed.verdict) ? parsed.verdict : 'Unclear / needs clarity'
-    const themes = Array.isArray(parsed.themes) ? parsed.themes : []
-    const sharedConviction = Array.isArray(parsed.sharedConviction) ? parsed.sharedConviction : []
-    const repeatedTension = Array.isArray(parsed.repeatedTension) ? parsed.repeatedTension : []
-    const openQuestions = Array.isArray(parsed.openQuestions) ? parsed.openQuestions : []
-    const reviewerVerdicts = Array.isArray(parsed.reviewerVerdicts) ? parsed.reviewerVerdicts : []
-    const generatedAt = new Date().toISOString()
-
-    // 6. Store pulse check
+    // 3. Write 'generating' sentinel so the frontend polling loop has something to watch
     await dynamo.send(new PutItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Item: {
         tenantId: { S: tenantId },
         itemId: { S: itemId },
-        status: { S: 'complete' },
-        verdict: { S: verdict },
-        themes: { L: themes.map(t => ({ M: {
-          themeId: { S: t.themeId || '' },
-          label: { S: t.label || '' },
-          reviewerSignals: { L: (t.reviewerSignals || []).map(s => ({ S: JSON.stringify(s) })) },
-        }})) },
-        sharedConviction: { L: sharedConviction.map(s => ({ S: s })) },
-        repeatedTension: { L: repeatedTension.map(s => ({ S: s })) },
-        openQuestions: { L: openQuestions.map(s => ({ S: s })) },
-        reviewerVerdicts: { L: reviewerVerdicts.map(rv => ({ M: {
-          sessionId: { S: rv.sessionId || '' },
-          verdict: { S: rv.verdict || '' },
-          energy: { S: rv.energy || '' },
-          isSelfReview: { BOOL: rv.isSelfReview === true },
-        }})) },
+        status: { S: 'generating' },
+        generatedAt: { S: startedAt },
         sessionCount: { N: String(sessions.length) },
         incompleteCount: { N: String(inProgressCount) },
-        generatedAt: { S: generatedAt },
       },
     }))
 
-    log('info', 'RunPulseCheck: pulse check complete', { requestId, tenantId, itemId, sessionCount: sessions.length })
+    // 4. Fire processPulseCheck async — InvocationType: Event means fire-and-forget
+    await lambda.send(new InvokeCommand({
+      FunctionName: process.env.PROCESS_FUNCTION_NAME,
+      InvocationType: 'Event',
+      Payload: JSON.stringify({ tenantId, itemId, startedAt }),
+    }))
 
-    return createResponse(200, {
-      data: {
-        verdict,
-        themes,
-        sharedConviction,
-        repeatedTension,
-        openQuestions,
-        reviewerVerdicts,
-        sessionCount: sessions.length,
-        incompleteCount: inProgressCount,
-        generatedAt,
-        status: 'complete',
-      },
-    }, {}, origin)
+    log('info', 'RunPulseCheck: dispatched to processPulseCheck', { requestId, tenantId, itemId })
+
+    return createResponse(202, { status: 'generating' }, {}, origin)
   } catch (err) {
     log('error', 'RunPulseCheck: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
-    return errorResponse(500, 'Failed to run pulse check', {}, origin)
+    return errorResponse(500, 'Failed to start pulse check', {}, origin)
   }
 }
