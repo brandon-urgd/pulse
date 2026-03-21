@@ -182,6 +182,7 @@ Respond in valid JSON:
       "revisionId": "unique-slug",
       "proposal": "A specific, concrete change the author could make. Derived from tension or uncertainty. Maximum 2 sentences.",
       "rationale": "Why this revision is warranted — grounded in reviewer signals. One sentence.",
+      "revisionType": "structural | line-edit | conceptual | feature",
       "sourceThemeIds": ["themeId-1"]
     }
   ]
@@ -189,7 +190,8 @@ Respond in valid JSON:
 
 For verdict: weight external reviewers primarily; note self-review separately.
 For sharedConviction/repeatedTension: only include if 2+ reviewers showed the same signal.
-For proposedRevisions: 2–5 actionable changes from tension/uncertainty only. Return empty array if none warranted.`
+For proposedRevisions: include as many as the signals warrant — no minimum, no maximum. Let signal density drive the count. A technical document may produce many small line-edits; a philosophical one may produce a few conceptual shifts. Return empty array only if no actionable changes are warranted.
+For revisionType: use "structural" for changes to organization/flow, "line-edit" for specific wording/phrasing changes, "conceptual" for changes to ideas/framing/argument, "feature" for additions or removals of discrete capabilities or sections.`
 
     // 6. Invoke Bedrock
     const bedrockStart = Date.now()
@@ -297,6 +299,7 @@ For proposedRevisions: 2–5 actionable changes from tension/uncertainty only. R
         revisionId: { S: r.revisionId || '' },
         proposal: { S: r.proposal || '' },
         rationale: { S: r.rationale || '' },
+        revisionType: { S: r.revisionType || 'structural' },
         sourceThemeIds: { L: (r.sourceThemeIds || []).map(id => ({ S: id })) },
       },
     }))

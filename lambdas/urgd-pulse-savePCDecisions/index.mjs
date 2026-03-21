@@ -9,7 +9,7 @@ requireEnv(['PULSE_CHECKS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const VALID_ACTIONS = ['Accept', 'Revise', 'Dismiss']
+const VALID_ACTIONS = ['Accept', 'Adjust', 'Revise', 'Dismiss']
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin

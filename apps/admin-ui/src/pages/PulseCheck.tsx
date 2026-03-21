@@ -42,6 +42,7 @@ interface ProposedRevision {
   revisionId: string;
   proposal: string;
   rationale: string;
+  revisionType: 'structural' | 'line-edit' | 'conceptual' | 'feature';
   sourceThemeIds: string[];
 }
 
@@ -59,7 +60,7 @@ interface PulseCheck {
   sessionCount: number;
   incompleteCount?: number;
   generatedAt: string;
-  status: 'generating' | 'complete';
+  status: 'generating' | 'complete' | 'failed';
 }
 
 interface PulseCheckResponse {
@@ -164,8 +165,9 @@ export default function PulseCheck() {
       const synced: Record<string, FeedbackAction> = {};
       for (const [revisionId, d] of Object.entries(pc.decisions)) {
         const action = d.action.toLowerCase();
-        // map legacy 'override' to 'dismiss' for backwards compat
-        synced[revisionId] = (action === 'override' ? 'dismiss' : action) as FeedbackAction;
+        // map legacy 'override'/'revise' to current action names
+        const mapped = action === 'override' ? 'dismiss' : action === 'revise' ? 'adjust' : action;
+        synced[revisionId] = mapped as FeedbackAction;
       }
       setDecisions(synced);
     }
@@ -467,6 +469,9 @@ export default function PulseCheck() {
           <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
           <p className={styles.verdictText}>{synthesizedVerdict}</p>
           {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
+          <p className={styles.verdictMeta}>
+            {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
+          </p>
         </div>
 
         {/* Item description context */}
@@ -480,7 +485,9 @@ export default function PulseCheck() {
         {themeRows.length > 0 && reviewerCols.length > 0 && (
           <section className={styles.matrixSection} aria-labelledby="matrix-heading">
             <h2 id="matrix-heading" className={styles.matrixHeading}>{labels.pulseCheck.matrixHeading}</h2>
-            <SignalMatrix themes={themeRows} reviewers={reviewerCols} ariaLabel={labels.pulseCheck.matrixAriaLabel} />
+            <div className={styles.matrixScroll}>
+              <SignalMatrix themes={themeRows} reviewers={reviewerCols} ariaLabel={labels.pulseCheck.matrixAriaLabel} />
+            </div>
           </section>
         )}
 
@@ -530,46 +537,60 @@ export default function PulseCheck() {
           </section>
         </section>
 
-        {proposedRevisions.length > 0 && (
-          <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
-            <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
-            <p className={styles.decisionsHint}>{labels.pulseCheck.decisionsHint}</p>
-            <ul className={styles.themeDecisionList}>
-              {proposedRevisions.map((revision) => (
-                <li key={revision.revisionId} className={styles.themeDecisionRow}>
-                  <div className={styles.themeDecisionHeader}>
-                    <div style={{ flex: 1 }}>
-                      <p className={styles.themeDecisionText}>{revision.proposal}</p>
-                      <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
-                    </div>
-                    <FeedbackActionPills
-                      value={decisions[revision.revisionId] ?? null}
-                      onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
-                      ariaLabel={`Decision for: ${revision.proposal}`}
-                    />
+        {/* Proposed Revisions — grouped by type */}
+        <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
+          <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
+          <p className={styles.decisionsHint}>{labels.pulseCheck.decisionsHint}</p>
+          {proposedRevisions.length === 0 ? (
+            <p className={styles.emptySection}>{labels.pulseCheck.noProposedRevisions}</p>
+          ) : (
+            <>
+              {(['structural', 'conceptual', 'feature', 'line-edit'] as const).map((type) => {
+                const group = proposedRevisions.filter(r => r.revisionType === type);
+                if (group.length === 0) return null;
+                return (
+                  <div key={type} className={styles.revisionGroup}>
+                    <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
+                    <ul className={styles.themeDecisionList}>
+                      {group.map((revision) => (
+                        <li key={revision.revisionId} className={styles.themeDecisionRow}>
+                          <div className={styles.themeDecisionHeader}>
+                            <div style={{ flex: 1 }}>
+                              <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                              <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
+                            </div>
+                            <FeedbackActionPills
+                              value={decisions[revision.revisionId] ?? null}
+                              onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                              ariaLabel={`Decision for: ${revision.proposal}`}
+                            />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </li>
-              ))}
-            </ul>
+                );
+              })}
 
-            <div className={styles.saveRow}>
-              <button
-                type="button"
-                className={styles.saveButton}
-                onClick={handleSaveDecisions}
-                disabled={saveStatus === 'saving'}
-              >
-                {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
-              </button>
-              {saveStatus === 'saved' && (
-                <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
-              )}
-              {saveStatus === 'error' && (
-                <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
-              )}
-            </div>
-          </section>
-        )}
+              <div className={styles.saveRow}>
+                <button
+                  type="button"
+                  className={styles.saveButton}
+                  onClick={handleSaveDecisions}
+                  disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0}
+                >
+                  {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
+                </button>
+                {saveStatus === 'saved' && (
+                  <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
+                )}
+              </div>
+            </>
+          )}
+        </section>
 
         <p className={styles.meta}>
           {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}

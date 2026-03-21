@@ -1,6 +1,6 @@
 import styles from './FeedbackActionPills.module.css';
 
-export type FeedbackAction = 'accept' | 'revise' | 'dismiss' | null;
+export type FeedbackAction = 'accept' | 'adjust' | 'dismiss' | null;
 
 interface FeedbackActionPillsProps {
   /** Currently selected action, or null for none */
@@ -13,7 +13,7 @@ interface FeedbackActionPillsProps {
 
 const PILLS: { action: Exclude<FeedbackAction, null>; label: string }[] = [
   { action: 'accept', label: 'Accept' },
-  { action: 'revise', label: 'Revise' },
+  { action: 'adjust', label: 'Adjust' },
   { action: 'dismiss', label: 'Dismiss' },
 ];
 

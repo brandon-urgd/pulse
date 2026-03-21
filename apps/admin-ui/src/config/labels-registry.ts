@@ -292,6 +292,13 @@ export const labels = {
     synthesisHeading: 'Synthesis',
     decisionsHeading: 'Proposed Revisions',
     decisionsHint: 'Mark each proposal — decisions are saved and used when you generate a revision.',
+    noProposedRevisions: 'No revisions proposed — reviewers were largely aligned.',
+    revisionTypeLabels: {
+      structural: 'Structural',
+      'line-edit': 'Line Edits',
+      conceptual: 'Conceptual',
+      feature: 'Features',
+    },
     saveDecisionsButton: 'Save Decisions',
     savingDecisions: 'Saving…',
     decisionsSaved: 'Decisions saved.',

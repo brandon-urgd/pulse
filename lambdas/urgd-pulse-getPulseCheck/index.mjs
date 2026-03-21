@@ -60,6 +60,7 @@ function deserializeProposedRevisions(revisionsL) {
       revisionId: m.revisionId?.S || '',
       proposal: m.proposal?.S || '',
       rationale: m.rationale?.S || '',
+      revisionType: m.revisionType?.S || 'structural',
       sourceThemeIds: (m.sourceThemeIds?.L || []).map(id => id.S || ''),
     }
   })
