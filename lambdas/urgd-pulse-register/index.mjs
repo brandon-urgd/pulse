@@ -59,6 +59,7 @@ export const handler = async (event) => {
       Username: email,
       UserAttributes: [
         { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
         { Name: 'name', Value: name },
       ],
       // No TemporaryPassword — Cognito generates a secure one
