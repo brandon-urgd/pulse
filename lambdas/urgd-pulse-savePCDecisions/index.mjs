@@ -89,10 +89,20 @@ export const handler = async (event) => {
     expressionNames['#decisions'] = 'decisions'
     expressionValues[':emptyMap'] = { M: {} }
 
-    decisionEntries.forEach(([themeId, decision], idx) => {
+    // Step 1: ensure the decisions map exists (no-op if already present)
+    await dynamo.send(new UpdateItemCommand({
+      TableName: process.env.PULSE_CHECKS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      UpdateExpression: 'SET #decisions = if_not_exists(#decisions, :emptyMap)',
+      ExpressionAttributeNames: { '#decisions': 'decisions' },
+      ExpressionAttributeValues: { ':emptyMap': { M: {} } },
+    }))
+
+    // Step 2: write each decision into the map as nested paths
+    decisionEntries.forEach(([revisionId, decision], idx) => {
       const nameKey = `#d${idx}`
       const valueKey = `:d${idx}`
-      expressionNames[nameKey] = themeId
+      expressionNames[nameKey] = revisionId
       expressionValues[valueKey] = {
         M: {
           action: { S: decision.action },
@@ -103,10 +113,15 @@ export const handler = async (event) => {
       updateParts.push(`#decisions.${nameKey} = ${valueKey}`)
     })
 
+    // Remove the init entries — not needed for step 2
+    delete expressionNames['#decisions']
+    delete expressionValues[':emptyMap']
+    expressionNames['#decisions'] = 'decisions'
+
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: `SET #decisions = if_not_exists(#decisions, :emptyMap), ${updateParts.join(', ')}`,
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionNames,
       ExpressionAttributeValues: expressionValues,
     }))
@@ -117,7 +132,7 @@ export const handler = async (event) => {
 
     return createResponse(200, { data: { decisionsCount: decisionEntries.length } }, {}, origin)
   } catch (err) {
-    log('error', 'SavePCDecisions: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
+    log('error', 'SavePCDecisions: unexpected error', { requestId, tenantId, itemId, errorName: err.name, errorMessage: err.message })
     return errorResponse(500, 'Failed to save decisions', {}, origin)
   }
 }
