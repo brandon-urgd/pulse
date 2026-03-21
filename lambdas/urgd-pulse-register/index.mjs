@@ -75,6 +75,7 @@ export const handler = async (event) => {
         ConditionExpression: 'attribute_not_exists(tenantId)',
         Item: {
           tenantId: { S: tenantId },
+          email: { S: email },
           tier: { S: 'free' },
           onboardingComplete: { BOOL: false },
           createdAt: { S: now },
