@@ -6179,6 +6179,7 @@ Resources:
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
           PROCESS_FUNCTION_NAME: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
