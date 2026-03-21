@@ -261,6 +261,21 @@ Parameters:
     Default: lambda-packages/urgd-pulse-usageReport/latest.zip
     Description: S3 key for urgd-pulse-usageReport Lambda ZIP
 
+  GenerateRevisionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-generateRevision/latest.zip
+    Description: S3 key for urgd-pulse-generateRevision Lambda ZIP
+
+  GetRevisionsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-getRevisions/latest.zip
+    Description: S3 key for urgd-pulse-getRevisions Lambda ZIP
+
+  SendPulseCheckReadyCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
+    Description: S3 key for urgd-pulse-sendPulseCheckReady Lambda ZIP
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -6664,7 +6679,7 @@ Resources:
       Role: !GetAtt PulseGenerateRevisionFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-generateRevision/latest.zip'
+        S3Key: !Ref GenerateRevisionCodeKey
       Timeout: 120
       MemorySize: 1024
       ReservedConcurrentExecutions: 25
@@ -6710,7 +6725,7 @@ Resources:
       Role: !GetAtt PulseGetRevisionsFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-getRevisions/latest.zip'
+        S3Key: !Ref GetRevisionsCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: 10
@@ -6752,7 +6767,7 @@ Resources:
       Role: !GetAtt PulseSendPulseCheckReadyFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip'
+        S3Key: !Ref SendPulseCheckReadyCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: 5
