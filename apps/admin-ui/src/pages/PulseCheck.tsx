@@ -48,6 +48,7 @@ interface ProposedRevision {
 interface PulseCheck {
   itemId: string;
   verdict: string;
+  narrative: string;
   themes: PulseCheckTheme[];
   sharedConviction: string[];
   repeatedTension: string[];
@@ -66,7 +67,7 @@ interface PulseCheckResponse {
 }
 
 interface ItemResponse {
-  data: { itemId: string; itemName: string; sessionCount: number; status: string };
+  data: { itemId: string; itemName: string; sessionCount: number; status: string; description: string };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export default function PulseCheck() {
   );
   const itemName = itemResp?.data?.itemName ?? '';
   const itemStatus = itemResp?.data?.status ?? '';
+  const itemDescription = itemResp?.data?.description ?? '';
 
   const { data: pcResp, isLoading, isError, refetch } = useAuthedQuery<PulseCheckResponse>(
     ['pulse-check', itemId],
@@ -126,6 +128,23 @@ export default function PulseCheck() {
     { enabled: Boolean(itemId), retry: false }
   );
   const pc = pcResp?.data;
+
+  // Poll every 3s while status is 'generating'
+  useEffect(() => {
+    if (pc?.status !== 'generating') return;
+    const interval = setInterval(() => {
+      refetch().then((result) => {
+        if (result.data?.data?.status === 'complete') {
+          setOverlayDone(true);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (result.data?.data?.status === 'failed') {
+          setOverlayVisible(false);
+          setOverlayError(labels.pulseCheck.generateError);
+        }
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [pc?.status, refetch]);
 
   interface Session { sessionId: string; status: string; completedAt?: string }
   const { data: sessionsResp } = useAuthedQuery<{ data: Session[] }>(
@@ -169,7 +188,7 @@ export default function PulseCheck() {
     'POST',
     {
       onSuccess: () => {
-        setOverlayDone(true);
+        // POST returned 202 — polling loop will detect 'complete' and set overlayDone
         queryClient.invalidateQueries({ queryKey: ['pulse-check', itemId] });
         refetch();
         setGenerateError('');
@@ -330,7 +349,7 @@ export default function PulseCheck() {
       <button
         type="button"
         className={newlyCompletedCount > 0 ? styles.rerunBannerButton : styles.rerunButton}
-        onClick={() => { setRerunError(''); showOverlay(); generateMutation.mutate(undefined); }}
+        onClick={() => { setRerunError(''); showOverlay(); generateMutation.mutate(undefined); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         disabled={isRerunPending}
       >
         {isRerunPending ? labels.pulseCheck.generating : labels.pulseCheck.rerunButton}
@@ -413,7 +432,7 @@ export default function PulseCheck() {
           </section>
 
           <p className={styles.meta}>
-            {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString())}
+            {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
           </p>
           {RerunFooter}
         </div>
@@ -425,6 +444,7 @@ export default function PulseCheck() {
   const reviewerVerdicts = pc.reviewerVerdicts ?? [];
   const { themeRows, reviewerCols } = buildMatrixData(pc.themes ?? [], reviewerVerdicts);
   const synthesizedVerdict = pc.verdict ?? labels.pulseCheck.noVerdict;
+  const narrative = pc.narrative ?? '';
   const sharedConvictions = pc.sharedConviction ?? [];
   const repeatedTensions = pc.repeatedTension ?? [];
   const openQuestions = pc.openQuestions ?? [];
@@ -442,6 +462,21 @@ export default function PulseCheck() {
         {itemName && <p className={styles.subheading}>{itemName}</p>}
         {IncompleteNotice}
 
+        {/* Verdict + narrative — above everything else */}
+        <div className={styles.verdictBlock}>
+          <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
+          <p className={styles.verdictText}>{synthesizedVerdict}</p>
+          {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
+        </div>
+
+        {/* Item description context */}
+        {itemDescription && (
+          <div className={styles.descriptionContext}>
+            <p className={styles.descriptionContextLabel}>{labels.pulseCheck.askedForLabel}</p>
+            <p className={styles.descriptionContextText}>{itemDescription}</p>
+          </div>
+        )}
+
         {themeRows.length > 0 && reviewerCols.length > 0 && (
           <section className={styles.matrixSection} aria-labelledby="matrix-heading">
             <h2 id="matrix-heading" className={styles.matrixHeading}>{labels.pulseCheck.matrixHeading}</h2>
@@ -451,11 +486,6 @@ export default function PulseCheck() {
 
         <section className={styles.synthesisSection} aria-labelledby="synthesis-heading">
           <h2 id="synthesis-heading" className={styles.synthesisHeading}>{labels.pulseCheck.synthesisHeading}</h2>
-
-          <div className={styles.verdictBlock}>
-            <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
-            <p className={styles.verdictText}>{synthesizedVerdict}</p>
-          </div>
 
           <section className={styles.section} aria-labelledby="multi-convictions-heading">
             <h3 id="multi-convictions-heading" className={styles.sectionHeading}>
@@ -542,7 +572,7 @@ export default function PulseCheck() {
         )}
 
         <p className={styles.meta}>
-          {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString())}
+          {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
         </p>
         {RerunFooter}
       </div>

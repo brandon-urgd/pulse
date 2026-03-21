@@ -93,6 +93,7 @@ export const handler = async (event) => {
     const pulseCheck = {
       itemId: item.itemId?.S,
       verdict: item.verdict?.S,
+      narrative: item.narrative?.S ?? '',
       themes: deserializeThemes(item.themes?.L),
       sharedConviction: (item.sharedConviction?.L || []).map(s => s.S),
       repeatedTension: (item.repeatedTension?.L || []).map(s => s.S),

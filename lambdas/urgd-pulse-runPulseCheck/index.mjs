@@ -1,6 +1,10 @@
 // ur/gd pulse — Run Pulse Check Lambda
 // POST /api/manage/items/{itemId}/pulse-check
 // Validates all sessions are completed/expired, loads all reports, consolidates via Bedrock
+//
+// ASYNC PATTERN: API Gateway REST has a hard 29s integration timeout but Bedrock
+// consolidation takes 25–40s. We write a 'generating' record immediately, return 202,
+// then continue Bedrock work. The frontend polls GET /pulse-check until status === 'complete'.
 
 import { DynamoDBClient, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
@@ -35,10 +39,7 @@ async function addXRayAnnotations(annotations) {
 
 async function putMetrics(metrics) {
   try {
-    await cloudwatch.send(new PutMetricDataCommand({
-      Namespace: 'Pulse/Reports',
-      MetricData: metrics,
-    }))
+    await cloudwatch.send(new PutMetricDataCommand({ Namespace: 'Pulse/Reports', MetricData: metrics }))
   } catch (err) {
     log('warn', 'RunPulseCheck: failed to publish CloudWatch metrics', { errorName: err.name })
   }
@@ -62,16 +63,11 @@ export const handler = async (event) => {
   const tenantId = event?.requestContext?.authorizer?.tenantId
   const itemId = event?.pathParameters?.itemId
 
-  if (!tenantId) {
-    return errorResponse(401, 'Unauthorized', {}, origin)
-  }
-
-  if (!itemId) {
-    return errorResponse(400, 'itemId is required', {}, origin)
-  }
+  if (!tenantId) return errorResponse(401, 'Unauthorized', {}, origin)
+  if (!itemId) return errorResponse(400, 'itemId is required', {}, origin)
 
   try {
-    // 1. Query all sessions for this item via item-index GSI
+    // 1. Query all sessions for this item
     const sessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
@@ -82,24 +78,17 @@ export const handler = async (event) => {
     }))
 
     const sessions = sessionsResult.Items || []
+    if (sessions.length === 0) return errorResponse(404, 'No sessions found for this item', {}, origin)
 
-    if (sessions.length === 0) {
-      return errorResponse(404, 'No sessions found for this item', {}, origin)
-    }
-
-    // 2. Validate all sessions are completed or expired
+    // 2. Validate all sessions are terminal
     const TERMINAL_STATUSES = new Set(['completed', 'expired', 'cancelled', 'discarded'])
-    const openSessions = sessions.filter(s => {
-      const status = s.status?.S
-      return !TERMINAL_STATUSES.has(status)
-    })
-
+    const openSessions = sessions.filter(s => !TERMINAL_STATUSES.has(s.status?.S))
     if (openSessions.length > 0) {
-      log('info', 'RunPulseCheck: sessions still open', { requestId, tenantId, itemId, openCount: openSessions.length })
+      log('warn', 'RunPulseCheck: open sessions remain', { requestId, tenantId, itemId, openCount: openSessions.length })
       return errorResponse(409, 'Not all sessions are closed. Wait for remaining sessions to complete or expire.', {}, origin)
     }
 
-    // 3. Query all reports for this item via item-index GSI
+    // 3. Query all reports
     const reportsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.REPORTS_TABLE,
       IndexName: 'item-index',
@@ -120,19 +109,29 @@ export const handler = async (event) => {
       incomplete: item.incomplete?.BOOL === true,
     }))
 
-    if (reports.length === 0) {
-      return errorResponse(404, 'No reports found — reports may still be generating', {}, origin)
-    }
+    if (reports.length === 0) return errorResponse(404, 'No reports found — reports may still be generating', {}, origin)
 
-    // 4. Build consolidation prompt
-    const selfReviewReports = reports.filter(r => r.isSelfReview)
-    const externalReports = reports.filter(r => !r.isSelfReview)
-    const hasSelfReview = selfReviewReports.length > 0
     const incompleteReports = reports.filter(r => r.incomplete)
-    const completeReports = reports.filter(r => !r.incomplete)
+    const selfReviewReports = reports.filter(r => r.isSelfReview)
+    const hasSelfReview = selfReviewReports.length > 0
 
+    // 4. Write 'generating' placeholder immediately — frontend polls until 'complete'
+    const startedAt = new Date().toISOString()
+    await dynamo.send(new PutItemCommand({
+      TableName: process.env.PULSE_CHECKS_TABLE,
+      Item: {
+        tenantId: { S: tenantId },
+        itemId: { S: itemId },
+        status: { S: 'generating' },
+        generatedAt: { S: startedAt },
+        sessionCount: { N: String(reports.length) },
+        incompleteCount: { N: String(incompleteReports.length) },
+      },
+    }))
+
+    // 5. Build Bedrock prompt
     const formatReport = (r, idx) => `
-Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}${r.incomplete ? ' (Session incomplete — reviewer did not finish)' : ''}:
+Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}${r.incomplete ? ' (Session incomplete)' : ''}:
 - Verdict: ${r.verdict}
 - Energy: ${r.energy}
 - Conversation Shape: ${r.conversationShape}
@@ -142,14 +141,13 @@ Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}${r.incomplete ? ' (
 - Themes: ${r.themes.join(', ') || 'none'}`
 
     const allReportsText = reports.map((r, i) => formatReport(r, i)).join('\n')
-
     const incompleteNote = incompleteReports.length > 0
-      ? `\nNote: ${incompleteReports.length} of ${reports.length} session${reports.length > 1 ? 's' : ''} were incomplete (reviewer did not finish). Their partial feedback is included but should be weighted less heavily than complete sessions.`
+      ? `\nNote: ${incompleteReports.length} of ${reports.length} sessions were incomplete. Weight their feedback less heavily.`
       : ''
 
     const prompt = `You are synthesizing feedback from ${reports.length} reviewer session${reports.length > 1 ? 's' : ''} into a consolidated Pulse Check.
 
-${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review (the item creator reviewing their own work). Separate self-review signals from external reviewer signals where relevant.` : ''}${incompleteNote}
+${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review. Separate self-review signals from external reviewer signals where relevant.` : ''}${incompleteNote}
 
 Individual Reports:
 ${allReportsText}
@@ -157,54 +155,43 @@ ${allReportsText}
 CRITICAL RULES:
 - Detect patterns across reviewers: shared conviction, repeated tension, common uncertainty
 - Preserve individual reviewer voice in theme-level details — don't homogenize
-- Adapt to the mix of conversation shapes across sessions
 - Compress aggressively — each item should be readable in 3–5 seconds
 - Never rewrite reviewer quotes into corporate language
 
 Respond in valid JSON:
 {
-  "verdict": "synthesized one-line verdict across all reviewers — must be exactly one of: 'Worth developing further' | 'Not there yet' | 'Unclear / needs clarity'",
+  "verdict": "synthesized one-line verdict — must be exactly one of: 'Worth developing further' | 'Not there yet' | 'Unclear / needs clarity'",
+  "narrative": "2–3 sentences from the facilitator's perspective. Orient the reader: what does this feedback mean for the work? What's the key tension or open question? Plain, direct language. No bullet points. No hedging.",
   "themes": [
     {
-      "themeId": "unique-slug-for-theme",
+      "themeId": "unique-slug",
       "label": "Theme label",
       "reviewerSignals": [
-        {
-          "sessionId": "session-id",
-          "signalType": "conviction | tension | uncertainty",
-          "quote": "reviewer's own words"
-        }
+        { "sessionId": "session-id", "signalType": "conviction | tension | uncertainty", "quote": "reviewer's own words" }
       ]
     }
   ],
-  "sharedConviction": ["themes or points where multiple reviewers showed conviction"],
-  "repeatedTension": ["themes or points where tension appeared across multiple reviewers"],
+  "sharedConviction": ["points where 2+ reviewers showed conviction"],
+  "repeatedTension": ["points where tension appeared across 2+ reviewers"],
   "openQuestions": ["unresolved questions that surfaced across sessions"],
   "reviewerVerdicts": [
-    {
-      "sessionId": "session-id",
-      "verdict": "reviewer verdict",
-      "energy": "reviewer energy level",
-      "isSelfReview": false
-    }
+    { "sessionId": "session-id", "verdict": "reviewer verdict", "energy": "reviewer energy level", "isSelfReview": false }
   ],
   "proposedRevisions": [
     {
       "revisionId": "unique-slug",
-      "proposal": "A specific, concrete change the author could make to the document — written as an actionable suggestion, not an observation. Derived from repeated tension or unresolved uncertainty. Example: 'Address the medium assumption gap — add a section that either defends radio as the right channel or explicitly acknowledges it as an open question.' Maximum 2 sentences.",
-      "rationale": "Why this revision is warranted — grounded in reviewer signals, not editorial opinion. One sentence.",
-      "sourceThemeIds": ["themeId-1", "themeId-2"]
+      "proposal": "A specific, concrete change the author could make. Derived from tension or uncertainty. Maximum 2 sentences.",
+      "rationale": "Why this revision is warranted — grounded in reviewer signals. One sentence.",
+      "sourceThemeIds": ["themeId-1"]
     }
   ]
 }
 
-For verdict: synthesize across all external reviewers primarily. If self-review exists, note it but weight external signals more heavily.
-For themes: union of themes across all reports. Each theme should have per-reviewer signal breakdown.
-For sharedConviction: only include if 2+ reviewers showed conviction on the same theme.
-For repeatedTension: only include if 2+ reviewers showed tension on the same theme.
-For proposedRevisions: derive 2–5 concrete, actionable changes the author could make. Only include revisions grounded in tension or uncertainty signals — do not propose revisions for conviction themes. Each revision must be specific enough that an author knows exactly what to do. Do not include vague suggestions like "expand the section" — say what to expand and why. If there is no meaningful tension or uncertainty, return an empty array.`
+For verdict: weight external reviewers primarily; note self-review separately.
+For sharedConviction/repeatedTension: only include if 2+ reviewers showed the same signal.
+For proposedRevisions: 2–5 actionable changes from tension/uncertainty only. Return empty array if none warranted.`
 
-    // 5. Invoke Bedrock
+    // 6. Invoke Bedrock
     const bedrockStart = Date.now()
     let bedrockResponse
     try {
@@ -222,11 +209,18 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
       const bedrockLatency = Date.now() - bedrockStart
       await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
       await addXRayAnnotations({ bedrockError: bedrockErr.name, bedrockLatencyMs: bedrockLatency })
-      await publishAlert('Bedrock invocation failed during pulse check consolidation', {
-        tenantId, itemId, errorName: bedrockErr.name,
-      })
+      await publishAlert('Bedrock invocation failed during pulse check consolidation', { tenantId, itemId, errorName: bedrockErr.name })
+      await dynamo.send(new PutItemCommand({
+        TableName: process.env.PULSE_CHECKS_TABLE,
+        Item: {
+          tenantId: { S: tenantId }, itemId: { S: itemId },
+          status: { S: 'failed' }, generatedAt: { S: startedAt },
+          sessionCount: { N: String(reports.length) },
+          incompleteCount: { N: String(incompleteReports.length) },
+        },
+      })).catch(() => {})
       log('error', 'RunPulseCheck: Bedrock invocation failed', { requestId, tenantId, itemId, errorName: bedrockErr.name })
-      return errorResponse(503, 'AI service temporarily unavailable', {}, origin)
+      return createResponse(202, { data: { status: 'generating', itemId } }, {}, origin)
     }
 
     const bedrockLatency = Date.now() - bedrockStart
@@ -242,7 +236,7 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
       bedrockTokensOut: tokensOut,
     })
 
-    // 6. Parse Bedrock response
+    // 7. Parse Bedrock response
     let consolidated
     try {
       const jsonMatch = rawText.match(/\{[\s\S]*\}/)
@@ -253,6 +247,7 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
 
     const VALID_VERDICTS = ['Worth developing further', 'Not there yet', 'Unclear / needs clarity']
     const verdict = VALID_VERDICTS.includes(consolidated.verdict) ? consolidated.verdict : 'Unclear / needs clarity'
+    const narrative = typeof consolidated.narrative === 'string' ? consolidated.narrative.trim() : ''
     const themes = Array.isArray(consolidated.themes) ? consolidated.themes : []
     const sharedConviction = Array.isArray(consolidated.sharedConviction) ? consolidated.sharedConviction : []
     const repeatedTension = Array.isArray(consolidated.repeatedTension) ? consolidated.repeatedTension : []
@@ -260,20 +255,15 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
     const reviewerVerdicts = Array.isArray(consolidated.reviewerVerdicts) ? consolidated.reviewerVerdicts : []
     const proposedRevisions = Array.isArray(consolidated.proposedRevisions) ? consolidated.proposedRevisions : []
 
-    // 7. Store pulse check — PutItem replaces existing
+    // 8. Store complete pulse check — replaces the 'generating' placeholder
     const generatedAt = new Date().toISOString()
 
-    // Also stamp hasPulseCheck on the item record so getItems can surface it cheaply
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.ITEMS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
       UpdateExpression: 'SET hasPulseCheck = :t, updatedAt = :now',
-      ExpressionAttributeValues: {
-        ':t': { BOOL: true },
-        ':now': { S: new Date().toISOString() },
-      },
+      ExpressionAttributeValues: { ':t': { BOOL: true }, ':now': { S: generatedAt } },
     })).catch(err => {
-      // Non-fatal — pulse check still stored even if item stamp fails
       log('warn', 'RunPulseCheck: failed to stamp hasPulseCheck on item', { requestId, tenantId, itemId, errorName: err.name })
     })
 
@@ -317,6 +307,7 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
         tenantId: { S: tenantId },
         itemId: { S: itemId },
         verdict: { S: verdict },
+        narrative: { S: narrative },
         themes: { L: serializeThemes },
         sharedConviction: { L: sharedConviction.map(s => ({ S: s })) },
         repeatedTension: { L: repeatedTension.map(s => ({ S: s })) },
@@ -330,37 +321,19 @@ For proposedRevisions: derive 2–5 concrete, actionable changes the author coul
       },
     }))
 
-    // 8. Publish CloudWatch metrics
     await putMetrics([
       { MetricName: 'BedrockLatency', Value: bedrockLatency, Unit: 'Milliseconds' },
       { MetricName: 'BedrockTokensIn', Value: tokensIn, Unit: 'Count' },
       { MetricName: 'BedrockTokensOut', Value: tokensOut, Unit: 'Count' },
     ])
 
-    const pulseCheck = {
-      itemId,
-      verdict,
-      themes,
-      sharedConviction,
-      repeatedTension,
-      openQuestions,
-      reviewerVerdicts,
-      proposedRevisions,
-      sessionCount: reports.length,
-      incompleteCount: incompleteReports.length,
-      generatedAt,
-      status: 'complete',
-    }
-
     log('info', 'RunPulseCheck: pulse check stored', {
       requestId, tenantId, itemId,
-      sessionCount: reports.length,
-      incompleteCount: incompleteReports.length,
-      verdict,
-      bedrockLatency, tokensIn, tokensOut,
+      sessionCount: reports.length, incompleteCount: incompleteReports.length,
+      verdict, bedrockLatency, tokensIn, tokensOut,
     })
 
-    return createResponse(200, { data: pulseCheck }, {}, origin)
+    return createResponse(202, { data: { status: 'generating', itemId } }, {}, origin)
   } catch (err) {
     log('error', 'RunPulseCheck: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
     return errorResponse(500, 'Failed to run pulse check', {}, origin)

@@ -105,6 +105,13 @@
   line-height: 1.4;
 }
 
+.verdictNarrative {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-3) 0 0;
+  line-height: 1.65;
+}
+
 .energyRow {
   display: flex;
   align-items: center;
@@ -116,6 +123,31 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   font-weight: 500;
+}
+
+/* ── Item description context ── */
+.descriptionContext {
+  margin-bottom: var(--space-8);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.descriptionContextLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.descriptionContextText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
 }
 
 /* ── Signal sections ── */

@@ -280,6 +280,7 @@ export const labels = {
     verdictLabel: 'Verdict',
     energyLabel: 'Overall energy',
     noVerdict: 'No verdict available.',
+    askedForLabel: 'You asked for a pulse on',
     convictionsHeading: 'What Landed',
     tensionsHeading: 'Where It Struggled',
     questionsHeading: 'Open Questions',
