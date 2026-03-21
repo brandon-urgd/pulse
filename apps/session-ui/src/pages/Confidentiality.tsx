@@ -129,6 +129,12 @@ export default function Confidentiality() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [transitioning, setTransitioning] = useState(false)
+  const [fadeOut, setFadeOut] = useState(false)
+
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   useEffect(() => {
     document.title = 'Confidentiality Agreement — Pulse'
@@ -148,22 +154,76 @@ export default function Confidentiality() {
 
     try {
       await acceptConfidentiality(sessionId, sessionToken)
-      navigate(`/s/${sessionId}/chat`, { replace: true })
+
+      if (prefersReducedMotion) {
+        navigate(`/s/${sessionId}/chat`, { replace: true })
+        return
+      }
+
+      // Fade out the card, then show transition screen, then navigate
+      setFadeOut(true)
+      setTimeout(() => {
+        setTransitioning(true)
+        setTimeout(() => {
+          navigate(`/s/${sessionId}/chat`, { replace: true })
+        }, 1200)
+      }, 300)
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
+      setLoading(false)
       if (status === 401 || status === 403) {
         clearSession()
         navigate('/s/', { replace: true })
       } else {
+        setFadeOut(false)
         setError('Something went wrong. Please try again.')
       }
-    } finally {
-      setLoading(false)
     }
   }
 
+  // Transition screen — full black fade with "Let's get your pulse..."
+  if (transitioning) {
+    return (
+      <div
+        style={{
+          minHeight: '100dvh',
+          backgroundColor: '#0f0f0f',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'pulseTextFadeIn 0.4s ease forwards',
+        }}
+        aria-live="polite"
+        aria-label="Starting session"
+      >
+        <style>{`
+          @keyframes pulseTextFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        `}</style>
+        <p style={{
+          fontSize: '1.25rem',
+          fontWeight: 500,
+          color: SAGE,
+          letterSpacing: '0.02em',
+          margin: 0,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}>
+          Let's get your pulse...
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <main style={styles.page}>
+    <main
+      style={{
+        ...styles.page,
+        opacity: fadeOut ? 0 : 1,
+        transition: 'opacity 0.3s ease',
+      }}
+    >
       <div style={styles.card}>
         <div style={styles.header}>
           <ShieldIcon style={styles.shieldIcon} />
