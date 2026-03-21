@@ -12,6 +12,7 @@ export function configureAmplify(): void {
         userPoolId,
         userPoolClientId,
         loginWith: {
+          email: true,
           oauth: {
             domain: cognitoDomain,
             scopes: ['email', 'openid', 'profile'],
