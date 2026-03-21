@@ -866,6 +866,8 @@ Resources:
         environment: !Ref Environment
         cfn-stack-name: !Ref AWS::StackName
         license: proprietary
+      LambdaConfig:
+        PostConfirmation: !GetAtt PulseCreateTenantFunction.Arn
 
   PulseAppleIdProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
@@ -2162,6 +2164,14 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: license
           Value: proprietary
+
+  PulseCreateTenantCognitoPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt PulseCreateTenantFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt PulseUserPool.Arn
 
   PulseGetSettingsFunction:
     Type: AWS::Lambda::Function
