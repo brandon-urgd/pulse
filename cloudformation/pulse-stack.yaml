@@ -1874,6 +1874,10 @@ Resources:
                   - cognito-idp:AdminCreateUser
                   - cognito-idp:AdminSetUserPassword
                 Resource: !GetAtt PulseUserPool.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulseTenantsTable.Arn
 
   PulseCreateTenantFunctionRole:
     Type: AWS::IAM::Role
@@ -2108,6 +2112,7 @@ Resources:
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          TENANTS_TABLE: !Ref TenantsTable
       Tags:
         - Key: project
           Value: pulse
