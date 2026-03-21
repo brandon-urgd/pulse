@@ -86,6 +86,9 @@ export const handler = async (event) => {
     const expressionNames = {}
     const expressionValues = {}
 
+    expressionNames['#decisions'] = 'decisions'
+    expressionValues[':emptyMap'] = { M: {} }
+
     decisionEntries.forEach(([themeId, decision], idx) => {
       const nameKey = `#d${idx}`
       const valueKey = `:d${idx}`
@@ -97,11 +100,8 @@ export const handler = async (event) => {
           decidedAt: { S: now },
         },
       }
-      updateParts.push(`decisions.${nameKey} = ${valueKey}`)
+      updateParts.push(`#decisions.${nameKey} = ${valueKey}`)
     })
-
-    expressionNames['#decisions'] = 'decisions'
-    expressionValues[':emptyMap'] = { M: {} }
 
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
