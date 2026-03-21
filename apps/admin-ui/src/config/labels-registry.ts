@@ -308,5 +308,6 @@ export const labels = {
     rerunNote: 'Re-running will incorporate any sessions that completed since the last run.',
     rerunError: 'Failed to re-run pulse check. Please try again.',
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
+    basedOnSessions: 'Based on {count} session{plural}',
   },
 } as const;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import SignalBadge, { type SignalType, type EnergyLevel } from './SignalBadge';
 import styles from './SignalMatrix.module.css';
 
@@ -23,6 +24,8 @@ export interface ReviewerColumn {
   name: string;
   verdict: string;
   energy: EnergyLevel;
+  /** If provided, reviewer header becomes a link */
+  href?: string;
 }
 
 interface SignalMatrixProps {
@@ -160,7 +163,13 @@ export default function SignalMatrix({ themes, reviewers, ariaLabel }: SignalMat
             {reviewers.map((r) => (
               <th key={r.reviewerId} className={styles.reviewerHeader} scope="col">
                 <div className={styles.reviewerHeaderInner}>
-                  <span className={styles.reviewerName}>{r.name}</span>
+                  {r.href ? (
+                    <Link to={r.href} className={styles.reviewerHeaderLink}>
+                      <span className={styles.reviewerName}>{r.name}</span>
+                    </Link>
+                  ) : (
+                    <span className={styles.reviewerName}>{r.name}</span>
+                  )}
                   <SignalBadge variant={r.energy} />
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', fontStyle: 'italic', maxWidth: 160, textAlign: 'center' }}>
                     {r.verdict}

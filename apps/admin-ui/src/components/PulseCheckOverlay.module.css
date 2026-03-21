@@ -118,3 +118,23 @@
 .dismissButton:hover {
   background: var(--color-interactive-hover);
 }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    animation: none;
+  }
+
+  .fadeOut {
+    animation: none;
+    opacity: 0;
+  }
+
+  .barFill {
+    transition: none;
+  }
+
+  .phase {
+    transition: none;
+  }
+}

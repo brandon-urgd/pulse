@@ -62,6 +62,23 @@
   font-weight: 500;
 }
 
+.reviewerHeaderLink {
+  text-decoration: none;
+  color: inherit;
+}
+
+.reviewerHeaderLink:hover .reviewerName,
+.reviewerHeaderLink:focus-visible .reviewerName {
+  color: var(--color-accent-pulse);
+  text-decoration: underline;
+}
+
+.reviewerHeaderLink:focus-visible {
+  outline: 2px solid var(--color-accent-pulse);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 /* Theme row */
 .themeCell {
   font-weight: 500;
