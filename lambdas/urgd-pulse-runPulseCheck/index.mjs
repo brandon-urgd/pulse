@@ -101,12 +101,17 @@ export const handler = async (event) => {
     const sessions = sessionsResult.Items || []
     if (sessions.length === 0) return errorResponse(404, 'No sessions found for this item', {}, origin)
 
-    // 2. Validate all sessions are terminal
-    const openSessions = sessions.filter(s => !TERMINAL_STATUSES.has(s.status?.S))
-    if (openSessions.length > 0) {
-      log('warn', 'RunPulseCheck: open sessions remain', { requestId, tenantId, itemId, openCount: openSessions.length })
+    // 2. Block only if there are not_started sessions — those haven't begun and would be
+    //    excluded from the report entirely. in_progress sessions are underway and will
+    //    complete naturally; the re-run banner handles including them after they finish.
+    const notStartedSessions = sessions.filter(s => s.status?.S === 'not_started')
+    if (notStartedSessions.length > 0) {
+      log('warn', 'RunPulseCheck: not_started sessions remain', { requestId, tenantId, itemId, notStartedCount: notStartedSessions.length })
       return errorResponse(409, 'Not all sessions are closed. Wait for remaining sessions to complete or expire.', {}, origin)
     }
+
+    // Count in_progress sessions so the pulse check record can surface them as incomplete
+    const inProgressCount = sessions.filter(s => s.status?.S === 'in_progress').length
 
     // 3. Load all reports for this item
     const reportsResult = await dynamo.send(new QueryCommand({
@@ -185,6 +190,7 @@ export const handler = async (event) => {
           isSelfReview: { BOOL: rv.isSelfReview === true },
         }})) },
         sessionCount: { N: String(sessions.length) },
+        incompleteCount: { N: String(inProgressCount) },
         generatedAt: { S: generatedAt },
       },
     }))
@@ -200,6 +206,7 @@ export const handler = async (event) => {
         openQuestions,
         reviewerVerdicts,
         sessionCount: sessions.length,
+        incompleteCount: inProgressCount,
         generatedAt,
         status: 'complete',
       },

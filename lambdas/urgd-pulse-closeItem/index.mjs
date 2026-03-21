@@ -50,7 +50,8 @@ export const handler = async (event) => {
     }))
 
     // Batch-expire all not_started sessions for this item
-    // Query via item-index GSI (itemId as hash key — same pattern as getItemSessions)
+    // in_progress sessions are left to finish naturally; the pulse check re-run banner
+    // handles including them once they complete.
     let expiredCount = 0
     let lastKey = undefined
 
