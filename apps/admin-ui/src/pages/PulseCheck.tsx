@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
@@ -75,13 +75,15 @@ interface ItemResponse {
 
 function buildMatrixData(
   themes: PulseCheckTheme[],
-  reviewerVerdicts: ReviewerVerdict[]
+  reviewerVerdicts: ReviewerVerdict[],
+  itemId: string
 ): { themeRows: ThemeRow[]; reviewerCols: ReviewerColumn[] } {
   const reviewerCols: ReviewerColumn[] = reviewerVerdicts.map((rv, i) => ({
     reviewerId: rv.sessionId,
     name: rv.isSelfReview ? 'Self-review' : `Reviewer ${i + 1}`,
     verdict: rv.verdict,
     energy: rv.energy,
+    href: `/admin/items/${itemId}/sessions/${rv.sessionId}/report`,
   }));
 
   const themeRows: ThemeRow[] = themes.map((t) => {
@@ -103,6 +105,7 @@ export default function PulseCheck() {
   const queryClient = useQueryClient();
 
   const [decisions, setDecisions] = useState<Record<string, FeedbackAction>>({});
+  const savedDecisionsRef = useRef<Record<string, FeedbackAction>>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const [generateError, setGenerateError] = useState('');
@@ -170,6 +173,7 @@ export default function PulseCheck() {
         synced[revisionId] = mapped as FeedbackAction;
       }
       setDecisions(synced);
+      savedDecisionsRef.current = synced;
     }
   }, [pc]);
 
@@ -244,6 +248,7 @@ export default function PulseCheck() {
         navigate
       );
       setSaveStatus('saved');
+      savedDecisionsRef.current = { ...decisions };
       queryClient.invalidateQueries({ queryKey: ['pulse-check', itemId] });
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err: unknown) {
@@ -444,7 +449,7 @@ export default function PulseCheck() {
 
   // ── Multi-session view ──────────────────────────────────────────────────────
   const reviewerVerdicts = pc.reviewerVerdicts ?? [];
-  const { themeRows, reviewerCols } = buildMatrixData(pc.themes ?? [], reviewerVerdicts);
+  const { themeRows, reviewerCols } = buildMatrixData(pc.themes ?? [], reviewerVerdicts, itemId ?? '');
   const synthesizedVerdict = pc.verdict ?? labels.pulseCheck.noVerdict;
   const narrative = pc.narrative ?? '';
   const sharedConvictions = pc.sharedConviction ?? [];
@@ -469,6 +474,11 @@ export default function PulseCheck() {
           <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
           <p className={styles.verdictText}>{synthesizedVerdict}</p>
           {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
+          <p className={styles.verdictSessionCount}>
+            {labels.pulseCheck.basedOnSessions
+              .replace('{count}', String(pc.sessionCount))
+              .replace('{plural}', pc.sessionCount === 1 ? '' : 's')}
+          </p>
           <p className={styles.verdictMeta}>
             {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
           </p>
@@ -552,21 +562,28 @@ export default function PulseCheck() {
                   <div key={type} className={styles.revisionGroup}>
                     <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
                     <ul className={styles.themeDecisionList}>
-                      {group.map((revision) => (
-                        <li key={revision.revisionId} className={styles.themeDecisionRow}>
-                          <div className={styles.themeDecisionHeader}>
-                            <div style={{ flex: 1 }}>
+                      {group.map((revision) => {
+                        const decided = decisions[revision.revisionId] ?? null;
+                        return (
+                          <li
+                            key={revision.revisionId}
+                            className={styles.themeDecisionRow}
+                            data-decided={decided ?? undefined}
+                          >
+                            <div className={styles.themeDecisionHeader}>
                               <p className={styles.themeDecisionText}>{revision.proposal}</p>
-                              <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
+                              <div className={styles.themeDecisionBody}>
+                                <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
+                                <FeedbackActionPills
+                                  value={decided}
+                                  onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                                  ariaLabel={`Decision for: ${revision.proposal}`}
+                                />
+                              </div>
                             </div>
-                            <FeedbackActionPills
-                              value={decisions[revision.revisionId] ?? null}
-                              onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
-                              ariaLabel={`Decision for: ${revision.proposal}`}
-                            />
-                          </div>
-                        </li>
-                      ))}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 );
@@ -577,7 +594,7 @@ export default function PulseCheck() {
                   type="button"
                   className={styles.saveButton}
                   onClick={handleSaveDecisions}
-                  disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0}
+                  disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || JSON.stringify(decisions) === JSON.stringify(savedDecisionsRef.current)}
                 >
                   {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                 </button>
