@@ -26,24 +26,25 @@ const FREE_TIER_USAGE = {
 }
 
 export const handler = async (event) => {
+  // ── Cognito PostConfirmation trigger ───────────────────────────────────────
+  // When invoked by Cognito, event.userName is the sub and there is no body.
+  // Must return the event object back to Cognito.
+  const isCognitoTrigger = !!event.triggerSource
+
+  const tenantId = isCognitoTrigger
+    ? event.userName
+    : randomUUID()
+
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
-
-  let body
-  try {
-    body = JSON.parse(event.body || '{}')
-  } catch {
-    return errorResponse(400, 'Invalid request body', {}, origin)
-  }
-
-  const tenantId = randomUUID()
   const now = new Date().toISOString()
 
-  log('info', 'CreateTenant: creating tenant record', { requestId, tenantId })
+  log('info', 'CreateTenant: creating tenant record', { requestId, tenantId, isCognitoTrigger })
 
   try {
     await dynamo.send(new PutItemCommand({
       TableName: process.env.TENANTS_TABLE,
+      ConditionExpression: 'attribute_not_exists(tenantId)',
       Item: {
         tenantId: { S: tenantId },
         tier: { S: 'free' },
@@ -71,18 +72,26 @@ export const handler = async (event) => {
     }))
 
     log('info', 'CreateTenant: tenant created', { requestId, tenantId })
-
-    return createResponse(201, {
-      tenantId,
-      tier: 'free',
-      onboardingComplete: false,
-      features: FREE_TIER_FEATURES,
-      usage: FREE_TIER_USAGE,
-      createdAt: now,
-      updatedAt: now,
-    }, {}, origin)
   } catch (err) {
-    log('error', 'CreateTenant: failed to create tenant', { requestId, tenantId, errorName: err.name })
-    return errorResponse(500, 'Failed to create tenant', {}, origin)
+    // ConditionalCheckFailedException means tenant already exists — idempotent, not an error
+    if (err.name !== 'ConditionalCheckFailedException') {
+      log('error', 'CreateTenant: failed to create tenant', { requestId, tenantId, errorName: err.name })
+      if (!isCognitoTrigger) return errorResponse(500, 'Failed to create tenant', {}, origin)
+      throw err // re-throw so Cognito blocks confirmation on hard failure
+    }
+    log('info', 'CreateTenant: tenant already exists, skipping', { requestId, tenantId })
   }
+
+  // Cognito triggers must return the event
+  if (isCognitoTrigger) return event
+
+  return createResponse(201, {
+    tenantId,
+    tier: 'free',
+    onboardingComplete: false,
+    features: FREE_TIER_FEATURES,
+    usage: FREE_TIER_USAGE,
+    createdAt: now,
+    updatedAt: now,
+  }, {}, origin)
 }
