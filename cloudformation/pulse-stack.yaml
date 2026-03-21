@@ -241,6 +241,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-runPulseCheck/latest.zip
     Description: S3 key for urgd-pulse-runPulseCheck Lambda ZIP
 
+  ProcessPulseCheckCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-processPulseCheck/latest.zip
+    Description: S3 key for urgd-pulse-processPulseCheck Lambda ZIP
+
   GetPulseCheckCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-getPulseCheck/latest.zip
@@ -376,6 +381,7 @@ Mappings:
       GenerateReport: 3
       GetReport: 3
       RunPulseCheck: 3
+      ProcessPulseCheck: 3
       GetPulseCheck: 3
       SavePCDecisions: 3
       UsageReport: 3
@@ -420,6 +426,7 @@ Mappings:
       GenerateReport: 5
       GetReport: 5
       RunPulseCheck: 5
+      ProcessPulseCheck: 5
       GetPulseCheck: 5
       SavePCDecisions: 5
       UsageReport: 5
@@ -464,6 +471,7 @@ Mappings:
       GenerateReport: 25
       GetReport: 10
       RunPulseCheck: 25
+      ProcessPulseCheck: 25
       GetPulseCheck: 10
       SavePCDecisions: 10
       UsageReport: 5
@@ -5668,6 +5676,17 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseProcessPulseCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-processPulseCheck-${Environment}'
+      RetentionInDays: 30
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   PulseGetPulseCheckLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -5866,6 +5885,10 @@ Resources:
                 Resource: !Ref PulseAlertsTopic
               - Effect: Allow
                 Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-processPulseCheck-${Environment}'
+              - Effect: Allow
+                Action:
                   - kms:GenerateDataKey*
                   - kms:Decrypt
                 Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
@@ -6058,8 +6081,8 @@ Resources:
       FunctionName: !Sub 'urgd-pulse-runPulseCheck-${Environment}'
       Runtime: nodejs22.x
       Handler: index.handler
-      Timeout: 120
-      MemorySize: 1024
+      Timeout: 10
+      MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RunPulseCheck]
       Role: !GetAtt PulseRunPulseCheckFunctionRole.Arn
       Code:
@@ -6072,9 +6095,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
-          ITEMS_TABLE: !Ref PulseItemsTable
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
-          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          PROCESS_FUNCTION_NAME: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
@@ -6090,6 +6111,106 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseProcessPulseCheckFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-processPulseCheck-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseProcessPulseCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseReportsTable.Arn
+                  - !Sub '${PulseReportsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PulsePulseChecksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseProcessPulseCheckFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseProcessPulseCheckLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 1024
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ProcessPulseCheck]
+      Role: !GetAtt PulseProcessPulseCheckFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ProcessPulseCheckCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          REPORTS_TABLE: !Ref PulseReportsTable
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
 
   PulseGetPulseCheckFunction:
     Type: AWS::Lambda::Function
