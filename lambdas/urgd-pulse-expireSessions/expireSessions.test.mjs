@@ -5,12 +5,21 @@ vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
 const dynamoSendSpy = vi.fn()
+const lambdaSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
   class ScanCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, ScanCommand, UpdateItemCommand }
+  class QueryCommand { constructor(input) { this.input = input } }
+  class GetItemCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand, GetItemCommand }
+})
+
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send(...args) { return lambdaSendSpy(...args) } }
+  class InvokeCommand { constructor(input) { this.input = input } }
+  return { LambdaClient, InvokeCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -31,6 +40,8 @@ function makeSession(tenantId, sessionId, status, expiresAt = PAST_DATE) {
 describe('urgd-pulse-expireSessions', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
+    lambdaSendSpy.mockReset()
+    lambdaSendSpy.mockResolvedValue({})
   })
 
   describe('marks past-due sessions as expired', () => {

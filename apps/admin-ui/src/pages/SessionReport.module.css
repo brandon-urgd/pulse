@@ -18,6 +18,16 @@
   color: var(--color-text-primary);
 }
 
+/* Pulse eyebrow — "Here's the pulse from {reviewerLabel}" */
+.pulseEyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent-pulse);
+  margin: 0 0 var(--space-4);
+}
+
 /* Verdict */
 .verdictBlock {
   margin-bottom: var(--space-8);

@@ -277,6 +277,15 @@ export default function SplashEntry() {
               <button type="submit" className="pulse-btn pulse-btn-primary" disabled={submitting}>
                 {submitting ? '…' : labels.login.submitButton}
               </button>
+              <div style={{ textAlign: 'right' }}>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/forgot-password')}
+                  style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-interactive)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  {labels.login.forgotPassword}
+                </button>
+              </div>
               <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '4px 0' }} />
               <button type="button" className="pulse-btn" onClick={() => signInWithRedirect({ provider: 'Apple' })}>
                 {labels.login.appleButton}

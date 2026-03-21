@@ -4,8 +4,12 @@
 // Updates status to "expired" — never modifies "completed" sessions
 // For in_progress sessions with ≥ 4 reviewer messages, invokes generateReport async
 // before expiring so partial feedback is captured in the pulse check
+//
+// After expiring sessions, groups expired sessions by itemId.
+// For each affected item, checks if ALL sessions are now terminal (completed/expired).
+// If so, invokes runPulseCheck and sendPulseCheckReady async (fire-and-forget).
 
-import { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 
@@ -25,6 +29,8 @@ export const handler = async (event) => {
   let totalExpired = 0
   let totalSkipped = 0
   let lastEvaluatedKey
+  // Track which items had sessions expire this run: Map<itemId, { tenantId }>
+  const expiredByItem = new Map()
 
   // Scan all sessions — filter for those with expiresAt in the past and not completed
   do {
@@ -112,6 +118,12 @@ export const handler = async (event) => {
 
         log('info', 'ExpireSessions: session expired', { tenantId, sessionId })
         totalExpired++
+
+        // Track this item for the post-loop pulse check trigger
+        const itemId = session.itemId?.S
+        if (itemId && !expiredByItem.has(itemId)) {
+          expiredByItem.set(itemId, { tenantId })
+        }
       } catch (err) {
         if (err.name === 'ConditionalCheckFailedException') {
           // Session was completed between scan and update — skip safely
@@ -127,5 +139,96 @@ export const handler = async (event) => {
 
   log('info', 'ExpireSessions: job completed', { totalScanned, totalExpired, totalSkipped })
 
+  // After expiring sessions, check each affected item to see if all sessions are now terminal.
+  // If so, invoke runPulseCheck and sendPulseCheckReady async (fire-and-forget).
+  if (expiredByItem.size > 0) {
+    await triggerPulseChecksForClosedItems(expiredByItem)
+  }
+
   return { totalScanned, totalExpired, totalSkipped }
+}
+
+/**
+ * For each item that had sessions expire this run, check if ALL sessions for that item
+ * are now in a terminal state (completed or expired). If so, fire runPulseCheck and
+ * sendPulseCheckReady async.
+ */
+async function triggerPulseChecksForClosedItems(expiredByItem) {
+  const runPulseCheckFnName = process.env.RUN_PULSE_CHECK_FUNCTION_NAME
+  const sendReadyFnName = process.env.SEND_PULSE_CHECK_READY_FUNCTION_NAME
+  const itemsTable = process.env.ITEMS_TABLE
+
+  if (!runPulseCheckFnName || !sendReadyFnName) {
+    log('info', 'ExpireSessions: pulse check trigger env vars not set, skipping auto-trigger')
+    return
+  }
+
+  const TERMINAL_STATUSES = new Set(['completed', 'expired', 'cancelled', 'discarded'])
+
+  for (const [itemId, { tenantId }] of expiredByItem.entries()) {
+    try {
+      // Query all sessions for this item
+      const sessionsResult = await dynamo.send(new QueryCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        IndexName: 'item-index',
+        KeyConditionExpression: 'itemId = :itemId',
+        ExpressionAttributeValues: { ':itemId': { S: itemId } },
+        ProjectionExpression: 'sessionId, #status',
+        ExpressionAttributeNames: { '#status': 'status' },
+      }))
+
+      const sessions = sessionsResult.Items ?? []
+      if (sessions.length === 0) continue
+
+      // Check if every session is now terminal
+      const allTerminal = sessions.every(s => TERMINAL_STATUSES.has(s.status?.S))
+      if (!allTerminal) {
+        log('info', 'ExpireSessions: item still has open sessions, skipping auto-trigger', { tenantId, itemId })
+        continue
+      }
+
+      // Get item name for the notification email
+      let itemName = 'your item'
+      if (itemsTable) {
+        try {
+          const itemResult = await dynamo.send(new GetItemCommand({
+            TableName: itemsTable,
+            Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+            ProjectionExpression: 'itemName',
+          }))
+          itemName = itemResult.Item?.itemName?.S ?? 'your item'
+        } catch (err) {
+          log('warn', 'ExpireSessions: failed to fetch item name', { tenantId, itemId, errorName: err.name })
+        }
+      }
+
+      log('info', 'ExpireSessions: all sessions terminal, triggering pulse check', { tenantId, itemId })
+
+      // Invoke runPulseCheck async (fire-and-forget)
+      try {
+        await lambda.send(new InvokeCommand({
+          FunctionName: runPulseCheckFnName,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ tenantId, itemId }),
+        }))
+        log('info', 'ExpireSessions: runPulseCheck invoked', { tenantId, itemId })
+      } catch (err) {
+        log('warn', 'ExpireSessions: failed to invoke runPulseCheck', { tenantId, itemId, errorName: err.name })
+      }
+
+      // Invoke sendPulseCheckReady async (fire-and-forget)
+      try {
+        await lambda.send(new InvokeCommand({
+          FunctionName: sendReadyFnName,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ tenantId, itemId, itemName }),
+        }))
+        log('info', 'ExpireSessions: sendPulseCheckReady invoked', { tenantId, itemId })
+      } catch (err) {
+        log('warn', 'ExpireSessions: failed to invoke sendPulseCheckReady', { tenantId, itemId, errorName: err.name })
+      }
+    } catch (err) {
+      log('error', 'ExpireSessions: error checking item for auto-trigger', { tenantId, itemId, errorName: err.name })
+    }
+  }
 }

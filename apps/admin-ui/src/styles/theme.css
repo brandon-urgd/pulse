@@ -155,3 +155,9 @@ body {
   background-color: var(--color-bg);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Global focus indicator — 2px solid interactive, 2px offset */
+:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}

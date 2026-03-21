@@ -69,12 +69,12 @@
 
 .reviewerHeaderLink:hover .reviewerName,
 .reviewerHeaderLink:focus-visible .reviewerName {
-  color: var(--color-accent-pulse);
+  color: var(--color-interactive);
   text-decoration: underline;
 }
 
 .reviewerHeaderLink:focus-visible {
-  outline: 2px solid var(--color-accent-pulse);
+  outline: 2px solid var(--color-interactive);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -119,7 +119,7 @@
 }
 
 .expandToggle:focus-visible {
-  outline: 2px solid var(--color-accent-pulse);
+  outline: 2px solid var(--color-interactive);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }

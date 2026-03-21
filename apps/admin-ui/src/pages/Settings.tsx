@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { updatePassword } from 'aws-amplify/auth';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useAuth } from '../hooks/useAuth';
@@ -40,6 +41,111 @@ function UsageBar({ used, max }: { used: number; max: number }) {
   );
 }
 
+function mapCognitoPasswordError(err: unknown): string {
+  const msg = (err as Error)?.message ?? '';
+  if (msg.includes('NotAuthorizedException') || msg.includes('Incorrect username or password')) {
+    return labels.settings.wrongCurrentPassword;
+  }
+  if (msg.includes('same') || msg.includes('previous')) {
+    return labels.settings.newPasswordSameAsCurrent;
+  }
+  if (msg.includes('8 characters') || msg.includes('too short')) {
+    return labels.settings.passwordTooShort;
+  }
+  if (msg.includes('uppercase')) {
+    return labels.settings.passwordMissingUppercase;
+  }
+  if (msg.includes('number') || msg.includes('numeric')) {
+    return labels.settings.passwordMissingNumber;
+  }
+  if (msg.includes('symbol') || msg.includes('special')) {
+    return labels.settings.passwordMissingSymbol;
+  }
+  return labels.settings.passwordGenericError;
+}
+
+// ─── Delete Account Modal ─────────────────────────────────────────────────────
+
+interface DeleteModalProps {
+  email: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isDeleting: boolean;
+  error: string;
+}
+
+function DeleteModal({ email, onConfirm, onCancel, isDeleting, error }: DeleteModalProps) {
+  const [typed, setTyped] = useState('');
+  const headingId = 'delete-modal-heading';
+  const descId = 'delete-modal-desc';
+  const firstFocusRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstFocusRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onCancel]);
+
+  const canDelete = typed === email;
+
+  return (
+    <div className={styles.modalOverlay} aria-modal="true" role="dialog" aria-labelledby={headingId}>
+      <div className={styles.modalCard}>
+        <h2 id={headingId} className={styles.modalHeading}>{labels.settings.deleteModalHeading}</h2>
+        <p id={descId} className={styles.modalBody}>{labels.settings.deleteModalBody}</p>
+
+        <div className={styles.modalField}>
+          <label htmlFor="delete-email-confirm" className={styles.modalLabel}>
+            {labels.settings.deleteEmailLabel}
+          </label>
+          <input
+            ref={firstFocusRef}
+            id="delete-email-confirm"
+            className={styles.modalInput}
+            type="email"
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            placeholder={email}
+            autoComplete="off"
+            aria-describedby={descId}
+            disabled={isDeleting}
+          />
+        </div>
+
+        {error && (
+          <p className={styles.modalError} aria-live="polite" role="alert">{error}</p>
+        )}
+
+        <div className={styles.modalActions}>
+          <button
+            type="button"
+            className={styles.deleteConfirmButton}
+            onClick={onConfirm}
+            disabled={!canDelete || isDeleting}
+            aria-disabled={!canDelete || isDeleting}
+          >
+            {isDeleting ? labels.settings.deleteLoadingButton : labels.settings.deleteConfirmButton}
+          </button>
+          <button
+            type="button"
+            className={styles.modalCancelButton}
+            onClick={onCancel}
+            disabled={isDeleting}
+          >
+            {labels.settings.deleteCancelButton}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -48,11 +154,25 @@ export default function Settings() {
   const { signOut } = useAuth();
   const { theme, setTheme } = useTheme();
 
+  // Theme save state
   const [themeSaveState, setThemeSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle');
+
+  // Display name edit
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
+
+  // Change password
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [passwordError, setPasswordError] = useState('');
+
+  // Delete account modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
 
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -76,11 +196,15 @@ export default function Settings() {
     document.title = labels.settings.documentTitle;
   }, []);
 
+  // ── Theme ──────────────────────────────────────────────────────────────────
+
   async function handleThemeChange(t: 'light' | 'dark' | 'system') {
     setTheme(t);
     setThemeSaveState('saving');
     themeMutation.mutate({ preferences: { theme: t } });
   }
+
+  // ── Display name ───────────────────────────────────────────────────────────
 
   function startEditName() {
     setNameValue(s?.displayName ?? '');
@@ -106,26 +230,58 @@ export default function Settings() {
     if (e.key === 'Escape') { setEditingName(false); }
   }
 
+  // ── Change password ────────────────────────────────────────────────────────
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) return;
+    setPasswordStatus('saving');
+    setPasswordError('');
+    try {
+      await updatePassword({ oldPassword: currentPassword, newPassword });
+      setPasswordStatus('saved');
+      setCurrentPassword('');
+      setNewPassword('');
+      setTimeout(() => setPasswordStatus('idle'), 3000);
+    } catch (err) {
+      setPasswordError(mapCognitoPasswordError(err));
+      setPasswordStatus('error');
+    }
+  }
+
+  // ── Sign out ───────────────────────────────────────────────────────────────
+
   async function handleSignOut() {
     await signOut();
     navigate('/admin/login', { replace: true });
   }
 
-  async function handleDeleteAccount() {
-    if (deleteState === 'idle') {
-      setDeleteState('confirm');
-      return;
-    }
-    if (deleteState === 'confirm') {
-      setDeleteState('deleting');
-      try {
-        await authedMutate('/api/manage/account', 'DELETE', undefined, navigate);
+  // ── Delete account ─────────────────────────────────────────────────────────
+
+  async function handleDeleteConfirm() {
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      await authedMutate('/api/manage/account', 'DELETE', { confirmEmail: s?.email }, navigate);
+      await signOut();
+      navigate('/', { replace: true });
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      if (status === 404) {
+        // Cognito user already deleted — treat as success
         await signOut();
-        navigate('/admin/login', { replace: true });
-      } catch {
-        setDeleteState('idle');
+        navigate('/', { replace: true });
+        return;
       }
+      setDeleteError(labels.settings.deleteServerError);
+      setIsDeleting(false);
     }
+  }
+
+  function handleDeleteCancel() {
+    setShowDeleteModal(false);
+    setDeleteError('');
+    setTimeout(() => deleteButtonRef.current?.focus(), 50);
   }
 
   const s = data?.data;
@@ -161,51 +317,37 @@ export default function Settings() {
                   <span className={styles.fieldValue}>{s.email}</span>
                 </div>
               )}
-              {s?.displayName && (
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
-                  {editingName ? (
+              <div className={styles.fieldRow}>
+                <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
+                {editingName ? (
+                  <div className={styles.inlineEditRow}>
                     <input
                       className={styles.inlineNameInput}
                       value={nameValue}
                       onChange={e => setNameValue(e.target.value)}
-                      onBlur={saveDisplayName}
                       onKeyDown={handleNameKeyDown}
                       disabled={nameSaving}
                       autoFocus
                       maxLength={255}
+                      placeholder={labels.settings.displayNamePlaceholder}
+                      aria-label={labels.settings.displayNameLabel}
                     />
-                  ) : (
-                    <button type="button" className={styles.inlineNameButton} onClick={startEditName}>
-                      {s.displayName}
+                    <button type="button" className={styles.inlineSaveButton} onClick={saveDisplayName} disabled={nameSaving}>
+                      {nameSaving ? labels.settings.savingName : labels.settings.saveButton}
                     </button>
-                  )}
-                </div>
-              )}
-              {!s?.displayName && !editingName && (
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
-                  <button type="button" className={styles.inlineNameButton} onClick={startEditName}>
-                    {labels.settings.displayNameAdd}
-                  </button>
-                </div>
-              )}
-              {!s?.displayName && editingName && (
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{labels.settings.displayNameLabel}</span>
-                  <input
-                    className={styles.inlineNameInput}
-                    value={nameValue}
-                    onChange={e => setNameValue(e.target.value)}
-                    onBlur={saveDisplayName}
-                    onKeyDown={handleNameKeyDown}
-                    disabled={nameSaving}
-                    autoFocus
-                    maxLength={255}
-                    placeholder={labels.settings.displayNamePlaceholder}
-                  />
-                </div>
-              )}
+                    <button type="button" className={styles.inlineCancelButton} onClick={() => setEditingName(false)} disabled={nameSaving}>
+                      {labels.settings.cancelButton}
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.inlineEditRow}>
+                    <span className={styles.fieldValue}>{s?.displayName ?? labels.settings.displayNameAdd}</span>
+                    <button type="button" className={styles.editButton} onClick={startEditName}>
+                      {labels.settings.editButton}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className={styles.fieldRow}>
                 <span className={styles.fieldLabel}>{labels.settings.tierLabel}</span>
                 <span>
@@ -278,34 +420,92 @@ export default function Settings() {
         )}
       </section>
 
-      {/* ── Actions ── */}
+      {/* ── Password ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>{labels.settings.changePasswordHeading}</h2>
+        <form onSubmit={handleChangePassword} noValidate className={styles.passwordForm}>
+          <div className={styles.passwordField}>
+            <label htmlFor="current-password" className={styles.passwordLabel}>
+              {labels.settings.currentPasswordLabel}
+            </label>
+            <input
+              id="current-password"
+              type="password"
+              className={styles.passwordInput}
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              disabled={passwordStatus === 'saving'}
+            />
+          </div>
+          <div className={styles.passwordField}>
+            <label htmlFor="new-password" className={styles.passwordLabel}>
+              {labels.settings.newPasswordLabel}
+            </label>
+            <input
+              id="new-password"
+              type="password"
+              className={styles.passwordInput}
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              disabled={passwordStatus === 'saving'}
+            />
+          </div>
+          <div className={styles.passwordFeedback} aria-live="polite">
+            {passwordStatus === 'saved' && (
+              <p className={styles.passwordSuccess}>{labels.settings.passwordUpdated}</p>
+            )}
+            {passwordStatus === 'error' && passwordError && (
+              <p className={styles.passwordError} role="alert">{passwordError}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            className={styles.updatePasswordButton}
+            disabled={passwordStatus === 'saving' || !currentPassword || !newPassword}
+          >
+            {passwordStatus === 'saving' ? labels.settings.updatingPassword : labels.settings.updatePasswordButton}
+          </button>
+        </form>
+      </section>
+
+      {/* ── Sign out ── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>Account actions</h2>
         <div className={styles.actionsSection}>
           <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
             {labels.settings.signOutButton}
           </button>
-          <button
-            type="button"
-            className={styles.deleteButton}
-            onClick={handleDeleteAccount}
-            disabled={deleteState === 'deleting'}
-            aria-disabled={deleteState === 'deleting'}
-          >
-            {deleteState === 'confirm'
-              ? labels.settings.deleteAccountConfirm
-              : deleteState === 'deleting'
-                ? labels.settings.deleteAccountDeleting
-                : labels.settings.deleteAccountButton}
-          </button>
-          {deleteState === 'confirm' && (
-            <p className={styles.deleteHint}>{labels.settings.deleteAccountConfirmHint}</p>
-          )}
-          {deleteState === 'idle' && (
-            <p className={styles.deleteHint}>{labels.settings.deleteAccountHint}</p>
-          )}
         </div>
       </section>
+
+      {/* ── Danger Zone ── */}
+      <section className={styles.section}>
+        <h2 className={`${styles.sectionHeading} ${styles.dangerHeading}`}>{labels.settings.dangerZoneHeading}</h2>
+        <div className={styles.dangerZone}>
+          <p className={styles.dangerDescription}>{labels.settings.dangerZoneDescription}</p>
+          <button
+            ref={deleteButtonRef}
+            type="button"
+            className={styles.deleteButton}
+            onClick={() => setShowDeleteModal(true)}
+          >
+            {labels.settings.deleteAccountButton}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Delete modal ── */}
+      {showDeleteModal && (
+        <DeleteModal
+          email={s?.email ?? ''}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+          isDeleting={isDeleting}
+          error={deleteError}
+        />
+      )}
     </div>
   );
 }

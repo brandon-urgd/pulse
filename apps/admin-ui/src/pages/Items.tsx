@@ -260,8 +260,17 @@ export default function Items() {
     <div className={styles.container}>
       <div className={styles.header}>
         <div>
-          <p className={styles.greeting}>What are we reviewing today?</p>
-          <h1 className={styles.title}>{labels.items.title}</h1>
+          {rawItems.length > 0 && rawItems.length < 3 && (
+            <p className={styles.greeting} aria-hidden="true">{labels.items.greetingLine}</p>
+          )}
+          <h1 className={styles.title}>
+            {rawItems.length === 0
+              ? labels.items.title
+              : rawItems.length === 1
+                ? labels.items.headingWithCount.replace('{count}', '1')
+                : labels.items.headingWithCountPlural.replace('{count}', String(rawItems.length))
+            }
+          </h1>
         </div>
         <button type="button" className={styles.newItemButton} onClick={() => setModalTarget('new')}>
           {labels.items.newItemButton}
@@ -290,10 +299,10 @@ export default function Items() {
 
       {items.length === 0 ? (
         <div className={styles.emptyState}>
-          <p className={styles.emptyStateHeading}>Nothing here yet.</p>
-          <p className={styles.emptyStateBody}>Create your first item to start collecting feedback.</p>
+          <p className={styles.emptyStateHeading}>{labels.items.emptyHeading}</p>
+          <p className={styles.emptyStateBody}>{labels.items.emptyBody}</p>
           <button type="button" className={styles.emptyStateCta} onClick={() => setModalTarget('new')}>
-            {labels.items.newItemButton}
+            {labels.items.emptyCta}
           </button>
         </div>
       ) : (

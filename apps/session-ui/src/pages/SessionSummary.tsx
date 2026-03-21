@@ -43,6 +43,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.875rem',
     textDecoration: 'none',
   },
+  closeButton: {
+    background: 'transparent',
+    border: '1px solid #3a3a3a',
+    borderRadius: '6px',
+    color: '#888',
+    fontSize: '0.875rem',
+    padding: '0.25rem 0.75rem',
+    cursor: 'pointer',
+  },
   content: {
     width: '100%',
     maxWidth: '600px',
@@ -226,9 +235,14 @@ export default function SessionSummary() {
       {/* Top bar */}
       <div style={styles.topBar}>
         <span style={styles.wordmark}>pulse</span>
-        <a href={`/s/${sessionId}/chat`} style={styles.backLink}>
-          ← Back to conversation
-        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <a href={`/s/${sessionId}/chat`} style={styles.backLink}>
+            ← Back to conversation
+          </a>
+          <button style={styles.closeButton} onClick={() => window.close()}>
+            Close
+          </button>
+        </div>
       </div>
 
       <div style={styles.content}>
@@ -289,7 +303,7 @@ export default function SessionSummary() {
 
             {summary.tenantName && (
               <p style={styles.footer}>
-                Your feedback has been shared with {summary.tenantName}.
+                Your responses have been shared with {summary.tenantName}.
               </p>
             )}
           </div>

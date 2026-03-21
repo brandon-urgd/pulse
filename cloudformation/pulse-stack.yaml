@@ -972,6 +972,8 @@ Resources:
       - PulseRunPulseCheckMethod
       - PulseGetPulseCheckMethod
       - PulseSavePCDecisionsMethod
+      - PulseGenerateRevisionMethod
+      - PulseGetRevisionsMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
 
@@ -1982,21 +1984,45 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:DeleteItem
-                Resource: !GetAtt PulseTenantsTable.Arn
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt PulseTenantsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseTranscriptsTable.Arn
+                  - !GetAtt PulseReportsTable.Arn
+                  - !GetAtt PulsePulseChecksTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:Query
-                  - dynamodb:BatchWriteItem
-                Resource: !GetAtt PulseItemsTable.Arn
+                Resource:
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+                  - !Sub '${PulseReportsTable.Arn}/index/*'
               - Effect: Allow
                 Action:
-                  - dynamodb:Query
-                  - dynamodb:BatchWriteItem
-                Resource: !GetAtt PulseSessionsTable.Arn
+                  - s3:ListBucket
+                Resource: !GetAtt PulseDataBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: 'pulse/*'
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
               - Effect: Allow
                 Action:
                   - cognito-idp:AdminDeleteUser
                 Resource: !GetAtt PulseUserPool.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
 
   PulseGetItemsFunctionRole:
     Type: AWS::IAM::Role
@@ -2217,7 +2243,7 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref DeleteAccountCodeKey
-      Timeout: 60
+      Timeout: 120
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, DeleteAccount]
       TracingConfig:
@@ -2227,10 +2253,13 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           ITEMS_TABLE: !Ref PulseItemsTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          REPORTS_TABLE: !Ref PulseReportsTable
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          DATA_BUCKET: !Ref PulseDataBucket
           USER_POOL_ID: !Ref PulseUserPool
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
-          CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
-          CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
       Tags:
         - Key: project
           Value: pulse
@@ -4626,6 +4655,20 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt PulseGenerateReportFunction.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub '${PulseSessionsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt PulseRunPulseCheckFunction.Arn
+                  - !GetAtt PulseSendPulseCheckReadyFunction.Arn
 
   PulseSendReminderFunction:
     # checkov:skip=CKV_AWS_117:Lambda VPC not required — scheduled job accesses DynamoDB/SES/SNS via AWS service endpoints
@@ -4691,6 +4734,9 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           GENERATE_REPORT_FUNCTION_NAME: !Ref PulseGenerateReportFunction
+          ITEMS_TABLE: !Ref PulseItemsTable
+          RUN_PULSE_CHECK_FUNCTION_NAME: !Ref PulseRunPulseCheckFunction
+          SEND_PULSE_CHECK_READY_FUNCTION_NAME: !Ref PulseSendPulseCheckReadyFunction
       Tags:
         - Key: project
           Value: pulse
@@ -6414,7 +6460,373 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSavePCDecisionsFunction.Arn}/invocations'
 
-# ─── Outputs ──────────────────────────────────────────────────────────────────
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S6: Revision and Account Management — Parameters, Log Groups, IAM Roles,
+  #     Lambda Functions, and API Gateway Resources
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── S6 CloudWatch Log Groups ─────────────────────────────────────────────────
+
+  PulseGenerateRevisionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-generateRevision-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseGetRevisionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-getRevisions-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSendPulseCheckReadyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-sendPulseCheckReady-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ── S6 IAM Execution Roles ───────────────────────────────────────────────────
+
+  PulseGenerateRevisionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-generateRevision-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GenerateRevisionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulsePulseChecksTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  PulseGetRevisionsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-getRevisions-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GetRevisionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt PulseDataBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: 'pulse/*/items/*/revisions/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+
+  PulseSendPulseCheckReadyFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-sendPulseCheckReady-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendPulseCheckReadyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/pulse@urgdstudios.com'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  # ── S6 Lambda Functions ──────────────────────────────────────────────────────
+
+  PulseGenerateRevisionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGenerateRevisionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-generateRevision-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGenerateRevisionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: 'lambda-packages/urgd-pulse-generateRevision/latest.zip'
+      Timeout: 120
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 25
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGenerateRevisionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGenerateRevisionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseGetRevisionsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseGetRevisionsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-getRevisions-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseGetRevisionsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: 'lambda-packages/urgd-pulse-getRevisions/latest.zip'
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: 10
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseGetRevisionsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseGetRevisionsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseSendPulseCheckReadyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSendPulseCheckReadyLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-sendPulseCheckReady-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseSendPulseCheckReadyFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: 'lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip'
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: 5
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ── S6 API Gateway Resources and Methods ─────────────────────────────────────
+
+  # POST /api/manage/items/{itemId}/revise
+  PulseManageItemReviseResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: revise
+
+  PulseGenerateRevisionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemReviseResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGenerateRevisionFunction.Arn}/invocations'
+
+  # GET /api/manage/items/{itemId}/revisions
+  PulseManageItemRevisionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: revisions
+
+  PulseGetRevisionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemRevisionsResource
+      HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetRevisionsFunction.Arn}/invocations'
+
+  # ── Update expireSessions function to add new env vars for auto-trigger ───────
+  # (The expireSessions function is defined in S3 — we update its env vars here
+  #  by referencing the new functions. The actual function resource is updated
+  #  in-place via CloudFormation update.)
+
+
 Outputs:
   CloudFrontDistributionId:
     Description: CloudFront distribution ID

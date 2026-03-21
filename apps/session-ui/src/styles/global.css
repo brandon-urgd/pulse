@@ -1,0 +1,7 @@
+/* Session UI — global styles */
+
+/* Global focus indicator — 2px solid, 2px offset */
+:focus-visible {
+  outline: 2px solid #7C9E8A;
+  outline-offset: 2px;
+}

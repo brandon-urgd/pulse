@@ -89,6 +89,14 @@ export default function SessionReport() {
         ← {labels.sessionReport.backToItem}
       </Link>
 
+      {/* ── Pulse eyebrow ── */}
+      <p className={styles.pulseEyebrow}>
+        {labels.sessionReport.pulseFromReviewer.replace(
+          '{reviewerLabel}',
+          report.isSelfReview ? 'Self-review' : 'Reviewer'
+        )}
+      </p>
+
       {/* ── Verdict ── */}
       <div className={styles.verdictBlock}>
         <p className={styles.verdictLabel}>{labels.sessionReport.verdictLabel}</p>

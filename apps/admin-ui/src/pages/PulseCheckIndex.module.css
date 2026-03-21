@@ -15,7 +15,7 @@
 
 .link {
   font-size: var(--font-size-sm);
-  color: var(--color-accent-pulse);
+  color: var(--color-interactive);
   text-decoration: none;
 }
 

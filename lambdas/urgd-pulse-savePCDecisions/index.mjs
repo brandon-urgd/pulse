@@ -9,7 +9,7 @@ requireEnv(['PULSE_CHECKS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const VALID_ACTIONS = ['Accept', 'Adjust', 'Revise', 'Dismiss']
+const VALID_ACTIONS = ['Accept', 'Revise', 'Override']
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -54,74 +54,58 @@ export const handler = async (event) => {
   }
 
   try {
-    // 1. Get pulse check to validate revisionIds exist
+    // 1. Get pulse check to validate themeIds exist
     const pcResult = await dynamo.send(new GetItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      ProjectionExpression: 'proposedRevisions',
+      ProjectionExpression: 'themes',
     }))
 
     if (!pcResult.Item) {
       return errorResponse(404, 'Pulse check not found', {}, origin)
     }
 
-    // Extract valid revisionIds from proposedRevisions
-    const validRevisionIds = new Set(
-      (pcResult.Item.proposedRevisions?.L || []).map(r => r.M?.revisionId?.S).filter(Boolean)
+    // Extract valid themeIds from themes array
+    const validThemeIds = new Set(
+      (pcResult.Item.themes?.L || []).map(r => r.M?.themeId?.S).filter(Boolean)
     )
 
-    // Validate all submitted revisionIds exist
-    const invalidRevisionIds = decisionEntries
-      .map(([revisionId]) => revisionId)
-      .filter(revisionId => !validRevisionIds.has(revisionId))
+    // Validate all submitted themeIds exist
+    const invalidThemeIds = decisionEntries
+      .map(([themeId]) => themeId)
+      .filter(themeId => !validThemeIds.has(themeId))
 
-    if (invalidRevisionIds.length > 0) {
-      log('warn', 'SavePCDecisions: invalid revisionIds', { requestId, tenantId, itemId, invalidRevisionIds })
-      return errorResponse(400, `Invalid revisionId(s): ${invalidRevisionIds.join(', ')}`, {}, origin)
+    if (invalidThemeIds.length > 0) {
+      log('warn', 'SavePCDecisions: invalid revisionIds', { requestId, tenantId, itemId, invalidRevisionIds: invalidThemeIds })
+      return errorResponse(400, `Invalid themeId(s): ${invalidThemeIds.join(', ')}`, {}, origin)
     }
 
     // 2. Build update expression for partial save — only update submitted decisions
     const now = new Date().toISOString()
     const updateParts = []
-    const expressionNames = {}
-    const expressionValues = {}
+    const expressionNames = { '#decisions': 'decisions' }
+    const expressionValues = { ':emptyMap': { M: {} } }
 
-    expressionNames['#decisions'] = 'decisions'
-    expressionValues[':emptyMap'] = { M: {} }
-
-    // Step 1: ensure the decisions map exists (no-op if already present)
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.PULSE_CHECKS_TABLE,
-      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: 'SET #decisions = if_not_exists(#decisions, :emptyMap)',
-      ExpressionAttributeNames: { '#decisions': 'decisions' },
-      ExpressionAttributeValues: { ':emptyMap': { M: {} } },
-    }))
-
-    // Step 2: write each decision into the map as nested paths
-    decisionEntries.forEach(([revisionId, decision], idx) => {
+    // Write each decision into the map as nested paths
+    decisionEntries.forEach(([themeId, decision], idx) => {
       const nameKey = `#d${idx}`
       const valueKey = `:d${idx}`
-      expressionNames[nameKey] = revisionId
+      expressionNames[nameKey] = themeId
       expressionValues[valueKey] = {
         M: {
           action: { S: decision.action },
-          tenantNote: { S: decision.tenantNote || '' },
+          ...(decision.tenantNote ? { tenantNote: { S: decision.tenantNote } } : {}),
           decidedAt: { S: now },
         },
       }
       updateParts.push(`#decisions.${nameKey} = ${valueKey}`)
     })
 
-    // Remove the init entries — not needed for step 2
-    delete expressionNames['#decisions']
-    delete expressionValues[':emptyMap']
-    expressionNames['#decisions'] = 'decisions'
-
+    // Single UpdateItem: init decisions map if absent, then write all submitted decisions
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: `SET ${updateParts.join(', ')}`,
+      UpdateExpression: `SET #decisions = if_not_exists(#decisions, :emptyMap), ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionNames,
       ExpressionAttributeValues: expressionValues,
     }))

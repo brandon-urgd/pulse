@@ -7,10 +7,12 @@ import SplashEntry from './pages/SplashEntry';
 import Welcome from './pages/Welcome';
 import Items from './pages/Items';
 import ItemDetail from './pages/ItemDetail';
+import ItemRevision from './pages/ItemRevision';
 import SessionReport from './pages/SessionReport';
 import PulseCheck from './pages/PulseCheck';
 import PulseCheckIndex from './pages/PulseCheckIndex';
 import Settings from './pages/Settings';
+import ForgotPassword from './pages/ForgotPassword';
 
 configureAmplify();
 
@@ -32,6 +34,7 @@ export default function App() {
           <Route path="/" element={<SplashEntry />} />
           <Route path="/admin/login" element={<Navigate to="/" replace />} />
           <Route path="/admin/register" element={<Navigate to="/" replace />} />
+          <Route path="/admin/forgot-password" element={<ForgotPassword />} />
 
           {/* Protected — standalone (no layout shell) */}
           <Route
@@ -56,6 +59,7 @@ export default function App() {
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemDetail />} />
             <Route path="items/:itemId" element={<ItemDetail />} />
+            <Route path="items/:itemId/revisions" element={<ItemRevision />} />
             <Route path="items/:itemId/sessions/:sessionId/report" element={<SessionReport />} />
             <Route path="pulse-check" element={<PulseCheckIndex />} />
             <Route path="pulse-check/:itemId" element={<PulseCheck />} />

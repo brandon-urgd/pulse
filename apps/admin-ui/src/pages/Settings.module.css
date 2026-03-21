@@ -244,6 +244,265 @@
   margin: 0;
 }
 
+/* ── Inline edit row ─────────────────────────────────────────────────────── */
+
+.inlineEditRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.editButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-interactive);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.inlineSaveButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-inverse);
+  background: var(--color-interactive);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-3);
+  cursor: pointer;
+}
+
+.inlineSaveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inlineCancelButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* ── Password section ────────────────────────────────────────────────────── */
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 360px;
+}
+
+.passwordField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.passwordLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.passwordInput {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.passwordInput:focus {
+  border-color: var(--color-interactive);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-interactive) 20%, transparent);
+}
+
+.passwordInput:disabled {
+  opacity: 0.5;
+}
+
+.passwordFeedback {
+  min-height: 1.4em;
+}
+
+.passwordSuccess {
+  font-size: var(--font-size-sm);
+  color: var(--color-success);
+  margin: 0;
+}
+
+.passwordError {
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+  margin: 0;
+}
+
+.updatePasswordButton {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.updatePasswordButton:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.updatePasswordButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Danger zone ─────────────────────────────────────────────────────────── */
+
+.dangerHeading {
+  color: var(--color-error);
+}
+
+.dangerZone {
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.dangerDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Delete modal ────────────────────────────────────────────────────────── */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.modalCard {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  padding: var(--space-7);
+  max-width: 440px;
+  width: 100%;
+  box-shadow: var(--shadow-modal-confirm, 0 24px 64px rgba(0,0,0,0.4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modalHeading {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.modalBody {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.modalLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.modalInput {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.modalInput:focus {
+  border-color: var(--color-interactive);
+}
+
+.modalError {
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+  margin: 0;
+}
+
+.modalActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.deleteConfirmButton {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-error);
+  color: #ffffff;
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.deleteConfirmButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deleteConfirmButton:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.modalCancelButton {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.modalCancelButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Loading skeleton ────────────────────────────────────────────────────── */
 
 .skeleton {

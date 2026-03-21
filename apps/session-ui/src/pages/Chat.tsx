@@ -628,7 +628,7 @@ export default function Chat() {
           if (msg.content === '__completion__') {
             return (
               <div key={i} style={styles.completionCard}>
-                <h2 style={styles.completionHeading}>Your feedback has been shared.</h2>
+                <h2 style={styles.completionHeading}>The pulse has been captured.</h2>
                 <p style={styles.completionBody}>
                   Thank you for your time. You can view a summary of your session below.
                 </p>

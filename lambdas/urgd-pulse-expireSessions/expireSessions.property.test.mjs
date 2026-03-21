@@ -9,12 +9,21 @@ vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
 const dynamoSendSpy = vi.fn()
+const lambdaSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
   class ScanCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, ScanCommand, UpdateItemCommand }
+  class QueryCommand { constructor(input) { this.input = input } }
+  class GetItemCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand, GetItemCommand }
+})
+
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send(...args) { return lambdaSendSpy(...args) } }
+  class InvokeCommand { constructor(input) { this.input = input } }
+  return { LambdaClient, InvokeCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -35,6 +44,8 @@ function makeSession(tenantId, sessionId, status, expiresAt) {
 describe('Property 28: Session Expiration Property', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
+    lambdaSendSpy.mockReset()
+    lambdaSendSpy.mockResolvedValue({})
   })
 
   it('sessions with past expiresAt and non-completed status are expired; completed sessions are never modified', async () => {

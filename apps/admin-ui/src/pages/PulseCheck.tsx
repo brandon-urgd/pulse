@@ -287,8 +287,11 @@ export default function PulseCheck() {
           <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
-          <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
-          {itemName && <p className={styles.subheading}>{itemName}</p>}
+          <h1 className={styles.heading}>
+            {itemName
+              ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
+              : labels.pulseCheck.heading}
+          </h1>
 
           <div className={`${styles.generatePrompt} ${itemIsActive ? styles.generatePromptActive : styles.generatePromptClosed}`}>
             {itemIsActive ? (
@@ -384,8 +387,11 @@ export default function PulseCheck() {
           <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
-          <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
-          {itemName && <p className={styles.subheading}>{itemName}</p>}
+          <h1 className={styles.heading}>
+            {itemName
+              ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
+              : labels.pulseCheck.heading}
+          </h1>
           {IncompleteNotice}
 
           <div className={styles.verdictBlock}>
@@ -466,8 +472,11 @@ export default function PulseCheck() {
         <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
           ← {labels.pulseCheck.backToItem}
         </Link>
-        <h1 className={styles.heading}>{labels.pulseCheck.heading}</h1>
-        {itemName && <p className={styles.subheading}>{itemName}</p>}
+        <h1 className={styles.heading}>
+          {itemName
+            ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
+            : labels.pulseCheck.heading}
+        </h1>
         {IncompleteNotice}
 
         {/* Verdict + narrative — above everything else */}

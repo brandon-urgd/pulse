@@ -107,6 +107,11 @@ check_post "S5 POST /api/manage/items/{id}/pulse-check reachable"     "$BASE_URL
 check "S5 GET /api/manage/items/{id}/pulse-check reachable"           "$BASE_URL/api/manage/items/smoke-test/pulse-check"              "401"
 check_put "S5 PUT /api/manage/items/{id}/pulse-check/decisions reachable" "$BASE_URL/api/manage/items/smoke-test/pulse-check/decisions" "401" "{}"
 
+# S6 gate: account deletion, revision generation, and revision listing routes
+check_delete "S6 DELETE /api/manage/account reachable"                    "$BASE_URL/api/manage/account"                              "401"
+check_post   "S6 POST /api/manage/items/{id}/revise reachable"            "$BASE_URL/api/manage/items/smoke-test/revise"              "401" "{}"
+check        "S6 GET /api/manage/items/{id}/revisions reachable"          "$BASE_URL/api/manage/items/smoke-test/revisions"           "401"
+
 # Summary
 echo ""
 echo "## 📊 Smoke Test Summary"
