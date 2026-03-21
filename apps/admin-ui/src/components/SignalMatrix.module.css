@@ -1,6 +1,5 @@
 .wrapper {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  /* overflow handled by .matrixScroll in PulseCheck — wrapper must not create a new scroll context */
 }
 
 /* ── Desktop table ─────────────────────────────────────────────────────────── */
@@ -24,6 +23,9 @@
   font-weight: 600;
   color: var(--color-text-primary);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 /* Summary column (leftmost) */
@@ -208,10 +210,6 @@
 
 /* Responsive breakpoint */
 @media (max-width: 640px) {
-  .wrapper {
-    overflow-x: visible;
-  }
-
   .table {
     display: none;
   }

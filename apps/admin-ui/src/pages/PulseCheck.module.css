@@ -226,6 +226,7 @@
   overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  -webkit-overflow-scrolling: touch;
 }
 
 .synthesisSection {
