@@ -264,6 +264,7 @@ jobs:
               {"ParameterKey": "ShieldEventBridgeRuleArn",   "ParameterValue": os.environ["SHIELD_EVENTBRIDGE_RULE_ARN"]},
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
               {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
+              {"ParameterKey": "DeploymentVersion",          "ParameterValue": "$VERSION"},
           ]
 
           # Derive CF parameter key from function name:

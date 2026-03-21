@@ -16,7 +16,7 @@ const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
-const REPLY_TO = 'no-reply@urgdstudios.com'
+const REPLY_TO = 'admin@urgdstudios.com'
 
 export const handler = async (event) => {
   const { tenantId, itemId, itemName } = event
@@ -71,56 +71,48 @@ export const handler = async (event) => {
   <meta charset="UTF-8">
   <title>Your Pulse Check is ready</title>
 </head>
-<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a; background: #ffffff;">
-
-  <!-- Logo -->
-  <div style="text-align: center; margin-bottom: 24px;">
-    <img src="${appUrl}/assets/urgd-logo.png" alt="ur/gd Studios" width="120" style="display: block; margin: 0 auto;" />
-  </div>
-
-  <hr style="border: none; border-top: 1px solid #eee; margin: 0 0 28px;" />
+<body style="max-width:600px;margin:0 auto;padding:24px;color:#111827;font-family:'Rubik',sans-serif;background:#ffffff;">
 
   <!-- Heading -->
-  <h2 style="font-size: 22px; font-weight: 600; color: #1a1a1a; margin: 0 0 16px;">Your Pulse Check is ready.</h2>
+  <h2 style="font-family:'Archivo',sans-serif;font-size:22px;font-weight:700;color:#111827;margin:0 0 16px;">Your Pulse Check is ready.</h2>
 
   <!-- Body copy -->
-  <p style="font-size: 16px; line-height: 1.6; color: #333; margin: 0 0 12px;">
+  <p style="font-size:16px;line-height:1.6;color:#111827;margin:0 0 12px;">
     ${itemName} has closed, and Pulse has already done the work.
   </p>
-  <p style="font-size: 16px; line-height: 1.6; color: #333; margin: 0 0 28px;">
+  <p style="font-size:16px;line-height:1.6;color:#111827;margin:0 0 28px;">
     Your Pulse Check is waiting for you — a clear read on what your reviewers actually think, organized by signal.
   </p>
 
-  <!-- CTA Button (Gmail-safe table-based) -->
-  <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 28px;">
+  <!-- CTA Button -->
+  <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
     <tr>
-      <td style="background-color:#4a7c59; border-radius:6px; padding:12px 24px;">
+      <td style="background-color:#4f46e5;border-radius:8px;padding:12px 24px;">
         <a href="${pulseCheckUrl}"
-           style="color:#ffffff; text-decoration:none; font-size:16px; font-weight:600; font-family:sans-serif;">
+           style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;font-family:'Rubik',sans-serif;">
           View your Pulse Check
         </a>
       </td>
     </tr>
   </table>
 
-  <!-- Plain-text fallback -->
-  <p style="font-size: 13px; color: #777; margin: 0 0 28px;">
-    Or copy this link: <a href="${pulseCheckUrl}" style="color:#4a7c59;">${pulseCheckUrl}</a>
+  <p style="font-size:13px;color:#4b5563;margin:0 0 28px;">
+    Or copy this link: <a href="${pulseCheckUrl}" style="color:#4f46e5;">${pulseCheckUrl}</a>
   </p>
 
-  <hr style="border: none; border-top: 1px solid #eee; margin: 0 0 16px;" />
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 16px;">
 
   <!-- Footer -->
-  <p style="font-size: 11px; color: #999; margin: 4px 0;">
-    Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#999;">ur/gd Studios</a>
+  <p style="font-size:11px;color:#6b7280;margin:4px 0;">
+    Sent by Pulse, powered by <a href="https://www.urgdstudios.com" style="color:#6b7280;">ur/gd Studios</a>
   </p>
-  <p style="font-size: 11px; color: #999; margin: 4px 0;">
+  <p style="font-size:11px;color:#6b7280;margin:4px 0;">
     ur/gd Studios LLC &middot; The Cloud Room &middot; 1424 11th Ave STE 400 &middot; Seattle, WA 98122-4271
   </p>
-  <p style="font-size: 11px; color: #999; margin: 4px 0;">
-    <a href="https://www.urgdstudios.com/privacy" style="color:#999;">Privacy Policy</a>
+  <p style="font-size:11px;color:#6b7280;margin:4px 0;">
+    <a href="https://www.urgdstudios.com/privacy" style="color:#6b7280;">Privacy Policy</a>
     &nbsp;&middot;&nbsp;
-    <a href="https://www.urgdstudios.com/terms" style="color:#999;">Terms of Use</a>
+    <a href="https://www.urgdstudios.com/terms" style="color:#6b7280;">Terms of Use</a>
   </p>
 
 </body>

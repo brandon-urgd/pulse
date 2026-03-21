@@ -276,6 +276,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
     Description: S3 key for urgd-pulse-sendPulseCheckReady Lambda ZIP
 
+  DeploymentVersion:
+    Type: String
+    Default: 'local'
+    Description: Git commit SHA injected at deploy time to force API Gateway redeployment
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -991,6 +996,7 @@ Resources:
       - PulseGetRevisionsMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
+      Description: !Sub 'Deployment ${DeploymentVersion} — ${AWS::StackName}'
 
   PulseApiGatewayAccessLogGroup:
     Type: AWS::Logs::LogGroup
