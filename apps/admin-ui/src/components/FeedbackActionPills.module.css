@@ -50,7 +50,7 @@
   color: #b45309;
 }
 
-.override.active {
+.dismiss.active {
   background: var(--color-error-bg);
   color: var(--color-error);
 }

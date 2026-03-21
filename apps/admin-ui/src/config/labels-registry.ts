@@ -290,6 +290,7 @@ export const labels = {
     matrixAriaLabel: 'Cross-reviewer feedback signal matrix',
     synthesisHeading: 'Synthesis',
     decisionsHeading: 'Proposed Revisions',
+    decisionsHint: 'Mark each proposal — decisions are saved and used when you generate a revision.',
     saveDecisionsButton: 'Save Decisions',
     savingDecisions: 'Saving…',
     decisionsSaved: 'Decisions saved.',

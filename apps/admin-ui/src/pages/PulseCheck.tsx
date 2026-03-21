@@ -143,8 +143,10 @@ export default function PulseCheck() {
   useEffect(() => {
     if (pc?.decisions) {
       const synced: Record<string, FeedbackAction> = {};
-      for (const [themeId, d] of Object.entries(pc.decisions)) {
-        synced[themeId] = d.action.toLowerCase() as FeedbackAction;
+      for (const [revisionId, d] of Object.entries(pc.decisions)) {
+        const action = d.action.toLowerCase();
+        // map legacy 'override' to 'dismiss' for backwards compat
+        synced[revisionId] = (action === 'override' ? 'dismiss' : action) as FeedbackAction;
       }
       setDecisions(synced);
     }
@@ -501,6 +503,7 @@ export default function PulseCheck() {
         {proposedRevisions.length > 0 && (
           <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
             <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
+            <p className={styles.decisionsHint}>{labels.pulseCheck.decisionsHint}</p>
             <ul className={styles.themeDecisionList}>
               {proposedRevisions.map((revision) => (
                 <li key={revision.revisionId} className={styles.themeDecisionRow}>

@@ -201,6 +201,13 @@
   border-top: 1px solid var(--color-border);
 }
 
+.decisionsHint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+  line-height: 1.5;
+}
+
 /* Theme decision rows */
 .themeDecisionList {
   list-style: none;
