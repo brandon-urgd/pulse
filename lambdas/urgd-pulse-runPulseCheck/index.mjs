@@ -187,13 +187,22 @@ Respond in valid JSON:
       "energy": "reviewer energy level",
       "isSelfReview": false
     }
+  ],
+  "proposedRevisions": [
+    {
+      "revisionId": "unique-slug",
+      "proposal": "A specific, concrete change the author could make to the document — written as an actionable suggestion, not an observation. Derived from repeated tension or unresolved uncertainty. Example: 'Address the medium assumption gap — add a section that either defends radio as the right channel or explicitly acknowledges it as an open question.' Maximum 2 sentences.",
+      "rationale": "Why this revision is warranted — grounded in reviewer signals, not editorial opinion. One sentence.",
+      "sourceThemeIds": ["themeId-1", "themeId-2"]
+    }
   ]
 }
 
 For verdict: synthesize across all external reviewers primarily. If self-review exists, note it but weight external signals more heavily.
 For themes: union of themes across all reports. Each theme should have per-reviewer signal breakdown.
 For sharedConviction: only include if 2+ reviewers showed conviction on the same theme.
-For repeatedTension: only include if 2+ reviewers showed tension on the same theme.`
+For repeatedTension: only include if 2+ reviewers showed tension on the same theme.
+For proposedRevisions: derive 2–5 concrete, actionable changes the author could make. Only include revisions grounded in tension or uncertainty signals — do not propose revisions for conviction themes. Each revision must be specific enough that an author knows exactly what to do. Do not include vague suggestions like "expand the section" — say what to expand and why. If there is no meaningful tension or uncertainty, return an empty array.`
 
     // 5. Invoke Bedrock
     const bedrockStart = Date.now()
@@ -249,6 +258,7 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
     const repeatedTension = Array.isArray(consolidated.repeatedTension) ? consolidated.repeatedTension : []
     const openQuestions = Array.isArray(consolidated.openQuestions) ? consolidated.openQuestions : []
     const reviewerVerdicts = Array.isArray(consolidated.reviewerVerdicts) ? consolidated.reviewerVerdicts : []
+    const proposedRevisions = Array.isArray(consolidated.proposedRevisions) ? consolidated.proposedRevisions : []
 
     // 7. Store pulse check — PutItem replaces existing
     const generatedAt = new Date().toISOString()
@@ -292,6 +302,15 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
       },
     }))
 
+    const serializeProposedRevisions = proposedRevisions.map(r => ({
+      M: {
+        revisionId: { S: r.revisionId || '' },
+        proposal: { S: r.proposal || '' },
+        rationale: { S: r.rationale || '' },
+        sourceThemeIds: { L: (r.sourceThemeIds || []).map(id => ({ S: id })) },
+      },
+    }))
+
     await dynamo.send(new PutItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Item: {
@@ -303,6 +322,7 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
         repeatedTension: { L: repeatedTension.map(s => ({ S: s })) },
         openQuestions: { L: openQuestions.map(s => ({ S: s })) },
         reviewerVerdicts: { L: serializeReviewerVerdicts },
+        proposedRevisions: { L: serializeProposedRevisions },
         sessionCount: { N: String(reports.length) },
         incompleteCount: { N: String(incompleteReports.length) },
         generatedAt: { S: generatedAt },
@@ -325,6 +345,7 @@ For repeatedTension: only include if 2+ reviewers showed tension on the same the
       repeatedTension,
       openQuestions,
       reviewerVerdicts,
+      proposedRevisions,
       sessionCount: reports.length,
       incompleteCount: incompleteReports.length,
       generatedAt,

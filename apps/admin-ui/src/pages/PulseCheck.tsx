@@ -38,6 +38,13 @@ interface DecisionRecord {
   decidedAt: string;
 }
 
+interface ProposedRevision {
+  revisionId: string;
+  proposal: string;
+  rationale: string;
+  sourceThemeIds: string[];
+}
+
 interface PulseCheck {
   itemId: string;
   verdict: string;
@@ -46,6 +53,7 @@ interface PulseCheck {
   repeatedTension: string[];
   openQuestions: string[];
   reviewerVerdicts: ReviewerVerdict[];
+  proposedRevisions: ProposedRevision[];
   decisions: Record<string, DecisionRecord>;
   sessionCount: number;
   incompleteCount?: number;
@@ -419,6 +427,7 @@ export default function PulseCheck() {
   const repeatedTensions = pc.repeatedTension ?? [];
   const openQuestions = pc.openQuestions ?? [];
   const themes = pc.themes ?? [];
+  const proposedRevisions = pc.proposedRevisions ?? [];
 
   return (
     <>
@@ -489,24 +498,21 @@ export default function PulseCheck() {
           </section>
         </section>
 
-        {themes.length > 0 && (
+        {proposedRevisions.length > 0 && (
           <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
             <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
             <ul className={styles.themeDecisionList}>
-              {themes.map((theme) => (
-                <li key={theme.themeId} className={styles.themeDecisionRow}>
+              {proposedRevisions.map((revision) => (
+                <li key={revision.revisionId} className={styles.themeDecisionRow}>
                   <div className={styles.themeDecisionHeader}>
                     <div style={{ flex: 1 }}>
-                      <p className={styles.themeDecisionText}>{theme.label}</p>
-                      <p className={styles.themeDecisionMeta}>
-                        {theme.reviewerSignals.length}{' '}
-                        {theme.reviewerSignals.length === 1 ? 'reviewer' : 'reviewers'}
-                      </p>
+                      <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                      <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
                     </div>
                     <FeedbackActionPills
-                      value={decisions[theme.themeId] ?? null}
-                      onChange={(action) => setDecisions((prev) => ({ ...prev, [theme.themeId]: action }))}
-                      ariaLabel={`Decision for: ${theme.label}`}
+                      value={decisions[revision.revisionId] ?? null}
+                      onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                      ariaLabel={`Decision for: ${revision.proposal}`}
                     />
                   </div>
                 </li>

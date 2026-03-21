@@ -53,6 +53,18 @@ function deserializeDecisions(decisionsM) {
   return result
 }
 
+function deserializeProposedRevisions(revisionsL) {
+  return (revisionsL || []).map(r => {
+    const m = r.M || {}
+    return {
+      revisionId: m.revisionId?.S || '',
+      proposal: m.proposal?.S || '',
+      rationale: m.rationale?.S || '',
+      sourceThemeIds: (m.sourceThemeIds?.L || []).map(id => id.S || ''),
+    }
+  })
+}
+
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -87,6 +99,7 @@ export const handler = async (event) => {
       openQuestions: (item.openQuestions?.L || []).map(s => s.S),
       reviewerVerdicts: deserializeReviewerVerdicts(item.reviewerVerdicts?.L),
       decisions: deserializeDecisions(item.decisions?.M),
+      proposedRevisions: deserializeProposedRevisions(item.proposedRevisions?.L),
       sessionCount: item.sessionCount?.N ? parseInt(item.sessionCount.N, 10) : 0,
       incompleteCount: item.incompleteCount?.N ? parseInt(item.incompleteCount.N, 10) : 0,
       generatedAt: item.generatedAt?.S,
