@@ -76,6 +76,7 @@ export const handler = async (event) => {
         Item: {
           tenantId: { S: tenantId },
           email: { S: email },
+          displayName: { S: name.trim() },
           tier: { S: 'free' },
           onboardingComplete: { BOOL: false },
           createdAt: { S: now },
