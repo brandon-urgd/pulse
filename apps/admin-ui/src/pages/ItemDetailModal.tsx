@@ -106,11 +106,20 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const autoSaved     = useRef(false);
   const uploadingCreate = useRef(false);
 
-  // Preview state
+  // Document preview state (file viewer panel)
   interface PreviewData { url: string; contentType: string; filename: string; originalUrl?: string }
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [loadingPreviewFile, setLoadingPreviewFile] = useState<string | null>(null);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Session preview state
+  const [isSessionPreviewLoading, setIsSessionPreviewLoading] = useState(false);
+  const [sessionPreviewError, setSessionPreviewError] = useState('');
+  const [sessionPreviewPopupBlocked, setSessionPreviewPopupBlocked] = useState(false);
+
+  // Self-review state
+  const [isSelfReviewLoading, setIsSelfReviewLoading] = useState(false);
+  const [selfReviewError, setSelfReviewError] = useState('');
 
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
@@ -366,6 +375,55 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     }
   }
 
+  // ── Session preview handler ─────────────────────────────────────────────────
+  async function handleSessionPreview() {
+    const targetItemId = savedItemId.current ?? itemId;
+    if (!targetItemId || isSessionPreviewLoading) return;
+    setIsSessionPreviewLoading(true);
+    setSessionPreviewError('');
+    setSessionPreviewPopupBlocked(false);
+    try {
+      const resp = await authedMutate(
+        `/api/manage/items/${targetItemId}/preview-session`,
+        'GET',
+        undefined,
+        navigate
+      ) as { data: { previewUrl: string } };
+      const newTab = window.open(resp.data.previewUrl, '_blank', 'noopener,noreferrer');
+      if (!newTab) setSessionPreviewPopupBlocked(true);
+    } catch {
+      setSessionPreviewError(labels.itemDetail.previewSessionError);
+    } finally {
+      setIsSessionPreviewLoading(false);
+    }
+  }
+
+  // ── Self-review handler ──────────────────────────────────────────────────────
+  async function handleSelfReview() {
+    const targetItemId = savedItemId.current ?? itemId;
+    if (!targetItemId || isSelfReviewLoading) return;
+    setIsSelfReviewLoading(true);
+    setSelfReviewError('');
+    try {
+      const resp = await authedMutate(
+        `/api/manage/items/${targetItemId}/self-review`,
+        'POST',
+        {},
+        navigate
+      ) as { data: { sessionId: string; sessionUrl: string } };
+      window.open(resp.data.sessionUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status ?? 500;
+      setSelfReviewError(
+        status === 403
+          ? labels.itemDetail.selfReviewLimitError
+          : labels.itemDetail.selfReviewError
+      );
+    } finally {
+      setIsSelfReviewLoading(false);
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   const isSaving  = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
@@ -384,6 +442,29 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           <h2 id="item-modal-title" className={styles.modalTitle}>
             {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
           </h2>
+          {isEditMode && (
+            <>
+              {(itemData?.status === 'draft' || itemData?.status === 'active') && (
+                <button
+                  type="button"
+                  className={styles.headerActionSelfReview}
+                  onClick={handleSelfReview}
+                  disabled={isSelfReviewLoading}
+                  title={labels.itemDetail.selfReviewTooltip}
+                >
+                  {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles.headerActionPreview}
+                onClick={handleSessionPreview}
+                disabled={isSessionPreviewLoading}
+              >
+                {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={styles.closeButton}
@@ -393,6 +474,17 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             ×
           </button>
         </div>
+
+        {/* Session preview inline feedback */}
+        {sessionPreviewError && (
+          <p className={styles.formError} role="alert" aria-live="polite">{sessionPreviewError}</p>
+        )}
+        {sessionPreviewPopupBlocked && (
+          <p className={styles.previewNotice} aria-live="polite">{labels.itemDetail.previewSessionPopupBlocked}</p>
+        )}
+        {selfReviewError && (
+          <p className={styles.formError} role="alert" aria-live="polite">{selfReviewError}</p>
+        )}
 
         {/* Inner layout — flex row when preview is open, flex column always */}
         <div className={previewData ? styles.modalInner : styles.modalSinglePane}>

@@ -38,12 +38,13 @@ export default function SplashEntry() {
 
   const firstInputRef = useRef<HTMLInputElement>(null);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated — run terms check first
   useEffect(() => {
     if (!isLoading && user) {
-      navigate('/admin/items', { replace: true });
+      redirectAfterLogin();
     }
-  }, [user, isLoading, navigate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isLoading]);
 
   // Handle OAuth redirect callback (Apple / Google)
   useEffect(() => {

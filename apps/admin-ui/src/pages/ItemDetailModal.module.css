@@ -79,6 +79,57 @@
   color: var(--color-text-primary);
 }
 
+.headerActionSelfReview {
+  margin-left: auto;
+  margin-right: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.headerActionSelfReview:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.headerActionSelfReview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.headerActionPreview {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.headerActionPreview:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.headerActionPreview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.previewNotice {
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 /* ── Body ────────────────────────────────────────────────────────────────── */
 
 .modalBody {

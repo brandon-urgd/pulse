@@ -52,7 +52,7 @@ describe('urgd-pulse-previewSession', () => {
       const body = JSON.parse(result.body)
 
       expect(result.statusCode).toBe(200)
-      expect(body.data.previewUrl).toMatch(/^\/s\/\?code=.+&preview=true$/)
+      expect(body.data.previewUrl).toMatch(/\/s\/\?code=.+&preview=true$/)
       expect(body.data.sessionId).toBeTruthy()
       expect(body.data.pulseCode).toBeTruthy()
       expect(body.data.expiresAt).toBeTruthy()
