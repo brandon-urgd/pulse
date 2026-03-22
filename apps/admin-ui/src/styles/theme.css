@@ -161,3 +161,18 @@ body {
   outline: 2px solid var(--color-interactive);
   outline-offset: 2px;
 }
+
+/* ── Responsive nav — hamburger on mobile, tabs on desktop ─────────────── */
+
+/* Mobile: hide desktop nav + avatar, show hamburger */
+@media (max-width: 639px) {
+  .desktop-nav    { display: none !important; }
+  .desktop-avatar { display: none !important; }
+  .mobile-spacer  { display: flex !important; }
+}
+
+/* Desktop: hide hamburger + spacer, show desktop nav + avatar */
+@media (min-width: 640px) {
+  .mobile-menu-wrap { display: none !important; }
+  .mobile-spacer    { display: none !important; }
+}

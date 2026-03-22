@@ -489,16 +489,6 @@ export default function Settings() {
         )}
       </section>
 
-      {/* ── Sign out ── */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>Account actions</h2>
-        <div className={styles.actionsSection}>
-          <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
-            {labels.settings.signOutButton}
-          </button>
-        </div>
-      </section>
-
       {/* ── Support & Privacy ── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>{labels.support.sectionHeading}</h2>
@@ -511,6 +501,16 @@ export default function Settings() {
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── Sign out ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>Account actions</h2>
+        <div className={styles.actionsSection}>
+          <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
+            {labels.settings.signOutButton}
+          </button>
         </div>
       </section>
 
