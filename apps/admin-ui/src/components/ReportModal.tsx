@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
+import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
 import styles from './ReportModal.module.css';
 
@@ -39,6 +40,7 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
   const [name, setName] = useState(prefillName);
   const [email, setEmail] = useState(prefillEmail);
   const [submitted, setSubmitted] = useState(false);
+  const { user, tenantId } = useAuth();
 
   const headingId = 'report-modal-heading';
   const firstFocusRef = useRef<HTMLSelectElement>(null);
@@ -57,7 +59,13 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const mutation = useAuthedMutation<unknown, { type: string; message: string; name?: string; email?: string }>(
+  const mutation = useAuthedMutation<unknown, {
+    type: string;
+    message: string;
+    name?: string;
+    email?: string;
+    metadata?: Record<string, string | null>;
+  }>(
     '/api/manage/report',
     'POST',
     {
@@ -80,6 +88,15 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
       message: message.trim(),
       ...(name.trim() ? { name: name.trim() } : {}),
       ...(email.trim() ? { email: email.trim() } : {}),
+      metadata: {
+        appName: 'pulse',
+        appVersion: import.meta.env.VITE_APP_VERSION ?? null,
+        userId: user?.username ?? null,
+        userEmail: user?.email ?? null,
+        tenantId: tenantId ?? null,
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+      },
     });
   }
 
