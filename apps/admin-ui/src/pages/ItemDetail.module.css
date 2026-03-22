@@ -312,7 +312,27 @@
   color: var(--color-error);
 }
 
-.formError {
+.fileRemoveButton {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.fileRemoveButton:hover {
+  color: var(--color-error);
+}
   color: var(--color-error);
   font-size: var(--font-size-sm);
   margin: 0;

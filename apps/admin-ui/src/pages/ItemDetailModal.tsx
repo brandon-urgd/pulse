@@ -382,8 +382,22 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     });
   }
 
-  // ── Preview handler ─────────────────────────────────────────────────────────
-  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
+  // ── Remove document handler ─────────────────────────────────────────────────
+  async function handleRemoveFile() {
+    const targetItemId = savedItemId.current ?? itemId;
+    if (!targetItemId || isAnyFileInFlight) return;
+    try {
+      await authedMutate(`/api/manage/items/${targetItemId}/document`, 'DELETE', undefined, navigate);
+      setFileStatuses({});
+      perFileTimeLimits.current = {};
+      setTimeLimitMinutes(null);
+      queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
+    } catch {
+      setFormError('Failed to remove document. Please try again.');
+    }
+  }
+
+  // ── Preview handler ─────────────────────────────────────────────────────────  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
     const targetItemId = savedItemId.current ?? itemId;
     if (!targetItemId) return;
     setLoadingPreviewFile(fileName);
@@ -681,6 +695,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
                         {Object.entries(fileStatuses).map(([name, state]) => {
                           const isReady = state.status === 'ready';
+                          const isInFlight = state.status === 'uploading' || state.status === 'scanning' || state.status === 'extracting';
                           const isLoadingThis = loadingPreviewFile === name;
                           return (
                             <div
@@ -710,6 +725,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                                 <span className={styles.previewLinkText}>
                                   {isLoadingThis ? '…' : labels.itemDetail.previewLink}
                                 </span>
+                              )}
+                              {!isInFlight && !isLocked && (
+                                <button
+                                  type="button"
+                                  className={styles.fileRemoveButton}
+                                  onClick={(e) => { e.stopPropagation(); handleRemoveFile(); }}
+                                  aria-label={`Remove ${name}`}
+                                >×</button>
                               )}
                             </div>
                           );

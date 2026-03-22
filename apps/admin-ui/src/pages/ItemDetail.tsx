@@ -420,9 +420,23 @@ export default function ItemDetail() {
     });
   }
 
+  // ── Remove document ─────────────────────────────────────────────────────────
+  async function handleRemoveFile() {
+    const targetItemId = savedItemId.current ?? itemId;
+    if (!targetItemId || isAnyFileInFlight) return;
+    try {
+      await authedMutate(`/api/manage/items/${targetItemId}/document`, 'DELETE', undefined, navigate);
+      setFileStatuses({});
+      perFileTimeLimits.current = {};
+      setTimeLimitMinutes(null);
+      queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
+    } catch {
+      setFormError('Failed to remove document. Please try again.');
+    }
+  }
+
   // ── Delete ──────────────────────────────────────────────────────────────────
-  function handleDeleteConfirm() {
-    setDeleteError('');
+  function handleDeleteConfirm() {    setDeleteError('');
     deleteMutation.mutate(undefined);
   }
 
@@ -609,6 +623,14 @@ export default function ItemDetail() {
                 }`}>
                   {fileStatusLabel(state.status)}
                 </span>
+                {state.status !== 'uploading' && state.status !== 'scanning' && state.status !== 'extracting' && !isLocked && (
+                  <button
+                    type="button"
+                    className={styles.fileRemoveButton}
+                    onClick={() => handleRemoveFile()}
+                    aria-label={`Remove ${name}`}
+                  >×</button>
+                )}
               </div>
             ))}
 

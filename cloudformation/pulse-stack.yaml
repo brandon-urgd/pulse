@@ -226,6 +226,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-getDocumentUrl/latest.zip
     Description: S3 key for urgd-pulse-getDocumentUrl Lambda ZIP
 
+  RemoveDocumentCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-removeDocument/latest.zip
+    Description: S3 key for urgd-pulse-removeDocument Lambda ZIP
+
   GenerateReportCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-generateReport/latest.zip
@@ -420,6 +425,7 @@ Mappings:
       GetPulseCheck: 3
       SavePCDecisions: 3
       UsageReport: 3
+      RemoveDocument: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -465,6 +471,7 @@ Mappings:
       GetPulseCheck: 5
       SavePCDecisions: 5
       UsageReport: 5
+      RemoveDocument: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -510,8 +517,7 @@ Mappings:
       GetPulseCheck: 10
       SavePCDecisions: 10
       UsageReport: 5
-
-# ─── Resources ────────────────────────────────────────────────────────────────
+      RemoveDocument: 5
 Resources:
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -1005,6 +1011,7 @@ Resources:
       - PulseDeleteSessionTranscriptMethod
       - PulseGetSessionFileMethod
       - PulseGetDocumentUrlMethod
+      - PulseRemoveDocumentMethod
       - PulsePutCloseItemMethod
       - PulseGetReportMethod
       - PulseRunPulseCheckMethod
@@ -5540,9 +5547,104 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
-  # ══════════════════════════════════════════════════════════════════════════════
-  # S4: API Gateway Resources
-  # ══════════════════════════════════════════════════════════════════════════════
+  PulseRemoveDocumentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-removeDocument-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseRemoveDocumentFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-removeDocument-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseRemoveDocumentPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+
+  PulseRemoveDocumentFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseRemoveDocumentLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-removeDocument-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseRemoveDocumentFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref RemoveDocumentCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RemoveDocument]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET_NAME: !Ref PulseDataBucket
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseRemoveDocumentFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseRemoveDocumentFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
   # POST /api/session/{sessionId}/chat
   PulseSessionChatResource:
@@ -5676,6 +5778,53 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetDocumentUrlFunction.Arn}/invocations'
+
+  # DELETE /api/manage/items/{itemId}/document
+  PulseManageItemDocumentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: document
+
+  PulseRemoveDocumentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemDocumentResource
+      HttpMethod: DELETE
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseRemoveDocumentFunction.Arn}/invocations'
+
+  PulseManageItemDocumentOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemDocumentResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: !Sub "'https://${FrontendDomainName}'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S4: CloudWatch Alarms (P1)
