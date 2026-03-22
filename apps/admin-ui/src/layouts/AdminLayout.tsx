@@ -302,7 +302,7 @@ export default function AdminLayout() {
       <footer
         style={{
           marginTop: 'auto',
-          padding: 'var(--space-8) var(--space-6)',
+          padding: 'var(--space-6) var(--space-4)',
           borderTop: '1px solid var(--color-border)',
           background: 'var(--color-surface)',
         }}

@@ -181,3 +181,24 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ── Mobile — sheet style from bottom ───────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  .modal {
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    touch-action: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}

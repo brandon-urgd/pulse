@@ -246,9 +246,23 @@
   color: var(--color-text-muted);
 }
 
-/* ── Action row ────────────────────────────────────────────────────────────── */
+/* ── Responsive — mobile ─────────────────────────────────────────────────── */
 
-.cardActions {
+@media (max-width: 639px) {
+  .container {
+    padding: var(--space-4);
+  }
+
+  .header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .newItemButton {
+    width: 100%;
+  }
+}
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -389,4 +403,26 @@
 .actionCancelConfirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  .container {
+    padding: var(--space-4);
+  }
+
+  .header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .newItemButton {
+    width: 100%;
+  }
+
+  .cardActions {
+    flex-wrap: wrap;
+  }
 }

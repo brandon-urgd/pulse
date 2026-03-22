@@ -549,3 +549,9 @@
     transform: none;
   }
 }
+
+@media (max-width: 639px) {
+  .container { padding: var(--space-4); }
+  .generatePrompt { padding: var(--space-5); }
+  .verdictBlock { padding: var(--space-4) var(--space-5); }
+}

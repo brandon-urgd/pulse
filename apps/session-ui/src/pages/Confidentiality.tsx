@@ -26,7 +26,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#1a1a1a',
     borderRadius: '12px',
     border: '1px solid #2a2a2a',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   header: {
     backgroundColor: SAGE_SUBTLE,

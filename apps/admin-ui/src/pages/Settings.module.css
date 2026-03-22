@@ -512,3 +512,37 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  .container {
+    padding: var(--space-4);
+  }
+
+  /* Stack label/value vertically instead of side-by-side grid */
+  .fieldRow {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .fieldLabel {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+  }
+
+  /* Confirm modal — sheet from bottom */
+  .modalOverlay {
+    align-items: flex-end;
+    padding: 0;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  .modalCard {
+    max-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, var(--space-7));
+    touch-action: auto;
+  }
+}

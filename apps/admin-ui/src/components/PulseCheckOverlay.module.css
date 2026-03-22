@@ -138,3 +138,7 @@
     transition: none;
   }
 }
+
+@media (max-width: 639px) {
+  .card { padding: var(--space-6) var(--space-5); }
+}

@@ -22,3 +22,7 @@
 .link:hover {
   text-decoration: underline;
 }
+
+@media (max-width: 639px) {
+  .container { padding: var(--space-6) var(--space-4); }
+}

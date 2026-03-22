@@ -12,6 +12,9 @@
   z-index: 200;
   padding: var(--space-4);
   animation: fadeIn 0.2s ease;
+  /* Prevent background from scrolling when modal is open */
+  overflow: hidden;
+  touch-action: none;
 }
 
 @keyframes fadeIn {
@@ -25,15 +28,16 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  box-shadow:
-    var(--shadow-modal);
+  box-shadow: var(--shadow-modal);
   width: 100%;
   max-width: 520px;
-  max-height: 90vh;
+  /* dvh accounts for mobile browser chrome */
+  max-height: min(90dvh, 720px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: auto;
 }
 
 @keyframes slideUp {
@@ -47,7 +51,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -90,8 +94,10 @@
 /* ── Body ────────────────────────────────────────────────────────────────── */
 
 .modalBody {
-  padding: var(--space-6);
+  padding: var(--space-5);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   flex: 1;
 }
 
@@ -467,24 +473,6 @@
   flex-shrink: 0;
 }
 
-/* ── Mobile header fix ───────────────────────────────────────────────────── */
-
-@media (max-width: 640px) {
-  .overlay {
-    align-items: flex-start;
-    padding: var(--space-3);
-  }
-
-  .modal {
-    max-height: calc(100vh - var(--space-6));
-    margin-top: var(--space-3);
-  }
-
-  .modalHeader {
-    padding: var(--space-3) var(--space-4);
-  }
-}
-
 /* ── Self-review footer button ───────────────────────────────────────────── */
 
 .selfReviewButton {
@@ -503,4 +491,25 @@
 .selfReviewButton:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-text-secondary);
+}
+
+/* ── Mobile — sheet style from bottom ───────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    /* Respect iOS home indicator */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .modalBody {
+    padding: var(--space-4);
+  }
 }

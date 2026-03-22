@@ -21,7 +21,15 @@ body {
 .page-scrollable {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   /* Undo the body height lock for this subtree */
+  height: 100%;
+  min-height: 100%;
+}
+
+/* When a scrollable page is present, allow #root to scroll too */
+#root:has(.page-scrollable) {
+  overflow-y: auto;
   height: auto;
   min-height: 100dvh;
 }

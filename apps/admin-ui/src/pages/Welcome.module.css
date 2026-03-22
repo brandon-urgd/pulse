@@ -34,3 +34,7 @@
 .ctaButton:hover {
   background: var(--color-interactive-hover);
 }
+
+@media (max-width: 639px) {
+  .container { margin: var(--space-8) auto; padding: 0 var(--space-4); }
+}
