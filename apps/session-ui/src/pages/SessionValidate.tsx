@@ -2,6 +2,7 @@
 // Accepts ?code={pulseCode} query param or /{sessionId} path param
 // Accepts ?public=1 to show the public walk-in entry form
 // Accepts ?preview=true to auto-validate a preview session (no email required)
+// Accepts ?token={tenantId}:{sessionId} to auto-authenticate a self-review session
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { validateSession } from '../api/session'
@@ -120,6 +121,7 @@ export default function SessionValidate() {
   const pulseCode = searchParams.get('code') ?? undefined
   const isPublic = searchParams.get('public') === '1'
   const isPreviewMode = searchParams.get('preview') === 'true'
+  const tokenParam = searchParams.get('token') ?? undefined
   const navigate = useNavigate()
   const { setSession } = useSession()
 
@@ -131,6 +133,16 @@ export default function SessionValidate() {
   useEffect(() => {
     document.title = 'Access Your Session — Pulse'
   }, [])
+
+  // Self-review mode: token param carries {tenantId}:{sessionId} — skip validate entirely
+  useEffect(() => {
+    if (!tokenParam || !pathSessionId) return
+    // Token is already valid (issued by createSelfSession Lambda)
+    // We don't have itemName here, but it's not critical for self-review flow
+    setSession(tokenParam, pathSessionId, '', false)
+    navigate(`/s/${pathSessionId}/confidentiality`, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenParam, pathSessionId])
 
   // Preview mode: auto-validate without email — skip confidentiality, go straight to chat
   useEffect(() => {

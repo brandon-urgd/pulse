@@ -76,6 +76,7 @@ export const handler = async (event) => {
 
     const isPublic = sessionRecord.isPublic?.BOOL === true
     const isSelfReview = sessionRecord.isSelfReview?.BOOL === true
+    const isPreview = sessionRecord.preview?.BOOL === true
 
     // Check expiry — expiresAt stored as ISO string (closeDate format from inviteReviewer)
     const isExpiredByStatus = status === 'expired'
@@ -106,7 +107,8 @@ export const handler = async (event) => {
 
     // Public sessions skip email validation — any visitor proceeds directly to confidentiality
     // Self-review sessions skip email match check — Cognito JWT is the identity proof
-    if (!isPublic && !isSelfReview) {
+    // Preview sessions skip email match check — short-lived token, no reviewer email set
+    if (!isPublic && !isSelfReview && !isPreview) {
       if (!email || typeof email !== 'string') {
         return errorResponse(400, 'email is required', {}, origin)
       }
@@ -183,6 +185,7 @@ export const handler = async (event) => {
       tenantId,
       item: itemContext,
       isSelfReview: isSelfReview || undefined,
+      isPreview: isPreview || undefined,
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
   } catch (err) {

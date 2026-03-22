@@ -1,0 +1,22 @@
+{
+  "name": "Pulse Admin",
+  "short_name": "Pulse",
+  "description": "Pulse admin dashboard by ur/gd Studios",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#4a7c59",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    }
+  ]
+}
