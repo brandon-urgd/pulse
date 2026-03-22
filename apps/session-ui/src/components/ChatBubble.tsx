@@ -48,6 +48,8 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '78%',
     minWidth: '80px',
     padding: '0.75rem 1rem',
+    width: 'fit-content',
+    textWrap: 'balance' as const,
   },
   content: {
     background: 'rgba(74,124,89,0.12)',

@@ -681,7 +681,6 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                           id="fileUpload"
                           className={styles.fileInput}
                           accept=".md,.txt,.pdf,.docx"
-                          multiple
                           onChange={handleFileChange}
                           disabled={isUploading || isLocked}
                           aria-label={labels.itemDetail.uploadChooseFile}
