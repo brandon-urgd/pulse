@@ -263,6 +263,24 @@
   text-decoration: underline;
 }
 
+.supportActionButton {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-3);
+  cursor: pointer;
+  font-weight: 500;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.supportActionButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+}
+
 .inlineSaveButton {
   font-size: var(--font-size-xs);
   color: var(--color-text-inverse);
