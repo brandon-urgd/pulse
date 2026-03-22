@@ -276,6 +276,21 @@ Parameters:
     Default: lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
     Description: S3 key for urgd-pulse-sendPulseCheckReady Lambda ZIP
 
+  PreviewSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-previewSession/latest.zip
+    Description: S3 key for urgd-pulse-previewSession Lambda ZIP
+
+  CreateSelfSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-createSelfSession/latest.zip
+    Description: S3 key for urgd-pulse-createSelfSession Lambda ZIP
+
+  SubmitReportCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-submitReport/latest.zip
+    Description: S3 key for urgd-pulse-submitReport Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
@@ -6929,7 +6944,7 @@ Resources:
       Role: !GetAtt PulsePreviewSessionFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-previewSession/latest.zip'
+        S3Key: !Ref PreviewSessionCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: 3
@@ -7059,7 +7074,7 @@ Resources:
       Role: !GetAtt PulseCreateSelfSessionFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-createSelfSession/latest.zip'
+        S3Key: !Ref CreateSelfSessionCodeKey
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: 3
@@ -7170,7 +7185,7 @@ Resources:
       Role: !GetAtt PulseSubmitReportFunctionRole.Arn
       Code:
         S3Bucket: urgd-applicationdata
-        S3Key: 'lambda-packages/urgd-pulse-submitReport/latest.zip'
+        S3Key: !Ref SubmitReportCodeKey
       Timeout: 15
       MemorySize: 256
       ReservedConcurrentExecutions: 3
