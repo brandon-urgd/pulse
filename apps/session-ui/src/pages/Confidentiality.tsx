@@ -15,8 +15,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: '1.5rem',
+    justifyContent: 'flex-start',
+    padding: '2rem 1.5rem 1.5rem',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     color: '#e5e5e5',
   },
@@ -219,6 +219,7 @@ export default function Confidentiality() {
 
   return (
     <main
+      className="page-scrollable"
       style={{
         ...styles.page,
         opacity: fadeOut ? 0 : 1,

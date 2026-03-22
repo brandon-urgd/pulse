@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
+import ReportSheet from './ReportSheet'
 
 interface Props {
   tenantName: string
+  sessionId: string
+  sessionToken: string
   onSubmit: () => void
   onDiscard: () => void
   onKeepGoing: () => void
 }
 
-type SheetState = 'initial' | 'discard-confirm'
+type SheetState = 'initial' | 'discard-confirm' | 'report'
 
 const styles: Record<string, React.CSSProperties> = {
   backdrop: {
@@ -112,10 +115,28 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     padding: '0.25rem',
   },
+  reportLinksRow: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '1.25rem',
+    marginTop: '1rem',
+    paddingTop: '0.75rem',
+    borderTop: '1px solid #2a2a2a',
+  },
+  reportLink: {
+    background: 'transparent',
+    border: 'none',
+    color: '#555',
+    fontSize: '0.75rem',
+    cursor: 'pointer',
+    padding: 0,
+    fontFamily: 'inherit',
+  },
 }
 
-export default function ExitSheet({ tenantName, onSubmit, onDiscard, onKeepGoing }: Props) {
+export default function ExitSheet({ tenantName, sessionId, sessionToken, onSubmit, onDiscard, onKeepGoing }: Props) {
   const [sheetState, setSheetState] = useState<SheetState>('initial')
+  const [reportType, setReportType] = useState<'report-abuse' | 'bug-report' | null>(null)
   const [isDesktop, setIsDesktop] = useState(false)
   const firstFocusRef = useRef<HTMLButtonElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -178,72 +199,98 @@ export default function ExitSheet({ tenantName, onSubmit, onDiscard, onKeepGoing
   }
 
   return (
-    <div
-      style={backdropStyle}
-      onClick={onKeepGoing}
-    >
+    <>
       <div
-        ref={sheetRef}
-        style={sheetStyle}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="exit-sheet-heading"
-        onClick={(e) => e.stopPropagation()}
+        style={backdropStyle}
+        onClick={onKeepGoing}
       >
-        {sheetState === 'initial' ? (
-          <>
-            <h2 id="exit-sheet-heading" style={styles.heading}>
-              Submit your feedback?
-            </h2>
-            <p style={styles.body}>
-              Your responses so far will be shared with {tenantName}. You won't be able to continue
-              this session.
-            </p>
-            <button
-              ref={firstFocusRef}
-              type="button"
-              style={styles.primaryButton}
-              onClick={onSubmit}
-            >
-              Submit feedback
-            </button>
-            <button type="button" style={styles.keepGoingButton} onClick={onKeepGoing}>
-              Keep going
-            </button>
-            <button
-              type="button"
-              style={styles.discardLink}
-              onClick={() => setSheetState('discard-confirm')}
-            >
-              Discard and exit
-            </button>
-          </>
-        ) : (
-          <>
-            <h2 id="exit-sheet-heading" style={styles.heading}>
-              End your session?
-            </h2>
-            <p style={styles.bodyDestructive}>
-              This will permanently delete your responses. This can't be undone.
-            </p>
-            <button
-              ref={firstFocusRef}
-              type="button"
-              style={styles.destructiveButton}
-              onClick={onDiscard}
-            >
-              Yes, discard
-            </button>
-            <button
-              type="button"
-              style={styles.cancelLink}
-              onClick={() => setSheetState('initial')}
-            >
-              Cancel
-            </button>
-          </>
-        )}
+        <div
+          ref={sheetRef}
+          style={sheetStyle}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-sheet-heading"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {sheetState === 'initial' ? (
+            <>
+              <h2 id="exit-sheet-heading" style={styles.heading}>
+                Submit your feedback?
+              </h2>
+              <p style={styles.body}>
+                Your responses so far will be shared with {tenantName}. You won't be able to continue
+                this session.
+              </p>
+              <button
+                ref={firstFocusRef}
+                type="button"
+                style={styles.primaryButton}
+                onClick={onSubmit}
+              >
+                Submit feedback
+              </button>
+              <button type="button" style={styles.keepGoingButton} onClick={onKeepGoing}>
+                Keep going
+              </button>
+              <button
+                type="button"
+                style={styles.discardLink}
+                onClick={() => setSheetState('discard-confirm')}
+              >
+                Discard and exit
+              </button>
+              <div style={styles.reportLinksRow}>
+                <button
+                  type="button"
+                  style={styles.reportLink}
+                  onClick={() => setReportType('report-abuse')}
+                >
+                  Report abuse
+                </button>
+                <button
+                  type="button"
+                  style={styles.reportLink}
+                  onClick={() => setReportType('bug-report')}
+                >
+                  Report a problem
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 id="exit-sheet-heading" style={styles.heading}>
+                End your session?
+              </h2>
+              <p style={styles.bodyDestructive}>
+                This will permanently delete your responses. This can't be undone.
+              </p>
+              <button
+                ref={firstFocusRef}
+                type="button"
+                style={styles.destructiveButton}
+                onClick={onDiscard}
+              >
+                Yes, discard
+              </button>
+              <button
+                type="button"
+                style={styles.cancelLink}
+                onClick={() => setSheetState('initial')}
+              >
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+      {reportType && (
+        <ReportSheet
+          type={reportType}
+          sessionId={sessionId}
+          sessionToken={sessionToken}
+          onClose={() => setReportType(null)}
+        />
+      )}
+    </>
   )
 }

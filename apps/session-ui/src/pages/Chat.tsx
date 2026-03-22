@@ -820,6 +820,8 @@ export default function Chat() {
       {showExitSheet && (
         <ExitSheet
           tenantName={itemName ?? 'the team'}
+          sessionId={sessionId}
+          sessionToken={sessionToken ?? ''}
           onSubmit={handleSubmitFeedback}
           onDiscard={handleDiscard}
           onKeepGoing={() => setShowExitSheet(false)}

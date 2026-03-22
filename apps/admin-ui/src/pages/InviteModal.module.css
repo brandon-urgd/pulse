@@ -467,6 +467,24 @@
   flex-shrink: 0;
 }
 
+/* ── Mobile header fix ───────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .overlay {
+    align-items: flex-start;
+    padding: var(--space-3);
+  }
+
+  .modal {
+    max-height: calc(100vh - var(--space-6));
+    margin-top: var(--space-3);
+  }
+
+  .modalHeader {
+    padding: var(--space-3) var(--space-4);
+  }
+}
+
 /* ── Self-review footer button ───────────────────────────────────────────── */
 
 .selfReviewButton {

@@ -36,8 +36,16 @@ interface Props {
   onSelfReview?: () => void;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+function nowDatetimeLocal(): string {
+  // Returns current datetime in "YYYY-MM-DDTHH:MM" format for datetime-local inputs
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function formatDeadline(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function sessionStatusLabel(status: SessionStatus): string {
@@ -357,7 +365,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
                     <span className={styles.sessionDate}>
                       Invited {new Date(session.createdAt).toLocaleDateString()}
                     </span>
-                    {(session.status === 'not_started' || session.status === 'discarded') && (
+                    {!session.isSelfReview && (session.status === 'not_started' || session.status === 'discarded') && (
                       <div className={styles.sessionActions}>
                         <button
                           type="button"
@@ -416,11 +424,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
             <div className={styles.extendRow}>
               <input
                 id="publicSessionDate"
-                type="date"
+                type="datetime-local"
                 className={styles.input}
                 value={publicSessionDate}
                 onChange={e => setPublicSessionDate(e.target.value)}
-                min={todayIso()}
+                min={nowDatetimeLocal()}
                 disabled={isGenerating}
               />
               <button
@@ -454,7 +462,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
                   <div className={styles.sessionMeta}>
                     {session.expiresAt && (
                       <span className={styles.sessionEndDate}>
-                        {labels.invitation.publicSessionEndsLabel} {new Date(session.expiresAt).toLocaleDateString()}
+                        {labels.invitation.publicSessionEndsLabel} {formatDeadline(session.expiresAt)}
                       </span>
                     )}
                     <div className={styles.sessionActions}>
@@ -540,11 +548,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
             <div className={styles.extendRow}>
               <input
                 id="extendDate"
-                type="date"
+                type="datetime-local"
                 className={styles.input}
                 value={extendDate}
                 onChange={e => setExtendDate(e.target.value)}
-                min={todayIso()}
+                min={nowDatetimeLocal()}
                 disabled={isExtending}
               />
               <button

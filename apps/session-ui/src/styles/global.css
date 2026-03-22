@@ -16,6 +16,16 @@ body {
   flex-direction: column;
 }
 
+/* Pages that need to scroll on small screens (confidentiality, validate, summary)
+   override the body lock by making themselves independently scrollable */
+.page-scrollable {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Undo the body height lock for this subtree */
+  height: auto;
+  min-height: 100dvh;
+}
+
 /* Chat scroll area — allow vertical pan only */
 .chat-scroll-area {
   touch-action: pan-y;

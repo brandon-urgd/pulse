@@ -63,7 +63,10 @@ interface Props {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Returns current datetime in "YYYY-MM-DDTHH:MM" format for datetime-local inputs
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 function fileStatusLabel(status: FileUploadStatus): string {
@@ -148,7 +151,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     if (itemData) {
       setItemName(itemData.itemName);
       setDescription(itemData.description);
-      setCloseDate(itemData.closeDate?.slice(0, 10) ?? '');
+      setCloseDate(itemData.closeDate?.slice(0, 16) ?? '');
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
@@ -245,8 +248,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       setFormError('Description is required (1–2000 characters).');
       return;
     }
-    if (!closeDate || closeDate <= todayIso()) {
-      setFormError('Close date must be a future date.');
+    if (!closeDate || new Date(closeDate).getTime() <= Date.now()) {
+      setFormError('Close date must be a future date and time.');
       return;
     }
 
@@ -302,7 +305,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
-          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;
@@ -625,7 +628,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                       </label>
                       <input
                         id="closeDate"
-                        type="date"
+                        type="datetime-local"
                         className={styles.input}
                         value={closeDate}
                         onChange={(e) => setCloseDate(e.target.value)}
