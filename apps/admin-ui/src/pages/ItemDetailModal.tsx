@@ -264,11 +264,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       updateMutation.mutate(payload);
     } else if (savedItemId.current) {
       // Item was auto-created during file upload — update it instead of creating a duplicate
-      authedMutate(`/api/manage/items/${savedItemId.current}`, 'PUT', payload, navigate)
-        .then(() => {
+      const targetId = savedItemId.current;
+      authedMutate(`/api/manage/items/${targetId}`, 'PUT', payload, navigate)
+        .then((resp) => {
           queryClient.invalidateQueries({ queryKey: ['items'] });
-          queryClient.invalidateQueries({ queryKey: ['item', savedItemId.current] });
-          onClose();
+          queryClient.invalidateQueries({ queryKey: ['item', targetId] });
+          const updated = (resp as { data: Item }).data;
+          setSavedItem({ itemId: targetId, itemName: updated?.itemName ?? payload.itemName });
+          setShowInviteModal(true);
         })
         .catch(() => setFormError(labels.itemDetail.saveError));
     } else {
