@@ -33,8 +33,10 @@ interface Item {
   closeDate: string;
   content?: string;
   documentStatus?: DocumentStatus;
+  documentKey?: string;
   sessionCount: number;
   updatedAt: string;
+  recommendedTimeLimitMinutes?: number;
 }
 
 interface CreateItemPayload {
