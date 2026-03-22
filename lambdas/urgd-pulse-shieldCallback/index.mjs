@@ -2,7 +2,7 @@
 // Triggered by EventBridge on S3 object tag change (GuardDuty scan result)
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand } from '@aws-sdk/client-s3'
+import { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 
@@ -119,9 +119,25 @@ export const handler = async (event) => {
       const ext = getExtension(objectKey)
 
       if (TEXT_EXTENSIONS.has(ext)) {
-        // .md or .txt — mark as ready
-        await updateDocumentStatus(tenantId, itemId, 'ready')
-        log('info', 'ShieldCallback: documentStatus set to ready', { tenantId, itemId })
+        // .md or .txt — read content, compute time recommendation, mark as ready
+        let recommendedTimeLimitMinutes = 5 // default floor
+        try {
+          const obj = await s3.send(new GetObjectCommand({
+            Bucket: process.env.DATA_BUCKET_NAME,
+            Key: objectKey,
+          }))
+          const chunks = []
+          for await (const chunk of obj.Body) chunks.push(chunk)
+          const text = Buffer.concat(chunks).toString('utf-8')
+          const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+          recommendedTimeLimitMinutes = Math.min(60, Math.max(5, Math.round(wordCount / 130)))
+        } catch (readErr) {
+          log('warn', 'ShieldCallback: could not read text file for word count', { tenantId, itemId, errorName: readErr.name })
+        }
+        await updateDocumentStatus(tenantId, itemId, 'ready', {
+          recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
+        })
+        log('info', 'ShieldCallback: documentStatus set to ready', { tenantId, itemId, recommendedTimeLimitMinutes })
       } else if (EXTRACT_EXTENSIONS.has(ext)) {
         // .pdf or .docx — mark as extracting, invoke extractText async
         await updateDocumentStatus(tenantId, itemId, 'extracting')

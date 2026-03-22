@@ -128,7 +128,15 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // Self-review "start over" confirm state
   const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
 
-  // ── Load item in edit mode ──────────────────────────────────────────────────
+  // ── Derived upload state ────────────────────────────────────────────────────
+  // True while any file is still in-flight (uploading/scanning/extracting)
+  const isAnyFileInFlight = Object.values(fileStatuses).some(
+    (s) => s.status === 'uploading' || s.status === 'scanning' || s.status === 'extracting'
+  );
+
+  // Per-file time limits accumulate as each file resolves to ready.
+  // We track them in a ref so pollFileStatus can update without re-renders.
+  const perFileTimeLimits = useRef<Record<string, number>>({});
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
     ['item', itemId],
     `/api/manage/items/${itemId}`,
@@ -346,9 +354,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           if (!mountedRef.current) { resolve(); return; }
           if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
             setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
-            // Seed time limit recommendation when doc becomes ready
+            // Accumulate per-file time limits and sum them (capped at 60 min)
             if (status === 'ready' && refreshed?.recommendedTimeLimitMinutes) {
-              setTimeLimitMinutes((prev) => prev ?? refreshed.recommendedTimeLimitMinutes ?? 30);
+              perFileTimeLimits.current[fileName] = refreshed.recommendedTimeLimitMinutes;
+              const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
+              setTimeLimitMinutes(Math.min(60, total));
             }
             // Also update the query cache so edit mode picks it up immediately
             queryClient.setQueryData(['item', targetItemId], { data: refreshed });
@@ -771,9 +781,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     type="submit"
                     form="item-detail-form"
                     className={styles.saveButton}
-                    disabled={isSaving}
+                    disabled={isSaving || isAnyFileInFlight}
+                    title={isAnyFileInFlight ? 'Waiting for document to finish processing…' : undefined}
                   >
-                    {isSaving ? '…' : labels.itemDetail.saveButton}
+                    {isSaving ? '…' : isAnyFileInFlight ? 'Processing…' : labels.itemDetail.saveButton}
                   </button>
                 )}
               </div>

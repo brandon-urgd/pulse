@@ -610,7 +610,15 @@ export default function Chat() {
           >
             {timeAnnouncement}
           </span>
-          {showEndSessionButton && (
+          {isPreview ? (
+            <button
+              type="button"
+              style={styles.endSessionButton}
+              onClick={() => window.close()}
+            >
+              End preview
+            </button>
+          ) : showEndSessionButton ? (
             <button
               type="button"
               style={styles.endSessionButton}
@@ -618,7 +626,7 @@ export default function Chat() {
             >
               End session
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
