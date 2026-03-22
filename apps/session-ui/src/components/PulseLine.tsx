@@ -7,9 +7,9 @@ interface Props {
 }
 
 const KEYFRAMES = `
-@keyframes pulseSegment {
+@keyframes pulseGlow {
   0%   { opacity: 1; }
-  50%  { opacity: 0.55; }
+  50%  { opacity: 0.6; }
   100% { opacity: 1; }
 }
 `
@@ -25,54 +25,48 @@ export default function PulseLine({ current, total, animationDuration = '2s' }: 
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '3px',
-    padding: '0 1rem',
-    height: '4px',
-    alignItems: 'center',
+  // Percentage complete — sections completed (not including current) / total
+  // Current section counts as half-done to give a sense of progress within it
+  const pct = total > 0 ? Math.min(100, ((current - 0.5) / total) * 100) : 0
+
+  const trackStyle: React.CSSProperties = {
+    width: '100%',
+    height: '3px',
+    background: '#2a2a2a',
+    position: 'relative' as const,
+    overflow: 'hidden',
   }
 
-  const segments = Array.from({ length: total }, (_, i) => {
-    const segIndex = i + 1
-    const isCompleted = segIndex < current
-    const isCurrent = segIndex === current
-    const isUpcoming = segIndex > current
+  const fillStyle: React.CSSProperties = {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    height: '100%',
+    width: `${pct}%`,
+    background: '#4a7c59',
+    borderRadius: '0 2px 2px 0',
+    transition: 'width 0.6s ease',
+    ...(pct > 0 && pct < 100 && !reducedMotion
+      ? { animation: `pulseGlow ${animationDuration} ease-in-out infinite` }
+      : {}),
+  }
 
-    let bg = '#2a2a2a'
-    if (isCompleted) bg = '#4a7c59'
-    if (isCurrent) bg = '#4a7c59'
-
-    const segStyle: React.CSSProperties = {
-      flex: 1,
-      height: '4px',
-      borderRadius: '2px',
-      background: bg,
-      ...(isCurrent && !reducedMotion
-        ? {
-            animation: `pulseSegment ${animationDuration} ease-in-out infinite`,
-          }
-        : {}),
-      ...(isUpcoming ? { opacity: 1 } : {}),
-    }
-
-    return <div key={i} style={segStyle} />
-  })
+  const pctRounded = Math.round(pct)
 
   return (
     <>
-      {!reducedMotion && (
-        <style>{KEYFRAMES}</style>
-      )}
+      {!reducedMotion && <style>{KEYFRAMES}</style>}
       <div
-        style={containerStyle}
+        style={{ padding: '0 1rem' }}
         role="progressbar"
-        aria-label={`Session progress: section ${current} of ${total}`}
-        aria-valuenow={current}
-        aria-valuemin={1}
-        aria-valuemax={total}
+        aria-label={`Session progress: ${pctRounded}% complete`}
+        aria-valuenow={pctRounded}
+        aria-valuemin={0}
+        aria-valuemax={100}
       >
-        {segments}
+        <div style={trackStyle}>
+          <div style={fillStyle} />
+        </div>
       </div>
     </>
   )

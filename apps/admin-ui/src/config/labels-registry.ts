@@ -156,8 +156,13 @@ export const labels = {
     previewSessionPopupBlocked: 'Preview opened in a new tab. If it didn\u2019t open, check your popup settings.',
     // Time limit
     timeLimitLabel: 'Session time',
-    timeLimitUnit: 'min',
     timeLimitHint: 'This is a pacing estimate for the AI — not a hard cutoff. The agent will naturally wrap up around this time, but reviewers can always finish their thought.',
+    timeLimitBrackets: [
+      { label: '10–15 min', value: 12 },
+      { label: '15–20 min', value: 17 },
+      { label: '20–30 min', value: 25 },
+      { label: '30–45 min', value: 37 },
+    ] as const,
     // Self-review session
     selfReviewButton: 'Review it yourself',
     selfReviewLoading: 'Starting\u2026',

@@ -129,6 +129,15 @@ export const handler = async (event) => {
     const itemStatus = item.status?.S
     const closeDate = item.closeDate?.S
     const itemName = item.itemName?.S ?? 'Untitled Item'
+    // Read recommended time limit from item — written by extractText/shieldCallback
+    // Snap to bracket midpoints: 12, 17, 25, 37. Default to 17 (15–20 min) if not set.
+    const BRACKETS = [12, 17, 25, 37]
+    const rawItemMinutes = item.recommendedTimeLimitMinutes?.N
+      ? parseInt(item.recommendedTimeLimitMinutes.N, 10)
+      : null
+    const sessionTimeLimitMinutes = rawItemMinutes
+      ? BRACKETS.reduce((best, b) => Math.abs(b - rawItemMinutes) < Math.abs(best - rawItemMinutes) ? b : best, BRACKETS[0])
+      : 17
 
     // Item must be draft or active to invite
     if (itemStatus !== 'draft' && itemStatus !== 'active') {
@@ -197,6 +206,7 @@ export const handler = async (event) => {
           reviewerEmail: { S: email },
           pulseCode: { S: pulseCode },
           status: { S: 'not_started' },
+          timeLimitMinutes: { N: String(sessionTimeLimitMinutes) },
           createdAt: { S: now },
           ...(closeDate ? { expiresAt: { S: closeDate } } : {}),
         },

@@ -388,7 +388,9 @@ export default function Chat() {
 
   // ── Timer ───────────────────────────────────────────────────────────────────
   function startTimer() {
-    if (timerStarted || timeLimitSeconds === 0) return
+    // Never run the timer in preview mode — preview is a 15-min TTL session,
+    // not a paced review. Wind-down signals don't apply.
+    if (timerStarted || timeLimitSeconds === 0 || isPreview) return
     setTimerStarted(true)
     startTimeRef.current = Date.now()
     timerRef.current = setInterval(() => {
@@ -407,19 +409,20 @@ export default function Chat() {
   useEffect(() => {
     if (timeLimitSeconds === 0 || !timerStarted) return
     const remaining = timeLimitSeconds - elapsedSeconds
-    const pct = elapsedSeconds / timeLimitSeconds
 
-    if (pct >= 0.95 && windingDown !== 'final') {
+    // Absolute remaining-time thresholds — percentages don't scale to short sessions.
+    // At 3 min remaining: soft wrap signal. At 90 sec remaining: closing signal.
+    if (remaining <= 90 && windingDown !== 'final') {
       setWindingDown('final')
       setAnimationDuration('4s')
       if (!announced95) {
-        setTimeAnnouncement('Less than 5% of session time remaining.')
+        setTimeAnnouncement('Session is wrapping up.')
         setAnnounced95(true)
       }
-    } else if (pct >= 0.8 && windingDown === null) {
+    } else if (remaining <= 180 && windingDown === null) {
       setWindingDown('true')
       if (!announced80) {
-        setTimeAnnouncement('80% of session time used.')
+        setTimeAnnouncement('Session is nearing its end.')
         setAnnounced80(true)
       }
     }
@@ -535,10 +538,10 @@ export default function Chat() {
   }
 
   // ── Derived state ───────────────────────────────────────────────────────────
-  const remaining = Math.max(0, timeLimitSeconds - elapsedSeconds)
-  const pct = timeLimitSeconds > 0 ? elapsedSeconds / timeLimitSeconds : 0
-  // isPaused: session is locked — either closed state or time expired
-  const isPaused = sessionStatus === 'paused' || closingState === 'closed' || (windingDown === 'final' && sessionStatus === 'in_progress' && remaining <= 0)
+  // isPaused: only lock the session when the backend explicitly closes it,
+  // or the session status is 'paused'. The time limit is a soft pacing guide —
+  // never hard-lock based on the client-side timer reaching zero.
+  const isPaused = sessionStatus === 'paused' || closingState === 'closed'
   const isComplete = sessionStatus === 'complete'
   const isDiscarded = sessionStatus === 'discarded'
   const isLoading = sessionStatus === 'loading'
@@ -547,22 +550,7 @@ export default function Chat() {
   const showEndSessionButton =
     sessionStatus === 'in_progress' && !isThinking && !isPaused && !isComplete && !isDiscarded
 
-  let timeColor = '#888'
-  if (pct >= 0.95) timeColor = '#f59e0b'
-  else if (pct >= 0.8) timeColor = '#ccc'
 
-  let timeLabel = ''
-  if (timeLimitSeconds > 0 && timerStarted) {
-    if (closingState === 'closing') {
-      timeLabel = 'Wrapping up'
-    } else if (closingState === 'closed') {
-      timeLabel = ''
-    } else if (isPaused) {
-      timeLabel = 'Paused'
-    } else {
-      timeLabel = `${formatTimeLeft(remaining)} left`
-    }
-  }
 
   // PulseLine animation slows during closing state
   const pulseLineAnimation = closingState === 'closing' ? '4s' : animationDuration

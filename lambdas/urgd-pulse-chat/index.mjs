@@ -256,13 +256,13 @@ Important:
 
 1. First message: A warm, brief greeting. Introduce yourself as Pulse. One to two sentences max. Example tone: "Hey! I'm Pulse, an AI feedback agent powered by ur/gd Studios."
 
-2. Then explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think. We'll cover it in ${totalSections} sections — just a conversation, nothing formal."
+2. Then explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think — just a conversation, nothing formal."
 
 3. Then let them know they're in control: "You can take your time, and if you ever want to stop early, just tap 'End session' at the top."
 
 4. Then invite them to begin: "Ready to dive in? Or any questions before we start?"
 
-Keep each thought to one or two sentences. Be warm but not over-the-top. This should feel like the start of a good conversation, not a briefing.`
+Keep each thought to one or two sentences. Be warm but not over-the-top. This should feel like the start of a good conversation, not a briefing. Do NOT mention the number of sections.`
     } else if (message === '__session_resume__') {
       systemPrompt += '\n\nThe reviewer has returned to continue their session. Welcome them back warmly and briefly. Reference where you left off. Keep it to two or three short sentences — don\'t re-explain the whole process.'
     } else if (message === '__session_end__') {
@@ -385,8 +385,9 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
 
     if (closingState === 'exploring' && !isSpecial && startedAt && timeLimitMinutes > 0) {
       const elapsedMs = Date.now() - new Date(startedAt).getTime()
-      const elapsedPct = elapsedMs / (timeLimitMinutes * 60 * 1000)
-      if (elapsedPct >= 0.7) {
+      const remainingMs = (timeLimitMinutes * 60 * 1000) - elapsedMs
+      // Absolute threshold: narrowing when 4 minutes remain — scales correctly at all session lengths
+      if (remainingMs <= 4 * 60 * 1000) {
         newClosingState = 'narrowing'
       }
     }

@@ -64,12 +64,15 @@ export const handler = async (event) => {
     }
 
     // Accept optional timeLimitMinutes from request body (1–60 min)
+    // Snap to bracket midpoints: 12, 17, 25, 37. Default to 17 (15–20 min) if not set.
     let body = {}
     try { body = JSON.parse(event.body || '{}') } catch { /* ignore */ }
+    const BRACKETS = [12, 17, 25, 37]
     const rawLimit = Number(body.timeLimitMinutes)
-    const timeLimitMinutes = (!isNaN(rawLimit) && rawLimit >= 1 && rawLimit <= 60)
-      ? Math.round(rawLimit)
-      : (parseInt(itemResult.Item.recommendedTimeLimitMinutes?.N || '0', 10) || 30)
+    const rawItemMinutes = parseInt(itemResult.Item.recommendedTimeLimitMinutes?.N || '0', 10)
+    const resolvedRaw = (!isNaN(rawLimit) && rawLimit >= 1) ? rawLimit : (rawItemMinutes || 17)
+    const timeLimitMinutes = BRACKETS.reduce((best, b) =>
+      Math.abs(b - resolvedRaw) < Math.abs(best - resolvedRaw) ? b : best, BRACKETS[0])
 
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()

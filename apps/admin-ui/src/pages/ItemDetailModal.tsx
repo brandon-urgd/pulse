@@ -155,7 +155,13 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
-        setTimeLimitMinutes(itemData.recommendedTimeLimitMinutes);
+        // Snap to nearest bracket midpoint
+        const brackets = labels.itemDetail.timeLimitBrackets;
+        const raw = itemData.recommendedTimeLimitMinutes;
+        const snapped = brackets.reduce((best, b) =>
+          Math.abs(b.value - raw) < Math.abs(best.value - raw) ? b : best
+        ).value;
+        setTimeLimitMinutes(snapped);
       }
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
         const fileName = itemData.documentKey
@@ -364,7 +370,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             if (status === 'ready' && refreshed?.recommendedTimeLimitMinutes) {
               perFileTimeLimits.current[fileName] = refreshed.recommendedTimeLimitMinutes;
               const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
-              setTimeLimitMinutes(Math.min(60, total));
+              // Snap to nearest bracket midpoint
+              const brackets = labels.itemDetail.timeLimitBrackets;
+              const snapped = brackets.reduce((best, b) =>
+                Math.abs(b.value - total) < Math.abs(best.value - total) ? b : best
+              ).value;
+              setTimeLimitMinutes(snapped);
             }
             // Also update the query cache so edit mode picks it up immediately
             queryClient.setQueryData(['item', targetItemId], { data: refreshed });
@@ -507,23 +518,19 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             <>
               {timeLimitMinutes != null && (
                 <div className={styles.headerTimeLimitRow}>
-                  <label htmlFor="headerTimeLimitInput" className={styles.headerTimeLimitLabel}>
+                  <label htmlFor="headerTimeLimitSelect" className={styles.headerTimeLimitLabel}>
                     {labels.itemDetail.timeLimitLabel}
                   </label>
-                  <input
-                    id="headerTimeLimitInput"
-                    type="number"
-                    min={5}
-                    max={60}
-                    step={5}
-                    className={styles.timeLimitInput}
+                  <select
+                    id="headerTimeLimitSelect"
+                    className={styles.timeLimitSelect}
                     value={timeLimitMinutes}
-                    onChange={(e) => {
-                      const v = Math.min(60, Math.max(5, Number(e.target.value)));
-                      setTimeLimitMinutes(v);
-                    }}
-                  />
-                  <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                    onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                  >
+                    {labels.itemDetail.timeLimitBrackets.map((b) => (
+                      <option key={b.value} value={b.value}>{b.label}</option>
+                    ))}
+                  </select>
                   <span className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</span>
                 </div>
               )}
@@ -743,23 +750,19 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         {!isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
                           <div className={styles.uploadReadyCtas}>
                             <div className={styles.timeLimitRow}>
-                              <label htmlFor="timeLimitInput" className={styles.timeLimitLabel}>
+                              <label htmlFor="timeLimitSelect" className={styles.timeLimitLabel}>
                                 {labels.itemDetail.timeLimitLabel}
                               </label>
-                              <input
-                                id="timeLimitInput"
-                                type="number"
-                                min={5}
-                                max={60}
-                                step={5}
-                                className={styles.timeLimitInput}
-                                value={timeLimitMinutes ?? 30}
-                                onChange={(e) => {
-                                  const v = Math.min(60, Math.max(5, Number(e.target.value)));
-                                  setTimeLimitMinutes(v);
-                                }}
-                              />
-                              <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                              <select
+                                id="timeLimitSelect"
+                                className={styles.timeLimitSelect}
+                                value={timeLimitMinutes ?? 17}
+                                onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                              >
+                                {labels.itemDetail.timeLimitBrackets.map((b) => (
+                                  <option key={b.value} value={b.value}>{b.label}</option>
+                                ))}
+                              </select>
                               <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                             </div>
                             <button

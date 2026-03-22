@@ -106,10 +106,14 @@ export const handler = async (event) => {
     }))
 
     // Estimate recommended session time from word count
-    // ~130 wpm reading pace for review content; short ≥5 min, long ≤60 min
+    // ~130 wpm reading pace for review content
+    // Snap to bracket midpoints: 12 (10–15 min), 17 (15–20 min), 25 (20–30 min), 37 (30–45 min)
     const wordCount = extractedText.trim().split(/\s+/).filter(Boolean).length
     const rawMinutes = Math.round(wordCount / 130)
-    const recommendedTimeLimitMinutes = Math.min(60, Math.max(5, rawMinutes))
+    const BRACKETS = [12, 17, 25, 37]
+    const recommendedTimeLimitMinutes = BRACKETS.reduce((best, b) =>
+      Math.abs(b - rawMinutes) < Math.abs(best - rawMinutes) ? b : best
+    , BRACKETS[0])
 
     // Update documentStatus to "ready", store extractedKey and recommendation
     await updateDocumentStatus(tenantId, itemId, 'ready', {

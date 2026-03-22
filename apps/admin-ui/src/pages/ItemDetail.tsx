@@ -400,7 +400,11 @@ export default function ItemDetail() {
             if (status === 'ready' && refreshed?.data?.recommendedTimeLimitMinutes) {
               perFileTimeLimits.current[fileName] = refreshed.data.recommendedTimeLimitMinutes;
               const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
-              setTimeLimitMinutes(Math.min(60, total));
+              const brackets = labels.itemDetail.timeLimitBrackets;
+              const snapped = brackets.reduce((best, b) =>
+                Math.abs(b.value - total) < Math.abs(best.value - total) ? b : best
+              ).value;
+              setTimeLimitMinutes(snapped);
             }
             resolve();
             return;
@@ -651,23 +655,19 @@ export default function ItemDetail() {
             {!isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
               <div className={styles.uploadReadyCtas}>
                 <div className={styles.timeLimitRow}>
-                  <label htmlFor="timeLimitInput" className={styles.timeLimitLabel}>
+                  <label htmlFor="timeLimitSelect" className={styles.timeLimitLabel}>
                     {labels.itemDetail.timeLimitLabel}
                   </label>
-                  <input
-                    id="timeLimitInput"
-                    type="number"
-                    min={5}
-                    max={60}
-                    step={5}
-                    className={styles.timeLimitInput}
-                    value={timeLimitMinutes ?? 30}
-                    onChange={(e) => {
-                      const v = Math.min(60, Math.max(5, Number(e.target.value)));
-                      setTimeLimitMinutes(v);
-                    }}
-                  />
-                  <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                  <select
+                    id="timeLimitSelect"
+                    className={styles.timeLimitSelect}
+                    value={timeLimitMinutes ?? 17}
+                    onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                  >
+                    {labels.itemDetail.timeLimitBrackets.map((b) => (
+                      <option key={b.value} value={b.value}>{b.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <button
                   type="button"

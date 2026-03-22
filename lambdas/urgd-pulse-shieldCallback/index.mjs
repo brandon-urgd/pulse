@@ -120,7 +120,7 @@ export const handler = async (event) => {
 
       if (TEXT_EXTENSIONS.has(ext)) {
         // .md or .txt — read content, compute time recommendation, mark as ready
-        let recommendedTimeLimitMinutes = 5 // default floor
+        let recommendedTimeLimitMinutes = 12 // default floor (10–15 min bracket)
         try {
           const obj = await s3.send(new GetObjectCommand({
             Bucket: process.env.DATA_BUCKET_NAME,
@@ -130,7 +130,11 @@ export const handler = async (event) => {
           for await (const chunk of obj.Body) chunks.push(chunk)
           const text = Buffer.concat(chunks).toString('utf-8')
           const wordCount = text.trim().split(/\s+/).filter(Boolean).length
-          recommendedTimeLimitMinutes = Math.min(60, Math.max(5, Math.round(wordCount / 130)))
+          const rawMinutes = Math.round(wordCount / 130)
+          const BRACKETS = [12, 17, 25, 37]
+          recommendedTimeLimitMinutes = BRACKETS.reduce((best, b) =>
+            Math.abs(b - rawMinutes) < Math.abs(best - rawMinutes) ? b : best
+          , BRACKETS[0])
         } catch (readErr) {
           log('warn', 'ShieldCallback: could not read text file for word count', { tenantId, itemId, errorName: readErr.name })
         }

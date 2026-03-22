@@ -81,6 +81,15 @@ export const handler = async (event) => {
       return errorResponse(409, 'Item is not accepting new sessions', {}, origin)
     }
 
+    // Read recommended time limit from item — snap to bracket midpoints
+    const BRACKETS = [12, 17, 25, 37]
+    const rawItemMinutes = itemResult.Item.recommendedTimeLimitMinutes?.N
+      ? parseInt(itemResult.Item.recommendedTimeLimitMinutes.N, 10)
+      : null
+    const sessionTimeLimitMinutes = rawItemMinutes
+      ? BRACKETS.reduce((best, b) => Math.abs(b - rawItemMinutes) < Math.abs(best - rawItemMinutes) ? b : best, BRACKETS[0])
+      : 17
+
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()
     const sessionLink = `${process.env.APP_URL}/s/${sessionId}?public=1`
@@ -94,6 +103,7 @@ export const handler = async (event) => {
       pulseCode: { S: pulseCode },
       status: { S: 'not_started' },
       isPublic: { BOOL: true },
+      timeLimitMinutes: { N: String(sessionTimeLimitMinutes) },
       expiresAt: { S: closeDate },
       createdAt: { S: now },
     }
