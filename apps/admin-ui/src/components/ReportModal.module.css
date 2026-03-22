@@ -56,16 +56,25 @@
 }
 
 .closeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
   background: transparent;
-  border: none;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xl);
-  cursor: pointer;
-  padding: var(--space-1);
   line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
 }
 
 .closeBtn:hover {
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
 

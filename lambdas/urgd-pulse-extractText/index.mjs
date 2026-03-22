@@ -105,12 +105,19 @@ export const handler = async (event) => {
       ContentType: 'text/markdown',
     }))
 
-    // Update documentStatus to "ready" and store extractedKey
+    // Estimate recommended session time from word count
+    // ~130 wpm reading pace for review content; short ≥5 min, long ≤60 min
+    const wordCount = extractedText.trim().split(/\s+/).filter(Boolean).length
+    const rawMinutes = Math.round(wordCount / 130)
+    const recommendedTimeLimitMinutes = Math.min(60, Math.max(5, rawMinutes))
+
+    // Update documentStatus to "ready", store extractedKey and recommendation
     await updateDocumentStatus(tenantId, itemId, 'ready', {
       extractedKey: { S: extractedKey },
+      recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
     })
 
-    log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey })
+    log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })
   } catch (err) {
     log('error', 'ExtractText: extraction failed', { tenantId, itemId, errorName: err.name })
 

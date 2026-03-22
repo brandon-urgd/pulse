@@ -61,8 +61,38 @@ export const handler = async (event) => {
       return errorResponse(409, 'Self-review is only available for draft and active items', {}, origin)
     }
 
-    // Check session limit — self-review counts toward maxSessionsPerItem
+    // Accept optional timeLimitMinutes from request body (1–60 min)
+    let body = {}
+    try { body = JSON.parse(event.body || '{}') } catch { /* ignore */ }
+    const rawLimit = Number(body.timeLimitMinutes)
+    const timeLimitMinutes = (!isNaN(rawLimit) && rawLimit >= 1 && rawLimit <= 60)
+      ? Math.round(rawLimit)
+      : (parseInt(itemResult.Item.recommendedTimeLimitMinutes?.N || '0', 10) || 30)
+
+    // Check for an existing self-review session — if found, return 409 with existingSessionId
+    // so the frontend can offer a "start over" flow
     const existingSessionsResult = await dynamo.send(new QueryCommand({
+      TableName: process.env.SESSIONS_TABLE,
+      IndexName: 'item-index',
+      KeyConditionExpression: 'itemId = :iid',
+      FilterExpression: 'isSelfReview = :t AND #st <> :cancelled',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: {
+        ':iid': { S: itemId },
+        ':t': { BOOL: true },
+        ':cancelled': { S: 'cancelled' },
+      },
+    }))
+
+    const existingSelfReview = (existingSessionsResult.Items ?? [])[0]
+    if (existingSelfReview) {
+      const existingSessionId = existingSelfReview.sessionId?.S
+      log('info', 'CreateSelfSession: existing self-review found', { requestId, tenantId, itemId, existingSessionId })
+      return errorResponse(409, 'A self-review session already exists for this item.', { existingSessionId }, origin)
+    }
+
+    // Count all sessions for limit check
+    const allSessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :iid',
@@ -70,7 +100,7 @@ export const handler = async (event) => {
       Select: 'COUNT',
     }))
 
-    const existingCount = existingSessionsResult.Count ?? 0
+    const existingCount = allSessionsResult.Count ?? 0
 
     // Fetch tenant record for feature flags
     let maxSessions = DEFAULT_MAX_SESSIONS_FREE
@@ -113,6 +143,7 @@ export const handler = async (event) => {
         reviewerEmail: { S: '' },
         isSelfReview: { BOOL: true },
         status: { S: 'not_started' },
+        timeLimitMinutes: { N: String(timeLimitMinutes) },
         createdAt: { S: now },
         updatedAt: { S: now },
         ...(closeDate ? { expiresAt: { S: closeDate } } : {}),

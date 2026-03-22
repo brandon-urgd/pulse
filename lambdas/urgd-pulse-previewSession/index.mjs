@@ -63,6 +63,14 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
+    // Accept optional timeLimitMinutes from request body (1–60 min)
+    let body = {}
+    try { body = JSON.parse(event.body || '{}') } catch { /* ignore */ }
+    const rawLimit = Number(body.timeLimitMinutes)
+    const timeLimitMinutes = (!isNaN(rawLimit) && rawLimit >= 1 && rawLimit <= 60)
+      ? Math.round(rawLimit)
+      : (parseInt(itemResult.Item.recommendedTimeLimitMinutes?.N || '0', 10) || 30)
+
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()
     const now = new Date()
@@ -80,6 +88,7 @@ export const handler = async (event) => {
         pulseCode: { S: pulseCode },
         status: { S: 'not_started' },
         preview: { BOOL: true },
+        timeLimitMinutes: { N: String(timeLimitMinutes) },
         expiresAt: { S: expiresAtIso },
         // DynamoDB TTL attribute (epoch seconds) for automatic cleanup
         ttl: { N: String(expiresAtEpoch) },

@@ -45,6 +45,7 @@ function normalizeItem(raw) {
     ...(raw.content !== undefined ? { content: raw.content } : {}),
     ...(raw.documentKey !== undefined ? { documentKey: raw.documentKey } : {}),
     ...(raw.extractedKey !== undefined ? { extractedKey: raw.extractedKey } : {}),
+    ...(raw.recommendedTimeLimitMinutes !== undefined ? { recommendedTimeLimitMinutes: raw.recommendedTimeLimitMinutes } : {}),
   }
 }
 

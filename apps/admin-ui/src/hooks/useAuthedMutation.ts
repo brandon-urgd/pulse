@@ -50,8 +50,9 @@ export async function authedMutate(
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    throw Object.assign(new Error((errBody as { error?: string }).error ?? res.statusText), {
+    throw Object.assign(new Error((errBody as { message?: string; error?: string }).message ?? (errBody as { error?: string }).error ?? res.statusText), {
       status: res.status,
+      body: errBody,
     });
   }
 

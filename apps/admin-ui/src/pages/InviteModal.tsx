@@ -33,6 +33,7 @@ interface Props {
   itemName: string;
   onClose: () => void;
   skipLabel?: string;
+  onSelfReview?: () => void;
 }
 
 function todayIso(): string {
@@ -51,7 +52,7 @@ function sessionStatusLabel(status: SessionStatus): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Props) {
+export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSelfReview }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -560,6 +561,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
           </form>
 
           <div className={styles.modalFooter}>
+            {onSelfReview && (
+              <button type="button" className={styles.selfReviewButton} onClick={onSelfReview}>
+                Review it yourself
+              </button>
+            )}
             {skipLabel && (
               <button type="button" className={styles.skipButton} onClick={onClose}>
                 {skipLabel}

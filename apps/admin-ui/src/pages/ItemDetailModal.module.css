@@ -45,7 +45,7 @@
 .modalHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
@@ -56,6 +56,8 @@
   font-weight: 600;
   margin: 0;
   color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
 }
 
 .closeButton {
@@ -65,13 +67,14 @@
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
 
 .closeButton:hover {
@@ -80,7 +83,6 @@
 }
 
 .headerActionSelfReview {
-  margin-left: auto;
   margin-right: var(--space-2);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
@@ -90,6 +92,8 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .headerActionSelfReview:hover {
@@ -103,7 +107,7 @@
 }
 
 .headerActionPreview {
-  margin-right: var(--space-3);
+  margin-right: var(--space-2);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
@@ -112,6 +116,8 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .headerActionPreview:hover {
@@ -627,6 +633,131 @@
   color: var(--color-interactive);
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* ── Upload-ready inline CTAs ────────────────────────────────────────────── */
+
+.uploadReadyCtas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  width: 100%;
+  align-items: center;
+}
+
+.timeLimitRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeLimitLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.timeLimitInput {
+  width: 64px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.timeLimitUnit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ── Header time limit row ───────────────────────────────────────────────── */
+
+.headerTimeLimitRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-right: var(--space-2);
+  flex-shrink: 0;
+}
+
+.headerTimeLimitLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.uploadCtaPreview {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.uploadCtaPreview:hover:not(:disabled) {
+  background: var(--color-interactive-hover);
+}
+
+.uploadCtaPreview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Self-review "start over" banner ─────────────────────────────────────── */
+
+.selfReviewResetBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-warning-bg);
+  border-bottom: 1px solid var(--color-warning-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.selfReviewResetConfirm {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-error);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.selfReviewResetConfirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selfReviewResetCancel {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.selfReviewResetCancel:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
 }
 
 @media (max-width: 800px) {

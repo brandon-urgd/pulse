@@ -30,6 +30,7 @@ interface Item {
   documentKey?: string;
   sessionCount: number;
   updatedAt: string;
+  recommendedTimeLimitMinutes?: number;
 }
 
 interface CreateItemPayload {
@@ -121,6 +122,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const [isSelfReviewLoading, setIsSelfReviewLoading] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState('');
 
+  // Time limit state (for session preview / self-review)
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
+
+  // Self-review "start over" confirm state
+  const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
+
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
     ['item', itemId],
@@ -136,8 +143,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       setCloseDate(itemData.closeDate?.slice(0, 10) ?? '');
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
+      if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
+        setTimeLimitMinutes(itemData.recommendedTimeLimitMinutes);
+      }
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
-        // Extract filename from documentKey if available, otherwise use a generic key
         const fileName = itemData.documentKey
           ? itemData.documentKey.split('/').pop() ?? '_loaded'
           : '_loaded';
@@ -336,6 +345,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           if (!mountedRef.current) { resolve(); return; }
           if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
             setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
+            // Seed time limit recommendation when doc becomes ready
+            if (status === 'ready' && refreshed?.recommendedTimeLimitMinutes) {
+              setTimeLimitMinutes((prev) => prev ?? refreshed.recommendedTimeLimitMinutes ?? 30);
+            }
             resolve();
             return;
           }
@@ -386,7 +399,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       const resp = await authedMutate(
         `/api/manage/items/${targetItemId}/preview-session`,
         'GET',
-        undefined,
+        timeLimitMinutes != null ? { timeLimitMinutes } : undefined,
         navigate
       ) as { data: { previewUrl: string } };
       const newTab = window.open(resp.data.previewUrl, '_blank', 'noopener,noreferrer');
@@ -399,26 +412,40 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   }
 
   // ── Self-review handler ──────────────────────────────────────────────────────
-  async function handleSelfReview() {
+  async function handleSelfReview(forceSessionId?: string) {
     const targetItemId = savedItemId.current ?? itemId;
     if (!targetItemId || isSelfReviewLoading) return;
     setIsSelfReviewLoading(true);
     setSelfReviewError('');
+    setSelfReviewExistingId(null);
     try {
+      // If starting over, delete the existing session first
+      if (forceSessionId) {
+        await authedMutate(
+          `/api/manage/items/${targetItemId}/sessions/${forceSessionId}`,
+          'DELETE',
+          undefined,
+          navigate
+        );
+      }
       const resp = await authedMutate(
         `/api/manage/items/${targetItemId}/self-review`,
         'POST',
-        {},
+        { ...(timeLimitMinutes != null ? { timeLimitMinutes } : {}) },
         navigate
       ) as { data: { sessionId: string; sessionUrl: string } };
       window.open(resp.data.sessionUrl, '_blank', 'noopener,noreferrer');
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500;
-      setSelfReviewError(
-        status === 403
-          ? labels.itemDetail.selfReviewLimitError
-          : labels.itemDetail.selfReviewError
-      );
+      const body = (err as { body?: { existingSessionId?: string } }).body;
+      if (status === 409 && body?.existingSessionId) {
+        // Existing self-review — surface "start over" prompt
+        setSelfReviewExistingId(body.existingSessionId);
+      } else if (status === 403) {
+        setSelfReviewError(labels.itemDetail.selfReviewLimitError);
+      } else {
+        setSelfReviewError(labels.itemDetail.selfReviewError);
+      }
     } finally {
       setIsSelfReviewLoading(false);
     }
@@ -444,11 +471,32 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           </h2>
           {isEditMode && (
             <>
+              {timeLimitMinutes != null && (
+                <div className={styles.headerTimeLimitRow}>
+                  <label htmlFor="headerTimeLimitInput" className={styles.headerTimeLimitLabel}>
+                    {labels.itemDetail.timeLimitLabel}
+                  </label>
+                  <input
+                    id="headerTimeLimitInput"
+                    type="number"
+                    min={5}
+                    max={60}
+                    step={5}
+                    className={styles.timeLimitInput}
+                    value={timeLimitMinutes}
+                    onChange={(e) => {
+                      const v = Math.min(60, Math.max(5, Number(e.target.value)));
+                      setTimeLimitMinutes(v);
+                    }}
+                  />
+                  <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                </div>
+              )}
               {(itemData?.status === 'draft' || itemData?.status === 'active') && (
                 <button
                   type="button"
                   className={styles.headerActionSelfReview}
-                  onClick={handleSelfReview}
+                  onClick={() => handleSelfReview()}
                   disabled={isSelfReviewLoading}
                   title={labels.itemDetail.selfReviewTooltip}
                 >
@@ -484,6 +532,26 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         )}
         {selfReviewError && (
           <p className={styles.formError} role="alert" aria-live="polite">{selfReviewError}</p>
+        )}
+        {selfReviewExistingId && (
+          <div className={styles.selfReviewResetBanner} role="alert">
+            <span>{labels.itemDetail.selfReviewExistsNotice}</span>
+            <button
+              type="button"
+              className={styles.selfReviewResetConfirm}
+              onClick={() => handleSelfReview(selfReviewExistingId)}
+              disabled={isSelfReviewLoading}
+            >
+              {labels.itemDetail.selfReviewStartOver}
+            </button>
+            <button
+              type="button"
+              className={styles.selfReviewResetCancel}
+              onClick={() => setSelfReviewExistingId(null)}
+            >
+              {labels.itemDetail.selfReviewStartOverCancel}
+            </button>
+          </div>
         )}
 
         {/* Inner layout — flex row when preview is open, flex column always */}
@@ -627,6 +695,39 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                             </div>
                           );
                         })}
+
+                        {/* Time limit + preview CTA — shown once a file is ready, create mode only */}
+                        {!isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
+                          <div className={styles.uploadReadyCtas}>
+                            <div className={styles.timeLimitRow}>
+                              <label htmlFor="timeLimitInput" className={styles.timeLimitLabel}>
+                                {labels.itemDetail.timeLimitLabel}
+                              </label>
+                              <input
+                                id="timeLimitInput"
+                                type="number"
+                                min={5}
+                                max={60}
+                                step={5}
+                                className={styles.timeLimitInput}
+                                value={timeLimitMinutes ?? 30}
+                                onChange={(e) => {
+                                  const v = Math.min(60, Math.max(5, Number(e.target.value)));
+                                  setTimeLimitMinutes(v);
+                                }}
+                              />
+                              <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.uploadCtaPreview}
+                              onClick={handleSessionPreview}
+                              disabled={isSessionPreviewLoading}
+                            >
+                              {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -737,6 +838,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           itemName={savedItem.itemName}
           onClose={() => { setShowInviteModal(false); onClose(); }}
           skipLabel="Skip for now"
+          onSelfReview={async () => {
+            setShowInviteModal(false);
+            await handleSelfReview();
+            onClose();
+          }}
         />
       )}
     </div>

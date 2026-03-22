@@ -154,12 +154,18 @@ export const labels = {
     previewSessionLoading: 'Opening preview\u2026',
     previewSessionError: 'Preview couldn\u2019t be started. Try again.',
     previewSessionPopupBlocked: 'Preview opened in a new tab. If it didn\u2019t open, check your popup settings.',
+    // Time limit
+    timeLimitLabel: 'Session time',
+    timeLimitUnit: 'min',
     // Self-review session
     selfReviewButton: 'Review it yourself',
     selfReviewLoading: 'Starting\u2026',
     selfReviewError: 'Couldn\u2019t start your review. Try again.',
     selfReviewLimitError: 'You\u2019ve reached the session limit for this item.',
     selfReviewTooltip: 'Give yourself feedback on this item. Your session won\u2019t count toward reviewer limits.',
+    selfReviewExistsNotice: 'You already have a review for this item.',
+    selfReviewStartOver: 'Start over',
+    selfReviewStartOverCancel: 'Cancel',
   },
 
   // Invitation section (within ItemDetail)
