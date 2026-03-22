@@ -157,6 +157,7 @@ export const labels = {
     // Time limit
     timeLimitLabel: 'Session time',
     timeLimitUnit: 'min',
+    timeLimitHint: 'This is a pacing estimate for the AI — not a hard cutoff. The agent will naturally wrap up around this time, but reviewers can always finish their thought.',
     // Self-review session
     selfReviewButton: 'Review it yourself',
     selfReviewLoading: 'Starting\u2026',

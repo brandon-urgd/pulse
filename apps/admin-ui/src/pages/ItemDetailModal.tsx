@@ -397,7 +397,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     }
   }
 
-  // ── Preview handler ─────────────────────────────────────────────────────────  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
+  // ── Preview handler ─────────────────────────────────────────────────────────
+  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
     const targetItemId = savedItemId.current ?? itemId;
     if (!targetItemId) return;
     setLoadingPreviewFile(fileName);
@@ -523,6 +524,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     }}
                   />
                   <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                  <span className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</span>
                 </div>
               )}
               {(itemData?.status === 'draft' || itemData?.status === 'active') && (
@@ -758,6 +760,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                                 }}
                               />
                               <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                              <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                             </div>
                             <button
                               type="button"

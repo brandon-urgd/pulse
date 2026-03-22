@@ -595,13 +595,6 @@ export default function Chat() {
       <div style={styles.topBar}>
         <span style={styles.wordmark}>pulse</span>
         <div style={styles.topBarRight}>
-          {timeLabel && (
-            <span
-              style={{ ...styles.timeDisplay, color: timeColor }}
-            >
-              {timeLabel}
-            </span>
-          )}
           {/* Visually hidden aria-live region for threshold announcements */}
           <span
             style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}

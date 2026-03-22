@@ -234,9 +234,9 @@ Important:
 - If the reviewer seems uncertain, confused, or asks a clarifying question about a section, offer to show them more. Something like "I can share more of that section if it'd help" or "Want me to pull up the details on that part?" Only offer when the moment calls for it — not after every summary. Read the conversation, not a checklist.`
 
     if (windingDown === 'true') {
-      systemPrompt += '\n\nThe session is approaching its time limit. Start wrapping up the current topic naturally. Don\'t mention the time limit directly — just begin steering toward a close.'
+      systemPrompt += '\n\nThe session is approaching its suggested time. This is a soft pacing signal — not a hard stop. Let the reviewer finish their current thought completely before you begin steering toward a natural close. Never cut off a response mid-thought. If they\'re in the middle of something meaningful, follow it through. Then begin wrapping the current topic naturally. Don\'t mention the time limit directly.'
     } else if (windingDown === 'final') {
-      systemPrompt += '\n\nThe session is nearly out of time. Deliver a brief, warm closing. Thank the reviewer for their time. Summarize what you covered together in a sentence or two. Let them know they can come back to continue.'
+      systemPrompt += '\n\nThe session is near the end of its suggested time. This is still a soft signal — if the reviewer is mid-thought or has just said something worth following up on, honor that first. Then deliver a brief, warm closing. Thank the reviewer for their time. Summarize what you covered together in a sentence or two. Let them know they can come back to continue. Never leave a reviewer feeling cut off.'
     }
 
     // Reflection pause guidance — added to all sessions
