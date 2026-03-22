@@ -172,7 +172,14 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${sessionToken}`,
         },
-        body: JSON.stringify({ type, message: message.trim() }),
+        body: JSON.stringify({
+          type,
+          message: message.trim(),
+          metadata: {
+            userAgent: navigator.userAgent,
+            url: window.location.href,
+          },
+        }),
       })
 
       if (!res.ok) {
