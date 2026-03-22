@@ -339,8 +339,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       async function poll() {
         if (!mountedRef.current) { resolve(); return; }
         try {
-          await queryClient.refetchQueries({ queryKey: ['item', targetItemId] });
-          const refreshed = queryClient.getQueryData<Item>(['item', targetItemId]);
+          // Fetch directly — in create mode the React Query cache has no entry for this item yet
+          const resp = await authedMutate(`/api/manage/items/${targetItemId}`, 'GET', undefined, navigate) as { data: Item };
+          const refreshed = resp?.data;
           const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
           if (!mountedRef.current) { resolve(); return; }
           if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
@@ -349,6 +350,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             if (status === 'ready' && refreshed?.recommendedTimeLimitMinutes) {
               setTimeLimitMinutes((prev) => prev ?? refreshed.recommendedTimeLimitMinutes ?? 30);
             }
+            // Also update the query cache so edit mode picks it up immediately
+            queryClient.setQueryData(['item', targetItemId], { data: refreshed });
             resolve();
             return;
           }
