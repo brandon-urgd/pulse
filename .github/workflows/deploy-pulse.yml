@@ -148,22 +148,6 @@ jobs:
             --region ${{ env.AWS_REGION }})
           echo "SHIELD_EVENTBRIDGE_RULE_ARN=$SHIELD_EVENTBRIDGE_RULE_ARN" >> $GITHUB_ENV
 
-          COMMAND_API_KEY=$(aws ssm get-parameter \
-            --name "/urgd/command/api_key" \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          echo "::add-mask::$COMMAND_API_KEY"
-          echo "COMMAND_API_KEY=$COMMAND_API_KEY" >> $GITHUB_ENV
-
-          COMMAND_INTAKE_URL=$(aws ssm get-parameter \
-            --name "/urgd/command/intake_url" \
-            --query 'Parameter.Value' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          echo "COMMAND_INTAKE_URL=$COMMAND_INTAKE_URL" >> $GITHUB_ENV
-
           GOOGLE_CLIENT_ID=$(aws ssm get-parameter \
             --name "/pulse/google/client-id" \
             --query 'Parameter.Value' \
@@ -281,8 +265,6 @@ jobs:
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
               {"ParameterKey": "CriticalAlertsEmail",        "ParameterValue": "critical@urgd.dev"},
               {"ParameterKey": "DeploymentVersion",          "ParameterValue": "$VERSION"},
-              {"ParameterKey": "CommandApiKey",              "ParameterValue": os.environ["COMMAND_API_KEY"]},
-              {"ParameterKey": "CommandIntakeUrl",           "ParameterValue": os.environ["COMMAND_INTAKE_URL"]},
           ]
 
           # Derive CF parameter key from function name:
