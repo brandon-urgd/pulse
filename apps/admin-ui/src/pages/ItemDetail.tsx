@@ -61,7 +61,10 @@ interface UploadUrlResponse {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Returns current datetime in "YYYY-MM-DDTHH:MM" format for datetime-local inputs
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 function fileStatusLabel(status: FileUploadStatus): string {
@@ -118,6 +121,15 @@ export default function ItemDetail() {
   // Track whether the item was auto-saved (so cancel can clean it up)
   const autoSaved = useRef(false);
 
+  // Time limit state
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
+  const perFileTimeLimits = useRef<Record<string, number>>({});
+
+  // True while any file is still in-flight
+  const isAnyFileInFlight = Object.values(fileStatuses).some(
+    (s) => s.status === 'uploading' || s.status === 'scanning' || s.status === 'extracting'
+  );
+
   // ── Load item in edit mode ──────────────────────────────────────────────────
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
     ['item', itemId],
@@ -130,7 +142,7 @@ export default function ItemDetail() {
     if (itemData) {
       setItemName(itemData.itemName);
       setDescription(itemData.description);
-      setCloseDate(itemData.closeDate?.slice(0, 10) ?? '');
+      setCloseDate(itemData.closeDate?.slice(0, 16) ?? '');
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
@@ -225,7 +237,7 @@ export default function ItemDetail() {
       const resp = await authedMutate(
         `/api/manage/items/${itemId}/preview-session`,
         'GET',
-        undefined,
+        timeLimitMinutes != null ? { timeLimitMinutes } : undefined,
         navigate
       ) as { data: { previewUrl: string } };
 
@@ -280,8 +292,8 @@ export default function ItemDetail() {
       setFormError('Description is required (1–2000 characters).');
       return;
     }
-    if (!closeDate || closeDate <= todayIso()) {
-      setFormError('Close date must be a future date.');
+    if (!closeDate || new Date(closeDate).getTime() <= Date.now()) {
+      setFormError('Close date must be a future date and time.');
       return;
     }
 
@@ -322,7 +334,7 @@ export default function ItemDetail() {
         const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
-          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;
@@ -383,6 +395,11 @@ export default function ItemDetail() {
 
           if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
             setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
+            if (status === 'ready' && refreshed?.data?.recommendedTimeLimitMinutes) {
+              perFileTimeLimits.current[fileName] = refreshed.data.recommendedTimeLimitMinutes;
+              const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
+              setTimeLimitMinutes(Math.min(60, total));
+            }
             resolve();
             return;
           }
@@ -532,7 +549,7 @@ export default function ItemDetail() {
           </label>
           <input
             id="closeDate"
-            type="date"
+            type="datetime-local"
             className={styles.input}
             value={closeDate}
             onChange={(e) => setCloseDate(e.target.value)}
@@ -606,6 +623,39 @@ export default function ItemDetail() {
                 {fileStatusLabel(fileStatuses['_loaded'].status)}
               </p>
             )}
+
+            {/* Time limit + preview CTA — shown once a file is ready, create mode only */}
+            {!isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
+              <div className={styles.uploadReadyCtas}>
+                <div className={styles.timeLimitRow}>
+                  <label htmlFor="timeLimitInput" className={styles.timeLimitLabel}>
+                    {labels.itemDetail.timeLimitLabel}
+                  </label>
+                  <input
+                    id="timeLimitInput"
+                    type="number"
+                    min={5}
+                    max={60}
+                    step={5}
+                    className={styles.timeLimitInput}
+                    value={timeLimitMinutes ?? 30}
+                    onChange={(e) => {
+                      const v = Math.min(60, Math.max(5, Number(e.target.value)));
+                      setTimeLimitMinutes(v);
+                    }}
+                  />
+                  <span className={styles.timeLimitUnit}>{labels.itemDetail.timeLimitUnit}</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.uploadCtaPreview}
+                  onClick={handlePreview}
+                  disabled={isPreviewLoading}
+                >
+                  {isPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -635,8 +685,8 @@ export default function ItemDetail() {
             >
               {labels.itemDetail.cancelButton}
             </button>
-            <button type="submit" className={styles.saveButton} disabled={isSaving}>
-              {labels.itemDetail.saveButton}
+            <button type="submit" className={styles.saveButton} disabled={isSaving || isAnyFileInFlight}>
+              {isSaving ? '…' : isAnyFileInFlight ? 'Processing…' : labels.itemDetail.saveButton}
             </button>
           </div>
         )}

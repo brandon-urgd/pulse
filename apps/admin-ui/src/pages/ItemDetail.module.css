@@ -616,3 +616,71 @@
 .extendRow .input {
   flex: 1;
 }
+
+@media (max-width: 639px) {
+  .container { padding: var(--space-4); }
+  .pageHeader { flex-wrap: wrap; }
+  .pageHeaderActions { flex-wrap: wrap; }
+}
+
+/* ── Upload-ready inline CTAs ────────────────────────────────────────────── */
+
+.uploadReadyCtas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  width: 100%;
+  align-items: center;
+}
+
+.timeLimitRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeLimitLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.timeLimitInput {
+  width: 64px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.timeLimitUnit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.uploadCtaPreview {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-interactive);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.uploadCtaPreview:hover:not(:disabled) {
+  background: var(--color-interactive-hover);
+}
+
+.uploadCtaPreview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
