@@ -499,45 +499,14 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* ── Support ── */}
+      {/* ── Support & Privacy ── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>{labels.support.sectionHeading}</h2>
         <div className={styles.fieldGrid}>
           <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>{labels.support.contactLink}</span>
+            <span className={styles.fieldLabel}>Contact us</span>
             <div className={styles.inlineEditRow}>
               <button type="button" className={styles.supportActionButton} onClick={() => setReportModalType('general-inquiry')}>
-                Open
-              </button>
-            </div>
-          </div>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>{labels.support.bugLink}</span>
-            <div className={styles.inlineEditRow}>
-              <button type="button" className={styles.supportActionButton} onClick={() => setReportModalType('bug-report')}>
-                Open
-              </button>
-            </div>
-          </div>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>{labels.support.featureLink}</span>
-            <div className={styles.inlineEditRow}>
-              <button type="button" className={styles.supportActionButton} onClick={() => setReportModalType('feature-request')}>
-                Open
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Privacy ── */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>{labels.support.privacySectionHeading}</h2>
-        <div className={styles.fieldGrid}>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>{labels.support.privacyLink}</span>
-            <div className={styles.inlineEditRow}>
-              <button type="button" className={styles.supportActionButton} onClick={() => setReportModalType('privacy-question')}>
                 Open
               </button>
             </div>

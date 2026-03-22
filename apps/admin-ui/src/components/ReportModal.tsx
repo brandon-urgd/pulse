@@ -110,7 +110,7 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
         {submitted ? (
           <p className={styles.success} aria-live="polite">{labels.reportModal.successMessage}</p>
         ) : (
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} noValidate className={styles.form}>
             {/* Type selector */}
             <div className={styles.fieldGroup}>
               <label htmlFor="report-type" className={styles.label}>
