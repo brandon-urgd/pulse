@@ -454,3 +454,15 @@
   margin-top: var(--space-5);
   text-align: center;
 }
+
+/* ── Self-review badge ───────────────────────────────────────────────────── */
+
+.selfReviewBadge {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
+  flex-shrink: 0;
+}

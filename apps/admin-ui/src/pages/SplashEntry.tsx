@@ -4,6 +4,8 @@ import { signInWithRedirect } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
+import { TERMS_VERSION } from '../config/terms';
+import TermsGate from '../components/TermsGate';
 import '../styles/glass.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -11,7 +13,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 // Valid pulse code: exactly 8 alphanumeric chars
 const isValidPulseCode = (code: string) => /^[A-Z0-9]{8}$/i.test(code);
 
-type EntryState = 'splash' | 'login' | 'register' | 'new-password' | 'registered';
+type EntryState = 'splash' | 'login' | 'register' | 'new-password' | 'registered' | 'terms-gate';
 
 export default function SplashEntry() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
@@ -21,6 +23,8 @@ export default function SplashEntry() {
 
   const [state, setState] = useState<EntryState>('splash');
   const [animating, setAnimating] = useState(false);
+  const [termsIsUpdated, setTermsIsUpdated] = useState(false);
+  const [termsAccepting, setTermsAccepting] = useState(false);
 
   // Form fields
   const [pulseCode, setPulseCode] = useState('');
@@ -151,6 +155,40 @@ export default function SplashEntry() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
+          const data = await res.json() as { data?: { onboardingComplete?: boolean; termsAcceptedVersion?: string | null } };
+          const acceptedVersion = data.data?.termsAcceptedVersion;
+          if (!acceptedVersion || acceptedVersion !== TERMS_VERSION) {
+            setTermsIsUpdated(!!acceptedVersion && acceptedVersion !== TERMS_VERSION);
+            setState('terms-gate');
+            return;
+          }
+          if (data.data?.onboardingComplete === false) {
+            navigate('/admin/welcome', { replace: true });
+            return;
+          }
+        }
+      }
+    } catch { /* fall through */ }
+    navigate('/admin/items', { replace: true });
+  }
+
+  async function handleTermsAccept() {
+    setTermsAccepting(true);
+    try {
+      const { fetchAuthSession } = await import('aws-amplify/auth');
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (token) {
+        await fetch(`${API_BASE}/api/manage/settings`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ termsAcceptedVersion: TERMS_VERSION, termsAcceptedAt: new Date().toISOString() }),
+        });
+        // Fetch settings again to determine routing
+        const res = await fetch(`${API_BASE}/api/manage/settings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
           const data = await res.json() as { data?: { onboardingComplete?: boolean } };
           if (data.data?.onboardingComplete === false) {
             navigate('/admin/welcome', { replace: true });
@@ -163,6 +201,16 @@ export default function SplashEntry() {
   }
 
   if (isLoading) return null;
+
+  if (state === 'terms-gate') {
+    return (
+      <TermsGate
+        isUpdated={termsIsUpdated}
+        onAccept={handleTermsAccept}
+        isAccepting={termsAccepting}
+      />
+    );
+  }
 
   return (
     <div className="pulse-entry-bg" style={{ padding: '24px' }}>

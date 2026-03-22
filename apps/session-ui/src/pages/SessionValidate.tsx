@@ -1,10 +1,12 @@
 // Session validation page — reviewer enters credentials to access their session
 // Accepts ?code={pulseCode} query param or /{sessionId} path param
 // Accepts ?public=1 to show the public walk-in entry form
+// Accepts ?preview=true to auto-validate a preview session (no email required)
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { validateSession } from '../api/session'
 import { useSession } from '../context/SessionContext'
+import SessionFooter from '../components/SessionFooter'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -117,6 +119,7 @@ export default function SessionValidate() {
   const [searchParams] = useSearchParams()
   const pulseCode = searchParams.get('code') ?? undefined
   const isPublic = searchParams.get('public') === '1'
+  const isPreviewMode = searchParams.get('preview') === 'true'
   const navigate = useNavigate()
   const { setSession } = useSession()
 
@@ -128,6 +131,35 @@ export default function SessionValidate() {
   useEffect(() => {
     document.title = 'Access Your Session — Pulse'
   }, [])
+
+  // Preview mode: auto-validate without email — skip confidentiality, go straight to chat
+  useEffect(() => {
+    if (!isPreviewMode || !pulseCode) return
+
+    let cancelled = false
+    setLoading(true)
+
+    validateSession({ pulseCode })
+      .then((result) => {
+        if (cancelled) return
+        setSession(result.sessionToken, result.sessionId, result.item.itemName ?? '', true)
+        // Skip confidentiality in preview mode — go directly to chat
+        navigate(`/s/${result.sessionId}/chat`, { replace: true })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const status = (err as { status?: number }).status ?? 500
+        if (status === 410) {
+          setError('This preview has expired.')
+        } else {
+          setError(getErrorMessage(status))
+        }
+        setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPreviewMode, pulseCode])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -249,6 +281,7 @@ export default function SessionValidate() {
           </button>
         </form>
       </div>
+      <SessionFooter />
     </main>
   )
 }

@@ -7,6 +7,7 @@ import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { labels } from '../config/labels-registry';
+import ReportModal, { type ReportType } from '../components/ReportModal';
 import styles from './Settings.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -174,6 +175,9 @@ export default function Settings() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Report modal
+  const [reportModalType, setReportModalType] = useState<ReportType | null>(null);
 
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -495,6 +499,40 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Support ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>{labels.support.sectionHeading}</h2>
+        <div className={styles.fieldGrid}>
+          <div className={styles.fieldRow}>
+            <button type="button" className={styles.editButton} onClick={() => setReportModalType('general-inquiry')}>
+              {labels.support.contactLink}
+            </button>
+          </div>
+          <div className={styles.fieldRow}>
+            <button type="button" className={styles.editButton} onClick={() => setReportModalType('bug-report')}>
+              {labels.support.bugLink}
+            </button>
+          </div>
+          <div className={styles.fieldRow}>
+            <button type="button" className={styles.editButton} onClick={() => setReportModalType('feature-request')}>
+              {labels.support.featureLink}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Privacy ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>{labels.support.privacySectionHeading}</h2>
+        <div className={styles.fieldGrid}>
+          <div className={styles.fieldRow}>
+            <button type="button" className={styles.editButton} onClick={() => setReportModalType('privacy-question')}>
+              {labels.support.privacyLink}
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* ── Danger Zone ── */}
       <section className={styles.section}>
         <h2 className={`${styles.sectionHeading} ${styles.dangerHeading}`}>{labels.settings.dangerZoneHeading}</h2>
@@ -519,6 +557,16 @@ export default function Settings() {
           onCancel={handleDeleteCancel}
           isDeleting={isDeleting}
           error={deleteError}
+        />
+      )}
+
+      {/* ── Report modal ── */}
+      {reportModalType && (
+        <ReportModal
+          type={reportModalType}
+          prefillName={s?.displayName ?? ''}
+          prefillEmail={s?.email ?? ''}
+          onClose={() => setReportModalType(null)}
         />
       )}
     </div>

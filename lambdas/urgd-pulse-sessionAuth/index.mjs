@@ -54,11 +54,16 @@ export const handler = async (event) => {
       throw new Error('Session expired')
     }
 
+    // Extract preview flag — passed via authorizer context so downstream Lambdas
+    // can short-circuit writes for preview sessions
+    const isPreview = result.Item.preview?.BOOL === true
+
     log('info', 'SessionAuth: allowed', { sessionId })
 
     return generatePolicy(sessionId, 'Allow', event.methodArn, {
       sessionId,
       tenantId,
+      preview: isPreview ? 'true' : 'false',
     })
   } catch (err) {
     log('warn', 'SessionAuth: denied', { reason: err.message })

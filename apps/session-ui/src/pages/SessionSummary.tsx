@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
 import { getSessionSummary } from '../api/session'
 import PulseLine from '../components/PulseLine'
+import SessionFooter from '../components/SessionFooter'
 
 interface SummaryData {
   sections: string[]
@@ -309,6 +310,7 @@ export default function SessionSummary() {
           </div>
         ) : null}
       </div>
+      <SessionFooter sessionId={sessionId} sessionToken={sessionToken ?? undefined} />
     </div>
   )
 }

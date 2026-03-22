@@ -81,6 +81,7 @@ export const handler = async (event) => {
         usage: { itemCount, sessionCount },
         onboardingComplete: tenant.onboardingComplete ?? false,
         preferences: tenant.preferences ?? {},
+        termsAcceptedVersion: tenant.termsAcceptedVersion ?? null,
       },
     }, {}, origin)
   } catch (err) {

@@ -149,6 +149,17 @@ export const labels = {
     previewDownloadOriginal: 'Download original',
     previewPdfFallback: 'Open PDF in new tab \u2192',
     previewNoText: 'No text could be extracted from this file.',
+    // Preview session
+    previewSessionButton: 'Preview',
+    previewSessionLoading: 'Opening preview\u2026',
+    previewSessionError: 'Preview couldn\u2019t be started. Try again.',
+    previewSessionPopupBlocked: 'Preview opened in a new tab. If it didn\u2019t open, check your popup settings.',
+    // Self-review session
+    selfReviewButton: 'Review it yourself',
+    selfReviewLoading: 'Starting\u2026',
+    selfReviewError: 'Couldn\u2019t start your review. Try again.',
+    selfReviewLimitError: 'You\u2019ve reached the session limit for this item.',
+    selfReviewTooltip: 'Give yourself feedback on this item. Your session won\u2019t count toward reviewer limits.',
   },
 
   // Invitation section (within ItemDetail)
@@ -407,5 +418,44 @@ export const labels = {
     rerunError: 'Failed to re-run pulse check. Please try again.',
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
     basedOnSessions: 'Based on {count} session{plural}',
+  },
+
+  // Support / Report Modal (Task 37)
+  support: {
+    sectionHeading: 'Support',
+    contactLink: 'Contact support',
+    bugLink: 'Report a bug',
+    featureLink: 'Request a feature',
+    privacySectionHeading: 'Privacy',
+    privacyLink: 'Privacy question',
+  },
+
+  // Terms of Service gate (Task 39)
+  termsGate: {
+    headingFirst: 'Before you continue, please review our Terms of Use.',
+    headingUpdated: "We've updated our Terms of Use.",
+    body: 'By clicking "I agree" you confirm you\'ve read and accept the full Terms of Use.',
+    readLink: 'Read the full Terms of Use →',
+    agreeButton: 'I agree and continue',
+    agreeing: 'Saving…',
+  },
+
+  reportModal: {
+    titleContactSupport: 'Contact support',
+    titleBugReport: 'Report a bug',
+    titleFeatureRequest: 'Request a feature',
+    titlePrivacyQuestion: 'Privacy question',
+    typeLabel: 'Type',
+    messageLabel: 'Message',
+    messagePlaceholder: 'Describe your issue or question.',
+    nameLabel: 'Your name (optional)',
+    emailLabel: 'Your email (optional)',
+    emailHelper: "We'll use this to follow up if needed.",
+    submitButton: 'Submit',
+    submittingButton: 'Submitting…',
+    successMessage: 'Your report has been sent.',
+    errorMessage: "Couldn't send your report. Try again.",
+    charLimitWarning: '{remaining} characters remaining',
+    charLimitExceeded: 'Message must be 5,000 characters or fewer',
   },
 } as const;

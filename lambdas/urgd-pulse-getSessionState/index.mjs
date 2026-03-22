@@ -41,6 +41,7 @@ export const handler = async (event) => {
     const totalSections = parseInt(session.totalSections?.N || '5', 10)
     const status = session.status?.S || 'not_started'
     const timeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
+    const closingState = session.closingState?.S || 'exploring'
 
     // 2. Query all transcripts ordered by ULID ascending
     const transcriptResult = await dynamo.send(new QueryCommand({
@@ -108,6 +109,7 @@ export const handler = async (event) => {
         status,
         timeLimitMinutes,
         files,
+        closingState,
       },
     }, {}, origin)
   } catch (err) {

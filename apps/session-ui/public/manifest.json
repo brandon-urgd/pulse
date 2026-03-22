@@ -1,0 +1,23 @@
+{
+  "name": "Pulse",
+  "short_name": "Pulse",
+  "description": "Guided feedback sessions by ur/gd Studios",
+  "start_url": "/s/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#4a7c59",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    }
+  ]
+}

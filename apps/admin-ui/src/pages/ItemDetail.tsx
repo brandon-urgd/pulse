@@ -97,6 +97,15 @@ export default function ItemDetail() {
   const [deleteError, setDeleteError] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // Preview session state
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [previewPopupBlocked, setPreviewPopupBlocked] = useState(false);
+
+  // Self-review session state
+  const [isSelfReviewLoading, setIsSelfReviewLoading] = useState(false);
+  const [selfReviewError, setSelfReviewError] = useState('');
+
   // Close item state — removed (flow moved to Pulse Check page)
 
   // Upload state — per-file map: filename → { status, error }
@@ -204,6 +213,59 @@ export default function ItemDetail() {
       },
     }
   );
+
+  // ── Preview session ─────────────────────────────────────────────────────────
+  async function handlePreview() {
+    if (!itemId || isPreviewLoading) return;
+    setIsPreviewLoading(true);
+    setPreviewError('');
+    setPreviewPopupBlocked(false);
+
+    try {
+      const resp = await authedMutate(
+        `/api/manage/items/${itemId}/preview-session`,
+        'GET',
+        undefined,
+        navigate
+      ) as { data: { previewUrl: string } };
+
+      const newTab = window.open(resp.data.previewUrl, '_blank', 'noopener,noreferrer');
+      if (!newTab) {
+        setPreviewPopupBlocked(true);
+      }
+    } catch {
+      setPreviewError(labels.itemDetail.previewSessionError);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }
+
+  // ── Self-review session ─────────────────────────────────────────────────────
+  async function handleSelfReview() {
+    if (!itemId || isSelfReviewLoading) return;
+    setIsSelfReviewLoading(true);
+    setSelfReviewError('');
+
+    try {
+      const resp = await authedMutate(
+        `/api/manage/items/${itemId}/self-review`,
+        'POST',
+        {},
+        navigate
+      ) as { data: { sessionId: string; sessionUrl: string } };
+
+      window.open(resp.data.sessionUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status ?? 500;
+      setSelfReviewError(
+        status === 403
+          ? labels.itemDetail.selfReviewLimitError
+          : labels.itemDetail.selfReviewError
+      );
+    } finally {
+      setIsSelfReviewLoading(false);
+    }
+  }
 
   // ── Form submit ─────────────────────────────────────────────────────────────
   function handleSubmit(e: React.FormEvent) {
@@ -370,6 +432,25 @@ export default function ItemDetail() {
                 {labels.items.inviteButton}
               </button>
             )}
+            {(itemData?.status === 'draft' || itemData?.status === 'active') && (
+              <button
+                type="button"
+                className={styles.headerActionSelfReview}
+                onClick={handleSelfReview}
+                disabled={isSelfReviewLoading}
+                title={labels.itemDetail.selfReviewTooltip}
+              >
+                {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.headerActionPreview}
+              onClick={handlePreview}
+              disabled={isPreviewLoading}
+            >
+              {isPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+            </button>
             <button
               type="button"
               className={styles.headerActionPulse}
@@ -384,6 +465,25 @@ export default function ItemDetail() {
       {isLocked && (
         <p className={styles.lockedNotice} role="status">
           🔒 {labels.itemDetail.readOnlyNotice}
+        </p>
+      )}
+
+      {/* Preview session inline feedback */}
+      {previewError && (
+        <p className={styles.formError} role="alert" aria-live="polite">
+          {previewError}
+        </p>
+      )}
+      {previewPopupBlocked && (
+        <p className={styles.previewNotice} aria-live="polite">
+          {labels.itemDetail.previewSessionPopupBlocked}
+        </p>
+      )}
+
+      {/* Self-review inline feedback */}
+      {selfReviewError && (
+        <p className={styles.formError} role="alert" aria-live="polite">
+          {selfReviewError}
         </p>
       )}
 

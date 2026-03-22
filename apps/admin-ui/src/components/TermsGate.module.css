@@ -1,0 +1,32 @@
+.heading {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0 0 16px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.body {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.lastUpdated {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 16px;
+}
+
+.readLink {
+  display: inline-block;
+  font-size: var(--font-size-sm);
+  color: var(--color-interactive);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+.readLink:hover {
+  text-decoration: underline;
+}

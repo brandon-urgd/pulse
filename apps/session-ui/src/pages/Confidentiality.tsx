@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { acceptConfidentiality } from '../api/session'
 import { useSession } from '../context/SessionContext'
+import SessionFooter from '../components/SessionFooter'
 
 const SAGE = '#4a7c59'
 const SAGE_SUBTLE = 'rgba(74, 124, 89, 0.12)'
@@ -297,6 +298,7 @@ export default function Confidentiality() {
           </button>
         </div>
       </div>
+      <SessionFooter sessionId={sessionId} sessionToken={sessionToken ?? undefined} />
     </main>
   )
 }

@@ -17,6 +17,7 @@ interface Session {
   createdAt: string;
   expiresAt?: string;
   isPublic?: boolean;
+  isSelfReview?: boolean;
   sessionName?: string;
 }
 
@@ -345,6 +346,11 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel }: Pr
                     <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
                       {sessionStatusLabel(session.status)}
                     </span>
+                    {session.isSelfReview && (
+                      <span className={styles.selfReviewBadge}>
+                        Self-review
+                      </span>
+                    )}
                   </div>
                   <div className={styles.sessionMeta}>
                     <span className={styles.sessionDate}>

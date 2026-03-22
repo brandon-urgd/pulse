@@ -63,6 +63,8 @@ export const handler = async (event) => {
   const requestId = event?.requestContext?.requestId
   const sessionId = event?.requestContext?.authorizer?.sessionId
   const tenantId = event?.requestContext?.authorizer?.tenantId
+  // Preview flag passed from sessionAuth authorizer context
+  const isPreview = event?.requestContext?.authorizer?.preview === 'true'
 
   if (!sessionId || !tenantId) {
     return errorResponse(401, 'Unauthorized', {}, origin)
@@ -110,6 +112,12 @@ export const handler = async (event) => {
     const itemId = session.itemId?.S
     let currentSection = parseInt(session.currentSection?.N || '1', 10)
     const totalSections = parseInt(session.totalSections?.N || '5', 10)
+    const timeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
+    const startedAt = session.startedAt?.S
+    // closingState: exploring → narrowing → closing → closed
+    let closingState = session.closingState?.S || 'exploring'
+    // graceMessagesRemaining: how many reviewer messages left in the grace window
+    let graceMessagesRemaining = parseInt(session.graceMessagesRemaining?.N || '2', 10)
 
     // 4. Prepare reviewer message — written atomically with agent response after Bedrock succeeds
     const reviewerMessageId = ulid()
@@ -231,6 +239,18 @@ Important:
       systemPrompt += '\n\nThe session is nearly out of time. Deliver a brief, warm closing. Thank the reviewer for their time. Summarize what you covered together in a sentence or two. Let them know they can come back to continue.'
     }
 
+    // Reflection pause guidance — added to all sessions
+    systemPrompt += '\n\nReflection pauses: At key moments — after presenting a complex or consequential section, or just before your closing question — you may invite the reviewer to take a moment before answering. Use phrases like "Take a moment before answering." or "What\'s your gut reaction to that?" These signal that thoughtful answers are valued. Use sparingly — not every exchange, just when the content genuinely warrants it.'
+
+    // Closing state system prompt additions
+    if (closingState === 'narrowing') {
+      systemPrompt += '\n\nThe session is entering its final phase. Begin naturally focusing the conversation — go deeper on the current topic rather than opening new ones. Do not announce this shift. Let the conversation feel like it\'s finding its natural depth, not winding down.'
+    } else if (closingState === 'closing') {
+      systemPrompt += '\n\nThe session is in its closing phase. Send your genuine final question — something the reviewer actually wants to answer, not a formality. After they respond, send one warm final reply that acknowledges what they shared. Do not ask new questions. Do not open new topics. Your final reply should feel like a natural end to a good conversation — something like "That\'s really helpful — thank you for taking the time." The reviewer should feel heard, not processed.'
+    } else if (closingState === 'closed') {
+      systemPrompt += '\n\nThis session is complete. Do not respond to further messages.'
+    }
+
     if (message === '__session_start__') {
       systemPrompt += `\n\nThis is the very start of the session. Send your opening as a series of short, distinct thoughts — not one big block. Structure it like this:
 
@@ -316,38 +336,39 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
     })
 
     // 9. Atomically write reviewer + agent messages — nothing written if Bedrock failed
+    // In preview mode: skip all DynamoDB writes — transcript and session state are not persisted
     const agentMessageId = ulid()
     const now = new Date().toISOString()
-    await dynamo.send(new TransactWriteItemsCommand({
-      TransactItems: [
-        {
-          Put: {
-            TableName: process.env.TRANSCRIPTS_TABLE,
-            Item: {
-              sessionId: { S: sessionId },
-              messageId: { S: reviewerMessageId },
-              role: { S: 'reviewer' },
-              content: { S: transcriptContent },
-              timestamp: { S: now },
+    if (!isPreview) {
+      await dynamo.send(new TransactWriteItemsCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: process.env.TRANSCRIPTS_TABLE,
+              Item: {
+                sessionId: { S: sessionId },
+                messageId: { S: reviewerMessageId },
+                role: { S: 'reviewer' },
+                content: { S: transcriptContent },
+                timestamp: { S: now },
+              },
             },
           },
-        },
-        {
-          Put: {
-            TableName: process.env.TRANSCRIPTS_TABLE,
-            Item: {
-              sessionId: { S: sessionId },
-              messageId: { S: agentMessageId },
-              role: { S: 'agent' },
-              content: { S: agentText },
-              timestamp: { S: now },
+          {
+            Put: {
+              TableName: process.env.TRANSCRIPTS_TABLE,
+              Item: {
+                sessionId: { S: sessionId },
+                messageId: { S: agentMessageId },
+                role: { S: 'agent' },
+                content: { S: agentText },
+                timestamp: { S: now },
+              },
             },
           },
-        },
-      ],
-    }))
-
-    // 10. Update currentSection if agent signals section transition
+        ],
+      }))
+    }
     const sectionMatch = agentText.match(/\[SECTION:(\d+)\]/)
     if (sectionMatch) {
       const newSection = parseInt(sectionMatch[1], 10)
@@ -356,65 +377,105 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       }
     }
 
+    // 10b. Compute closing state transitions
+    // Time-based: narrowing at ~70% elapsed, closing when model sends closing question
+    // Turn-based grace window: closing → closed after 2 reviewer messages + 1 agent reply
+    let newClosingState = closingState
+    let newGraceMessagesRemaining = graceMessagesRemaining
+
+    if (closingState === 'exploring' && !isSpecial && startedAt && timeLimitMinutes > 0) {
+      const elapsedMs = Date.now() - new Date(startedAt).getTime()
+      const elapsedPct = elapsedMs / (timeLimitMinutes * 60 * 1000)
+      if (elapsedPct >= 0.7) {
+        newClosingState = 'narrowing'
+      }
+    }
+
+    if ((closingState === 'narrowing' || closingState === 'exploring') && windingDown === 'final') {
+      // Model is sending its closing question — transition to closing
+      newClosingState = 'closing'
+      newGraceMessagesRemaining = 2
+    }
+
+    if (closingState === 'closing' && !isSpecial) {
+      // Count down grace window: each reviewer message decrements the counter
+      // After the agent's final reply (graceMessagesRemaining === 0), transition to closed
+      if (graceMessagesRemaining <= 0) {
+        newClosingState = 'closed'
+      } else {
+        newGraceMessagesRemaining = graceMessagesRemaining - 1
+      }
+    }
+
+    // SESSION_COMPLETE tag always closes regardless of state
+    if (agentText.includes('[SESSION_COMPLETE]')) {
+      newClosingState = 'closed'
+    }
+
     // 11. If first message: update status to in_progress, set startedAt
     const isFirstMessage = message === '__session_start__'
     const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]')
 
-    const updateExprParts = ['#updatedAt = :updatedAt', 'currentSection = :cs']
-    const updateNames = { '#updatedAt': 'updatedAt' }
-    const updateValues = {
-      ':updatedAt': { S: new Date().toISOString() },
-      ':cs': { N: String(currentSection) },
-    }
-
-    if (isFirstMessage) {
-      updateExprParts.push('#status = :status', 'startedAt = :startedAt')
-      updateNames['#status'] = 'status'
-      updateValues[':status'] = { S: 'in_progress' }
-      updateValues[':startedAt'] = { S: new Date().toISOString() }
-    }
-
-    // 13. If sessionComplete: update status to completed, set completedAt
-    if (sessionComplete) {
-      updateExprParts.push('#status = :status', 'completedAt = :completedAt')
-      updateNames['#status'] = 'status'
-      updateValues[':status'] = { S: 'completed' }
-      updateValues[':completedAt'] = { S: new Date().toISOString() }
-    }
-
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.SESSIONS_TABLE,
-      Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
-      UpdateExpression: `SET ${updateExprParts.join(', ')}`,
-      ExpressionAttributeNames: updateNames,
-      ExpressionAttributeValues: updateValues,
-    }))
-
-    // 13. Invoke generateSessionSummary and generateReport async if complete
-    if (sessionComplete) {
-      const generateSummaryFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
-      if (generateSummaryFnName) {
-        try {
-          await lambda.send(new InvokeCommand({
-            FunctionName: generateSummaryFnName,
-            InvocationType: 'Event',
-            Payload: JSON.stringify({ sessionId, tenantId }),
-          }))
-        } catch (err) {
-          log('warn', 'Chat: failed to invoke generateSessionSummary', { requestId, sessionId, tenantId, errorName: err.name })
-        }
+    // In preview mode: skip all session state updates and downstream invocations
+    if (!isPreview) {
+      const updateExprParts = ['#updatedAt = :updatedAt', 'currentSection = :cs', 'closingState = :closingState', 'graceMessagesRemaining = :grace']
+      const updateNames = { '#updatedAt': 'updatedAt' }
+      const updateValues = {
+        ':updatedAt': { S: new Date().toISOString() },
+        ':cs': { N: String(currentSection) },
+        ':closingState': { S: newClosingState },
+        ':grace': { N: String(newGraceMessagesRemaining) },
       }
 
-      const generateReportFnName = process.env.GENERATE_REPORT_FUNCTION_NAME
-      if (generateReportFnName) {
-        try {
-          await lambda.send(new InvokeCommand({
-            FunctionName: generateReportFnName,
-            InvocationType: 'Event',
-            Payload: JSON.stringify({ sessionId, tenantId }),
-          }))
-        } catch (err) {
-          log('warn', 'Chat: failed to invoke generateReport', { requestId, sessionId, tenantId, errorName: err.name })
+      if (isFirstMessage) {
+        updateExprParts.push('#status = :status', 'startedAt = :startedAt')
+        updateNames['#status'] = 'status'
+        updateValues[':status'] = { S: 'in_progress' }
+        updateValues[':startedAt'] = { S: new Date().toISOString() }
+      }
+
+      // 13. If sessionComplete: update status to completed, set completedAt
+      if (sessionComplete) {
+        updateExprParts.push('#status = :status', 'completedAt = :completedAt')
+        updateNames['#status'] = 'status'
+        updateValues[':status'] = { S: 'completed' }
+        updateValues[':completedAt'] = { S: new Date().toISOString() }
+      }
+
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+        UpdateExpression: `SET ${updateExprParts.join(', ')}`,
+        ExpressionAttributeNames: updateNames,
+        ExpressionAttributeValues: updateValues,
+      }))
+
+      // 13. Invoke generateSessionSummary and generateReport async if complete
+      if (sessionComplete) {
+        const generateSummaryFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
+        if (generateSummaryFnName) {
+          try {
+            await lambda.send(new InvokeCommand({
+              FunctionName: generateSummaryFnName,
+              InvocationType: 'Event',
+              Payload: JSON.stringify({ sessionId, tenantId }),
+            }))
+          } catch (err) {
+            log('warn', 'Chat: failed to invoke generateSessionSummary', { requestId, sessionId, tenantId, errorName: err.name })
+          }
+        }
+
+        const generateReportFnName = process.env.GENERATE_REPORT_FUNCTION_NAME
+        if (generateReportFnName) {
+          try {
+            await lambda.send(new InvokeCommand({
+              FunctionName: generateReportFnName,
+              InvocationType: 'Event',
+              Payload: JSON.stringify({ sessionId, tenantId }),
+            }))
+          } catch (err) {
+            log('warn', 'Chat: failed to invoke generateReport', { requestId, sessionId, tenantId, errorName: err.name })
+          }
         }
       }
     }
@@ -439,6 +500,7 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
         message: agentText,
         section: currentSection,
         sessionComplete,
+        closingState: newClosingState,
       },
     }, {}, origin)
   } catch (err) {

@@ -30,6 +30,7 @@ type SessionStatus =
   | 'loading'
 
 type WindingDown = 'true' | 'final' | null
+type ClosingState = 'exploring' | 'narrowing' | 'closing' | 'closed'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -235,13 +236,23 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'block',
     marginTop: '0.5rem',
   },
+  previewBanner: {
+    background: 'var(--color-accent-pulse-subtle, rgba(74, 124, 89, 0.12))',
+    borderBottom: '1px solid rgba(74, 124, 89, 0.25)',
+    padding: '0.5rem 1rem',
+    fontSize: '0.8125rem',
+    color: '#ccc',
+    textAlign: 'center' as const,
+    flexShrink: 0,
+    width: '100%',
+  },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Chat() {
   const { sessionId: paramSessionId } = useParams<{ sessionId: string }>()
-  const { sessionToken, sessionId: ctxSessionId, itemName } = useSession()
+  const { sessionToken, sessionId: ctxSessionId, itemName, isPreview } = useSession()
   const navigate = useNavigate()
 
   const sessionId = paramSessionId ?? ctxSessionId ?? ''
@@ -255,6 +266,7 @@ export default function Chat() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [timerStarted, setTimerStarted] = useState(false)
   const [windingDown, setWindingDown] = useState<WindingDown>(null)
+  const [closingState, setClosingState] = useState<ClosingState>('exploring')
   const [animationDuration, setAnimationDuration] = useState('2s')
   const [isThinking, setIsThinking] = useState(false)
   const [inputValue, setInputValue] = useState('')
@@ -293,6 +305,7 @@ export default function Chat() {
         setTotalSections(state.totalSections)
         setTimeLimitSeconds(state.timeLimitMinutes * 60)
         setFiles(state.files ?? [])
+        if (state.closingState) setClosingState(state.closingState)
 
         const existingMessages: Message[] = state.messages.map((m) => ({
           role: m.role,
@@ -356,6 +369,7 @@ export default function Chat() {
         setMessages([...currentMessages, newMsg])
         setCurrentSection(resp.section)
         setSessionStatus('in_progress')
+        if (resp.closingState) setClosingState(resp.closingState)
         if (resp.sessionComplete) {
           setSessionStatus('complete')
         }
@@ -459,6 +473,7 @@ export default function Chat() {
       const finalMessages = [...nextMessages, agentMsg]
       setMessages(finalMessages)
       setCurrentSection(resp.section)
+      if (resp.closingState) setClosingState(resp.closingState)
 
       if (resp.sessionComplete) {
         setSessionStatus('complete')
@@ -494,6 +509,7 @@ export default function Chat() {
       const resp = await sendChatMessage(sessionId, sessionToken, '__session_end__')
       const agentMsg: Message = { role: 'agent', content: resp.message, section: resp.section }
       setMessages((prev) => [...prev, agentMsg])
+      if (resp.closingState) setClosingState(resp.closingState)
       if (resp.sessionComplete) {
         setSessionStatus('complete')
         if (timerRef.current) clearInterval(timerRef.current)
@@ -521,7 +537,8 @@ export default function Chat() {
   // ── Derived state ───────────────────────────────────────────────────────────
   const remaining = Math.max(0, timeLimitSeconds - elapsedSeconds)
   const pct = timeLimitSeconds > 0 ? elapsedSeconds / timeLimitSeconds : 0
-  const isPaused = sessionStatus === 'paused' || (windingDown === 'final' && sessionStatus === 'in_progress' && remaining <= 0)
+  // isPaused: session is locked — either closed state or time expired
+  const isPaused = sessionStatus === 'paused' || closingState === 'closed' || (windingDown === 'final' && sessionStatus === 'in_progress' && remaining <= 0)
   const isComplete = sessionStatus === 'complete'
   const isDiscarded = sessionStatus === 'discarded'
   const isLoading = sessionStatus === 'loading'
@@ -536,12 +553,19 @@ export default function Chat() {
 
   let timeLabel = ''
   if (timeLimitSeconds > 0 && timerStarted) {
-    if (isPaused) {
+    if (closingState === 'closing') {
+      timeLabel = 'Wrapping up'
+    } else if (closingState === 'closed') {
+      timeLabel = ''
+    } else if (isPaused) {
       timeLabel = 'Paused'
     } else {
       timeLabel = `${formatTimeLeft(remaining)} left`
     }
   }
+
+  // PulseLine animation slows during closing state
+  const pulseLineAnimation = closingState === 'closing' ? '4s' : animationDuration
 
   // ── Discarded state ─────────────────────────────────────────────────────────
   if (isDiscarded) {
@@ -598,12 +622,19 @@ export default function Chat() {
         </div>
       </div>
 
+      {/* Preview banner — non-dismissible, full-width */}
+      {isPreview && (
+        <div style={styles.previewBanner} role="status" aria-live="polite">
+          This is a preview. Responses are not saved.
+        </div>
+      )}
+
       {/* Progress line */}
       <div style={styles.pulseLineWrapper}>
         <PulseLine
           current={isComplete ? totalSections : currentSection}
           total={totalSections}
-          animationDuration={animationDuration}
+          animationDuration={pulseLineAnimation}
         />
       </div>
 
@@ -619,6 +650,7 @@ export default function Chat() {
       {/* Chat area */}
       <div
         ref={chatAreaRef}
+        className="chat-scroll-area"
         style={styles.chatArea}
         role="log"
         aria-live="polite"
@@ -628,9 +660,9 @@ export default function Chat() {
           if (msg.content === '__completion__') {
             return (
               <div key={i} style={styles.completionCard}>
-                <h2 style={styles.completionHeading}>The pulse has been captured.</h2>
+                <h2 style={styles.completionHeading}>Thanks — your feedback has been captured.</h2>
                 <p style={styles.completionBody}>
-                  Thank you for your time. You can view a summary of your session below.
+                  Your responses have been shared with the team.
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <a href={`/s/${sessionId}/summary`} style={styles.completionLink}>
@@ -716,7 +748,14 @@ export default function Chat() {
               ...styles.messageRow,
               ...(pi > 0 ? { marginTop: '-0.5rem' } : {}),
             }}>
-              {pi === 0 ? <PulseDot state="idle" /> : <div style={{ width: '28px', flexShrink: 0 }} />}
+              {pi === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+                  <PulseDot state="idle" />
+                  <span style={{ fontSize: '0.625rem', color: '#555', letterSpacing: '0.04em', fontWeight: 500 }} aria-hidden="true">Pulse</span>
+                </div>
+              ) : (
+                <div style={{ width: '28px', flexShrink: 0 }} />
+              )}
               <ChatBubble type="agent">{text}</ChatBubble>
             </div>
           ))
@@ -743,7 +782,9 @@ export default function Chat() {
             onBlur={() => setInputFocused(false)}
             aria-label="Your message"
             placeholder={
-              isPaused
+              closingState === 'closed'
+                ? 'Session complete'
+                : isPaused
                 ? 'Session paused — come back to continue.'
                 : sessionExpired
                 ? 'This session has expired.'

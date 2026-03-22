@@ -60,12 +60,14 @@ export interface SessionStateResponse {
   status: string
   timeLimitMinutes: number
   files: Array<{ fileId: string; filename: string; contentType: string }>
+  closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
 }
 
 export interface ChatResponse {
   message: string
   section: number
   sessionComplete: boolean
+  closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
 }
 
 export interface SessionSummaryResponse {

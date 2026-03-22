@@ -2,7 +2,7 @@
 // POST /api/session/validate (public — no auth)
 // Validates a reviewer's session via pulseCode or sessionId + email match
 
-import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { randomUUID } from 'crypto'
 
@@ -75,6 +75,7 @@ export const handler = async (event) => {
     log('info', 'ValidateSession: session found', { requestId, sessionId: foundSessionId, tenantId })
 
     const isPublic = sessionRecord.isPublic?.BOOL === true
+    const isSelfReview = sessionRecord.isSelfReview?.BOOL === true
 
     // Check expiry — expiresAt stored as ISO string (closeDate format from inviteReviewer)
     const isExpiredByStatus = status === 'expired'
@@ -85,13 +86,27 @@ export const handler = async (event) => {
       return errorResponse(410, 'This invitation has been cancelled', {}, origin)
     }
 
+    // Discarded session recovery — reset to not_started so reviewer gets a clean restart
+    if (status === 'discarded') {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        Key: { tenantId: { S: tenantId }, sessionId: { S: foundSessionId } },
+        UpdateExpression: 'SET #status = :status REMOVE discardedAt',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': { S: 'not_started' } },
+      }))
+      log('info', 'ValidateSession: discarded session recovered', { requestId, sessionId: foundSessionId, tenantId })
+      // Continue with normal validation flow — session is now not_started
+    }
+
     if (isExpiredByStatus || isExpiredByDate) {
       log('info', 'ValidateSession: session expired', { requestId, sessionId: foundSessionId, tenantId })
       return errorResponse(410, 'This session has expired', {}, origin)
     }
 
     // Public sessions skip email validation — any visitor proceeds directly to confidentiality
-    if (!isPublic) {
+    // Self-review sessions skip email match check — Cognito JWT is the identity proof
+    if (!isPublic && !isSelfReview) {
       if (!email || typeof email !== 'string') {
         return errorResponse(400, 'email is required', {}, origin)
       }
@@ -167,6 +182,7 @@ export const handler = async (event) => {
       sessionId: activeSessionId,
       tenantId,
       item: itemContext,
+      isSelfReview: isSelfReview || undefined,
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
   } catch (err) {

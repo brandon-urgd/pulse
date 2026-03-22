@@ -71,18 +71,21 @@ export const handler = async (event) => {
     }, {})
 
     const sessions = allItems
-      .filter((item) => item.status?.S !== 'cancelled' && !item.parentSessionId?.S)
+      .filter((item) => item.status?.S !== 'cancelled' && !item.parentSessionId?.S && item.preview?.BOOL !== true)
       .map((item) => {
         const sid = item.sessionId?.S ?? ''
         const isPublic = item.isPublic?.BOOL === true
+        const isSelfReview = item.isSelfReview?.BOOL === true
         const session = {
           sessionId: sid,
           pulseCode: item.pulseCode?.S ?? '',
-          reviewerEmail: item.reviewerEmail?.S ?? '',
+          // Self-review sessions show "You" instead of masked email
+          reviewerEmail: isSelfReview ? 'You' : (item.reviewerEmail?.S ?? ''),
           status: item.status?.S ?? 'not_started',
           createdAt: item.createdAt?.S ?? '',
           expiresAt: item.expiresAt?.S ?? '',
           isPublic,
+          isSelfReview,
         }
         // For parent public sessions, surface visitor count from child sessions
         if (isPublic) session.visitorCount = childCountByParent[sid] || 0

@@ -36,6 +36,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.65,
     borderRadius: '16px 16px 16px 4px',
     maxWidth: '75%',
+    minWidth: '80px',
     padding: '0.75rem 1rem',
   },
   reviewer: {
@@ -45,6 +46,7 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.65,
     borderRadius: '16px 16px 4px 16px',
     maxWidth: '78%',
+    minWidth: '80px',
     padding: '0.75rem 1rem',
   },
   content: {
