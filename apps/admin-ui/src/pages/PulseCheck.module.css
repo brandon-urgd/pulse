@@ -354,7 +354,7 @@
 }
 
 .themeDecisionRow[data-decided="adjust"] {
-  border-left-color: #f59e0b;
+  border-left-color: var(--color-warning);
 }
 
 .themeDecisionRow[data-decided="dismiss"] {

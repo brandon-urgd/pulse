@@ -53,7 +53,7 @@
 
 .adjust.active {
   background: var(--color-warning-bg);
-  color: #b45309;
+  color: var(--color-warning);
   font-weight: 600;
 }
 

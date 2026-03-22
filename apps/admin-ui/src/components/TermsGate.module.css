@@ -1,5 +1,5 @@
 .heading {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   font-weight: 500;
   margin: 0 0 16px;
   line-height: 1.4;
