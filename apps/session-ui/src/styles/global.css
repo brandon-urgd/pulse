@@ -19,17 +19,18 @@ body {
 /* Pages that need to scroll on small screens (confidentiality, validate, summary)
    override the body lock by making themselves independently scrollable */
 .page-scrollable {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  min-height: 100dvh;
   overscroll-behavior: contain;
-  /* Undo the body height lock for this subtree */
-  height: 100%;
-  min-height: 100%;
 }
 
-/* When a scrollable page is present, allow #root to scroll too */
-#root:has(.page-scrollable) {
+/* When a scrollable page is present, unlock body + root so content can grow */
+body:has(.page-scrollable) {
   overflow-y: auto;
+  height: auto;
+}
+
+#root:has(.page-scrollable) {
+  overflow-y: visible;
   height: auto;
   min-height: 100dvh;
 }
