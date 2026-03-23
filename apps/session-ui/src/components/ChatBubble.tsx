@@ -38,6 +38,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '75%',
     minWidth: '80px',
     padding: '0.75rem 1rem',
+    width: 'fit-content',
   },
   reviewer: {
     background: '#4a7c59',
@@ -45,11 +46,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     borderRadius: '16px 16px 4px 16px',
-    maxWidth: '78%',
+    maxWidth: '75%',
     minWidth: '80px',
     padding: '0.75rem 1rem',
     width: 'fit-content',
-    textWrap: 'balance' as const,
   },
   content: {
     background: 'rgba(74,124,89,0.12)',
