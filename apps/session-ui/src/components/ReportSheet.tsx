@@ -133,11 +133,18 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [reducedMotion, setReducedMotion] = useState(
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
   const firstFocusRef = useRef<HTMLTextAreaElement>(null)
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 640
-  const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // Focus textarea on open
   useEffect(() => {
@@ -198,7 +205,7 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
   const sheetStyle = isDesktop ? { ...sheet, ...sheetDesktop } : sheet
 
   // Slide-up animation (respects prefers-reduced-motion)
-  const animationStyle: React.CSSProperties = prefersReducedMotion
+  const animationStyle: React.CSSProperties = reducedMotion
     ? {}
     : {
         animation: 'slideUp 0.25s ease',
@@ -206,12 +213,14 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
 
   return (
     <>
-      <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(100%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
+      {!reducedMotion && (
+        <style>{`
+          @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+        `}</style>
+      )}
       {/* Backdrop */}
       <div
         style={overlayStyle}
