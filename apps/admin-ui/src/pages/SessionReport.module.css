@@ -144,6 +144,29 @@
 }
 
 @media (max-width: 639px) {
-  .container { padding: var(--space-4); }
-  .verdictBlock { padding: var(--space-4); }
+  .container {
+    padding: var(--space-4);
+  }
+
+  .verdictBlock {
+    padding: var(--space-4) var(--space-4);
+    border-left-width: 3px;
+  }
+
+  .verdictText {
+    font-size: var(--font-size-lg);
+  }
+
+  .sectionHeading {
+    font-size: var(--font-size-sm);
+  }
+
+  .quoteItem {
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+  }
+
+  .section {
+    margin-bottom: var(--space-6);
+  }
 }
