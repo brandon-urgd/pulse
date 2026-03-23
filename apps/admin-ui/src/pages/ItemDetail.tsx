@@ -235,6 +235,14 @@ export default function ItemDetail() {
     setPreviewError('');
     setPreviewPopupBlocked(false);
 
+    // Open window synchronously inside the gesture so mobile browsers don't block it
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      setPreviewPopupBlocked(true);
+      setIsPreviewLoading(false);
+      return;
+    }
+
     try {
       const resp = await authedMutate(
         `/api/manage/items/${itemId}/preview-session`,
@@ -243,11 +251,9 @@ export default function ItemDetail() {
         navigate
       ) as { data: { previewUrl: string } };
 
-      const newTab = window.open(resp.data.previewUrl, '_blank', 'noopener,noreferrer');
-      if (!newTab) {
-        setPreviewPopupBlocked(true);
-      }
+      newTab.location.href = resp.data.previewUrl;
     } catch {
+      newTab.close();
       setPreviewError(labels.itemDetail.previewSessionError);
     } finally {
       setIsPreviewLoading(false);
@@ -260,6 +266,14 @@ export default function ItemDetail() {
     setIsSelfReviewLoading(true);
     setSelfReviewError('');
 
+    // Open window synchronously inside the gesture so mobile browsers don't block it
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      setSelfReviewError(labels.itemDetail.selfReviewError);
+      setIsSelfReviewLoading(false);
+      return;
+    }
+
     try {
       const resp = await authedMutate(
         `/api/manage/items/${itemId}/self-review`,
@@ -268,8 +282,9 @@ export default function ItemDetail() {
         navigate
       ) as { data: { sessionId: string; sessionUrl: string } };
 
-      window.open(resp.data.sessionUrl, '_blank', 'noopener,noreferrer');
+      newTab.location.href = resp.data.sessionUrl;
     } catch (err: unknown) {
+      newTab.close();
       const status = (err as { status?: number }).status ?? 500;
       setSelfReviewError(
         status === 403

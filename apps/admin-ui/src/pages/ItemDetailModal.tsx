@@ -440,6 +440,15 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     setIsSessionPreviewLoading(true);
     setSessionPreviewError('');
     setSessionPreviewPopupBlocked(false);
+
+    // Open window synchronously inside the gesture so mobile browsers don't block it
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      setSessionPreviewPopupBlocked(true);
+      setIsSessionPreviewLoading(false);
+      return;
+    }
+
     try {
       const resp = await authedMutate(
         `/api/manage/items/${targetItemId}/preview-session`,
@@ -447,9 +456,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         timeLimitMinutes != null ? { timeLimitMinutes } : undefined,
         navigate
       ) as { data: { previewUrl: string } };
-      const newTab = window.open(resp.data.previewUrl, '_blank', 'noopener,noreferrer');
-      if (!newTab) setSessionPreviewPopupBlocked(true);
+      newTab.location.href = resp.data.previewUrl;
     } catch {
+      newTab.close();
       setSessionPreviewError(labels.itemDetail.previewSessionError);
     } finally {
       setIsSessionPreviewLoading(false);
@@ -463,6 +472,15 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     setIsSelfReviewLoading(true);
     setSelfReviewError('');
     setSelfReviewExistingId(null);
+
+    // Open window synchronously inside the gesture so mobile browsers don't block it
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      setSelfReviewError(labels.itemDetail.selfReviewError);
+      setIsSelfReviewLoading(false);
+      return;
+    }
+
     try {
       // If starting over, delete the existing session first
       if (forceSessionId) {
@@ -479,12 +497,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         { ...(timeLimitMinutes != null ? { timeLimitMinutes } : {}) },
         navigate
       ) as { data: { sessionId: string; sessionUrl: string } };
-      window.open(resp.data.sessionUrl, '_blank', 'noopener,noreferrer');
+      newTab.location.href = resp.data.sessionUrl;
     } catch (err: unknown) {
+      newTab.close();
       const status = (err as { status?: number }).status ?? 500;
       const body = (err as { body?: { existingSessionId?: string } }).body;
       if (status === 409 && body?.existingSessionId) {
-        // Existing self-review — surface "start over" prompt
         setSelfReviewExistingId(body.existingSessionId);
       } else if (status === 403) {
         setSelfReviewError(labels.itemDetail.selfReviewLimitError);
@@ -517,21 +535,23 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           {isEditMode && (
             <>
               {timeLimitMinutes != null && (
-                <div className={styles.headerTimeLimitRow}>
-                  <label htmlFor="headerTimeLimitSelect" className={styles.headerTimeLimitLabel}>
-                    {labels.itemDetail.timeLimitLabel}
-                  </label>
-                  <select
-                    id="headerTimeLimitSelect"
-                    className={styles.timeLimitSelect}
-                    value={timeLimitMinutes}
-                    onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
-                  >
-                    {labels.itemDetail.timeLimitBrackets.map((b) => (
-                      <option key={b.value} value={b.value}>{b.label}</option>
-                    ))}
-                  </select>
-                  <span className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</span>
+                <div className={styles.headerTimeLimitWrapper}>
+                  <div className={styles.headerTimeLimitRow}>
+                    <label htmlFor="headerTimeLimitSelect" className={styles.headerTimeLimitLabel}>
+                      {labels.itemDetail.timeLimitLabel}
+                    </label>
+                    <select
+                      id="headerTimeLimitSelect"
+                      className={styles.timeLimitSelect}
+                      value={timeLimitMinutes}
+                      onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                    >
+                      {labels.itemDetail.timeLimitBrackets.map((b) => (
+                        <option key={b.value} value={b.value}>{b.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                 </div>
               )}
               {(itemData?.status === 'draft' || itemData?.status === 'active') && (
