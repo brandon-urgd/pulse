@@ -235,13 +235,34 @@ export default function ItemDetail() {
     setPreviewError('');
     setPreviewPopupBlocked(false);
 
-    // Open window synchronously inside the gesture so mobile browsers don't block it
+    // Open window synchronously inside the gesture so mobile browsers don't block it.
+    // Write a loading page immediately — navigating a blank tab after an await is
+    // blocked on mobile Safari because the gesture context is gone by then.
     const newTab = window.open('', '_blank', 'noopener,noreferrer');
     if (!newTab) {
       setPreviewPopupBlocked(true);
       setIsPreviewLoading(false);
       return;
     }
+
+    // Write a self-redirecting loading page into the tab right now, synchronously.
+    // Once we have the URL we update window.location from the parent. The meta-refresh
+    // is a fallback in case the parent write is also blocked (e.g. cross-origin quirks).
+    newTab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Opening preview…</title>
+  <style>
+    body { margin: 0; display: flex; align-items: center; justify-content: center;
+           min-height: 100dvh; font-family: system-ui, sans-serif;
+           background: #0d0d0d; color: #999; font-size: 15px; }
+  </style>
+</head>
+<body>Opening preview…</body>
+</html>`);
+    newTab.document.close();
 
     try {
       const resp = await authedMutate(
@@ -251,6 +272,8 @@ export default function ItemDetail() {
         navigate
       ) as { data: { previewUrl: string } };
 
+      // Navigate the tab to the real URL. This works because we own the tab's
+      // document (same origin, opened blank) so the gesture context is preserved.
       newTab.location.href = resp.data.previewUrl;
     } catch {
       newTab.close();
