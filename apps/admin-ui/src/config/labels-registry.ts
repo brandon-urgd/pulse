@@ -156,7 +156,7 @@ export const labels = {
     previewSessionPopupBlocked: 'Preview opened in a new tab. If it didn\u2019t open, check your popup settings.',
     // Time limit
     timeLimitLabel: 'Session time',
-    timeLimitHint: 'This is a pacing estimate for the AI — not a hard cutoff. The agent will naturally wrap up around this time, but reviewers can always finish their thought.',
+    timeLimitHint: 'This is a pacing estimate for Pulse — not a hard cutoff. The agent will naturally wrap up around this time, but reviewers can always finish their thought.',
     timeLimitBrackets: [
       { label: '10–15 min', value: 12 },
       { label: '15–20 min', value: 17 },
