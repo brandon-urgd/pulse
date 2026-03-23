@@ -551,7 +551,56 @@
 }
 
 @media (max-width: 639px) {
-  .container { padding: var(--space-4); }
-  .generatePrompt { padding: var(--space-5); }
-  .verdictBlock { padding: var(--space-4) var(--space-5); }
+  .container {
+    padding: var(--space-4);
+  }
+
+  .generatePrompt {
+    padding: var(--space-5);
+  }
+
+  .verdictBlock {
+    padding: var(--space-4) var(--space-4);
+    border-left-width: 3px;
+  }
+
+  .verdictText {
+    font-size: var(--font-size-lg);
+  }
+
+  .matrixHeading,
+  .synthesisHeading {
+    font-size: var(--font-size-base);
+  }
+
+  .sectionHeading {
+    font-size: var(--font-size-sm);
+  }
+
+  .quoteItem {
+    padding: var(--space-3);
+    font-size: var(--font-size-xs);
+  }
+
+  .section {
+    margin-bottom: var(--space-6);
+  }
+
+  .themeDecisionBody {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .themeDecisionMeta {
+    width: 100%;
+    flex: unset;
+  }
+
+  .themeDecisionRow {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .saveRow {
+    padding: var(--space-3) 0;
+  }
 }
