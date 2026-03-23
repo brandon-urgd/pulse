@@ -591,6 +591,12 @@ export default function Chat() {
           >
             {timeAnnouncement}
           </span>
+          {/* Time display — shows remaining time or "Wrapping up" in closing state */}
+          {!isPreview && timeLimitSeconds > 0 && timerStarted && !isComplete && !isPaused && !isDiscarded && (
+            <span style={styles.timeDisplay} aria-hidden="true">
+              {closingState === 'closing' ? 'Wrapping up' : formatTimeLeft(Math.max(0, timeLimitSeconds - elapsedSeconds))}
+            </span>
+          )}
           {isPreview ? (
             <button
               type="button"
