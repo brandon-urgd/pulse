@@ -90,7 +90,7 @@ describe('urgd-pulse-submitReport', () => {
     const res = await handler(event);
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/Invalid report type/i);
+    expect(JSON.parse(res.body).message).toMatch(/Invalid report type/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -110,7 +110,7 @@ describe('urgd-pulse-submitReport', () => {
     const res = await handler(event);
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/message is required/i);
+    expect(JSON.parse(res.body).message).toMatch(/message is required/i);
   });
 
   it('returns 400 for whitespace-only message', async () => {
@@ -130,7 +130,7 @@ describe('urgd-pulse-submitReport', () => {
     const res = await handler(event);
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/5,000 characters/i);
+    expect(JSON.parse(res.body).message).toMatch(/5,000 characters/i);
   });
 
   it('accepts message of exactly 5000 characters', async () => {
@@ -150,7 +150,7 @@ describe('urgd-pulse-submitReport', () => {
     const res = await handler(event);
 
     expect(res.statusCode).toBe(502);
-    expect(JSON.parse(res.body).error).toMatch(/could not be submitted/i);
+    expect(JSON.parse(res.body).message).toMatch(/could not be submitted/i);
   });
 
   it('returns 502 when upstream returns 5xx', async () => {

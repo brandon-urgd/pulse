@@ -53,7 +53,7 @@ vi.mock('ulid', () => ({ ulid: () => '01HTEST000000000000000000' }))
 
 const { handler } = await import('./index.mjs')
 
-const STARTED_AT = new Date(Date.now() - 25 * 60 * 1000).toISOString() // 25 min ago
+const STARTED_AT = new Date(Date.now() - 27 * 60 * 1000).toISOString() // 27 min ago (3 min remaining ≤ 4 min threshold)
 
 function makeSession(overrides = {}) {
   return {
@@ -117,9 +117,9 @@ describe('graceful session closing — closingState transitions (Task 36)', () =
     cloudwatchSendSpy.mockReset()
   })
 
-  describe('36.1 — exploring → narrowing at ~70% time elapsed', () => {
-    it('transitions to narrowing when 70%+ time has elapsed', async () => {
-      // 25 min elapsed of 30 min = 83% — should trigger narrowing
+  describe('36.1 — exploring → narrowing when ≤4 minutes remain', () => {
+    it('transitions to narrowing when ≤4 minutes remain', async () => {
+      // 27 min elapsed of 30 min = 3 min remaining — should trigger narrowing (threshold: ≤4 min)
       const session = makeSession({ closingState: { S: 'exploring' } })
       setupMocks(session)
 
