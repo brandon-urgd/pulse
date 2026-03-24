@@ -81,12 +81,27 @@ export const handler = async (event) => {
     }
 
     // 2. Build update expression for partial save — only update submitted decisions
+    //
+    // DynamoDB can't set nested paths on a map that doesn't exist yet in the same
+    // expression as if_not_exists — the nested path evaluates against the current
+    // item state, not the post-if_not_exists state. So we first ensure the map
+    // exists, then write the nested keys in a second update.
     const now = new Date().toISOString()
+
+    // Step 2a: Ensure decisions map exists
+    await dynamo.send(new UpdateItemCommand({
+      TableName: process.env.PULSE_CHECKS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      UpdateExpression: 'SET #decisions = if_not_exists(#decisions, :emptyMap)',
+      ExpressionAttributeNames: { '#decisions': 'decisions' },
+      ExpressionAttributeValues: { ':emptyMap': { M: {} } },
+    }))
+
+    // Step 2b: Write each decision into the map as nested paths
     const updateParts = []
     const expressionNames = { '#decisions': 'decisions' }
-    const expressionValues = { ':emptyMap': { M: {} } }
+    const expressionValues = {}
 
-    // Write each decision into the map as nested paths
     decisionEntries.forEach(([themeId, decision], idx) => {
       const nameKey = `#d${idx}`
       const valueKey = `:d${idx}`
@@ -101,11 +116,10 @@ export const handler = async (event) => {
       updateParts.push(`#decisions.${nameKey} = ${valueKey}`)
     })
 
-    // Single UpdateItem: init decisions map if absent, then write all submitted decisions
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: `SET #decisions = if_not_exists(#decisions, :emptyMap), ${updateParts.join(', ')}`,
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
       ExpressionAttributeNames: expressionNames,
       ExpressionAttributeValues: expressionValues,
     }))

@@ -490,24 +490,13 @@ export default function Settings() {
       </section>
 
       {/* ── Support & Privacy ── */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>{labels.support.sectionHeading}</h2>
-        <div className={styles.fieldGrid}>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>Contact us</span>
-            <div className={styles.inlineEditRow}>
-              <button type="button" className={styles.supportActionButton} onClick={() => setReportModalType('general-inquiry')}>
-                Open
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Sign out ── */}
+      {/* ── Account actions ── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>Account actions</h2>
         <div className={styles.actionsSection}>
+          <button type="button" className={styles.signOutButton} onClick={() => setReportModalType('general-inquiry')}>
+            Contact us
+          </button>
           <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
             {labels.settings.signOutButton}
           </button>
