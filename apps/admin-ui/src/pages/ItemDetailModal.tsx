@@ -151,7 +151,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     if (itemData) {
       setItemName(itemData.itemName);
       setDescription(itemData.description);
-      setCloseDate(itemData.closeDate?.slice(0, 16) ?? '');
+      setCloseDate(itemData.closeDate ? (itemData.closeDate.includes('T') ? itemData.closeDate.slice(0, 16) : `${itemData.closeDate}T00:00`) : '');
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
@@ -442,7 +442,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     setSessionPreviewPopupBlocked(false);
 
     // Open window synchronously inside the gesture so mobile browsers don't block it
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    const newTab = window.open('', '_blank');
     if (!newTab) {
       setSessionPreviewPopupBlocked(true);
       setIsSessionPreviewLoading(false);
@@ -474,7 +474,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     setSelfReviewExistingId(null);
 
     // Open window synchronously inside the gesture so mobile browsers don't block it
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    const newTab = window.open('', '_blank');
     if (!newTab) {
       setSelfReviewError(labels.itemDetail.selfReviewError);
       setIsSelfReviewLoading(false);

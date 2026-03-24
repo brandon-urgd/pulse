@@ -54,30 +54,30 @@ export const handler = async (event) => {
   }
 
   try {
-    // 1. Get pulse check to validate themeIds exist
+    // 1. Get pulse check to validate revisionIds exist
     const pcResult = await dynamo.send(new GetItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      ProjectionExpression: 'themes',
+      ProjectionExpression: 'proposedRevisions',
     }))
 
     if (!pcResult.Item) {
       return errorResponse(404, 'Pulse check not found', {}, origin)
     }
 
-    // Extract valid themeIds from themes array
-    const validThemeIds = new Set(
-      (pcResult.Item.themes?.L || []).map(r => r.M?.themeId?.S).filter(Boolean)
+    // Extract valid revisionIds from proposedRevisions array
+    const validRevisionIds = new Set(
+      (pcResult.Item.proposedRevisions?.L || []).map(r => r.M?.revisionId?.S).filter(Boolean)
     )
 
-    // Validate all submitted themeIds exist
-    const invalidThemeIds = decisionEntries
-      .map(([themeId]) => themeId)
-      .filter(themeId => !validThemeIds.has(themeId))
+    // Validate all submitted revisionIds exist
+    const invalidRevisionIds = decisionEntries
+      .map(([revisionId]) => revisionId)
+      .filter(revisionId => !validRevisionIds.has(revisionId))
 
-    if (invalidThemeIds.length > 0) {
-      log('warn', 'SavePCDecisions: invalid revisionIds', { requestId, tenantId, itemId, invalidRevisionIds: invalidThemeIds })
-      return errorResponse(400, `Invalid themeId(s): ${invalidThemeIds.join(', ')}`, {}, origin)
+    if (invalidRevisionIds.length > 0) {
+      log('warn', 'SavePCDecisions: invalid revisionIds', { requestId, tenantId, itemId, invalidRevisionIds })
+      return errorResponse(400, `Invalid revisionId(s): ${invalidRevisionIds.join(', ')}`, {}, origin)
     }
 
     // 2. Build update expression for partial save — only update submitted decisions

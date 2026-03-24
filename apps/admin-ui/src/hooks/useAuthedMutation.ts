@@ -19,6 +19,17 @@ export async function authedMutate(
     throw new Error('No access token');
   }
 
+  // For GET requests, serialize body as query params instead of dropping it
+  let finalUrl = `${API_BASE}${url}`;
+  if (method === 'GET' && body !== undefined && body !== null && typeof body === 'object') {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
+      if (v !== undefined && v !== null) params.set(k, String(v));
+    }
+    const qs = params.toString();
+    if (qs) finalUrl += `${finalUrl.includes('?') ? '&' : '?'}${qs}`;
+  }
+
   const init: RequestInit = {
     method,
     headers: {
@@ -28,7 +39,7 @@ export async function authedMutate(
     body: body !== undefined && method !== 'GET' ? JSON.stringify(body) : undefined,
   };
 
-  let res = await fetch(`${API_BASE}${url}`, init);
+  let res = await fetch(finalUrl, init);
 
   // API Gateway Lambda authorizers return 403 (not 401) for expired tokens — try refresh first
   if (res.status === 401 || res.status === 403) {
@@ -36,7 +47,7 @@ export async function authedMutate(
       const refreshed = await fetchAuthSession({ forceRefresh: true });
       const newToken = refreshed.tokens?.accessToken?.toString();
       if (!newToken) throw new Error('Refresh failed');
-      res = await fetch(`${API_BASE}${url}`, {
+      res = await fetch(finalUrl, {
         ...init,
         headers: { ...init.headers as Record<string, string>, Authorization: `Bearer ${newToken}` },
       });

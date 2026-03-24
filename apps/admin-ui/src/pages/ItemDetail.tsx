@@ -144,7 +144,7 @@ export default function ItemDetail() {
     if (itemData) {
       setItemName(itemData.itemName);
       setDescription(itemData.description);
-      setCloseDate(itemData.closeDate?.slice(0, 16) ?? '');
+      setCloseDate(itemData.closeDate ? (itemData.closeDate.includes('T') ? itemData.closeDate.slice(0, 16) : `${itemData.closeDate}T00:00`) : '');
       setContent(itemData.content ?? '');
       setIsLocked(itemData.status !== 'draft');
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
@@ -238,7 +238,9 @@ export default function ItemDetail() {
     // Open window synchronously inside the gesture so mobile browsers don't block it.
     // Write a loading page immediately — navigating a blank tab after an await is
     // blocked on mobile Safari because the gesture context is gone by then.
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    // NOTE: Do NOT use 'noopener' — it severs the parent's reference to the child
+    // window, making document.write() and location.href assignment silently fail.
+    const newTab = window.open('', '_blank');
     if (!newTab) {
       setPreviewPopupBlocked(true);
       setIsPreviewLoading(false);
@@ -290,7 +292,7 @@ export default function ItemDetail() {
     setSelfReviewError('');
 
     // Open window synchronously inside the gesture so mobile browsers don't block it
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    const newTab = window.open('', '_blank');
     if (!newTab) {
       setSelfReviewError(labels.itemDetail.selfReviewError);
       setIsSelfReviewLoading(false);
