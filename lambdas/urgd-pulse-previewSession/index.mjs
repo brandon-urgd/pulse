@@ -63,12 +63,13 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
-    // Accept optional timeLimitMinutes from request body (1–60 min)
+    // Accept optional timeLimitMinutes from query string (GET) or body (1–60 min)
     // Snap to bracket midpoints: 12, 17, 25, 37. Default to 17 (15–20 min) if not set.
     let body = {}
     try { body = JSON.parse(event.body || '{}') } catch { /* ignore */ }
+    const qs = event.queryStringParameters || {}
     const BRACKETS = [12, 17, 25, 37]
-    const rawLimit = Number(body.timeLimitMinutes)
+    const rawLimit = Number(qs.timeLimitMinutes ?? body.timeLimitMinutes)
     const rawItemMinutes = parseInt(itemResult.Item.recommendedTimeLimitMinutes?.N || '0', 10)
     const resolvedRaw = (!isNaN(rawLimit) && rawLimit >= 1) ? rawLimit : (rawItemMinutes || 17)
     const timeLimitMinutes = BRACKETS.reduce((best, b) =>
