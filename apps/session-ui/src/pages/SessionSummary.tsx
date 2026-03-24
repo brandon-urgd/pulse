@@ -232,7 +232,7 @@ export default function SessionSummary() {
   const totalSections = summary?.sections.length ?? 1
 
   return (
-    <div style={styles.page}>
+    <div className="page-scrollable" style={styles.page}>
       {/* Top bar */}
       <div style={styles.topBar}>
         <span style={styles.wordmark}>pulse</span>

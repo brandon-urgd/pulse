@@ -234,10 +234,12 @@ export default function PulseCheck() {
   async function handleSaveDecisions() {
     setSaveStatus('saving');
     setSaveErrorMsg('');
+    // Map frontend action names back to Lambda-expected values
+    const actionToApi: Record<string, string> = { accept: 'Accept', adjust: 'Revise', dismiss: 'Override' };
     const payload: Record<string, { action: string; tenantNote?: string }> = {};
     for (const [themeId, action] of Object.entries(decisions)) {
       if (action !== null) {
-        payload[themeId] = { action: action.charAt(0).toUpperCase() + action.slice(1) };
+        payload[themeId] = { action: actionToApi[action] ?? action.charAt(0).toUpperCase() + action.slice(1) };
       }
     }
     try {

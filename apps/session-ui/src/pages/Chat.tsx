@@ -117,7 +117,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   inputArea: {
     borderTop: '1px solid #2a2a2a',
-    padding: '0.75rem 1rem',
+    padding: '0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px))',
     display: 'flex',
     gap: '0.5rem',
     alignItems: 'flex-end',
@@ -165,7 +165,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.875rem',
     color: '#888',
     textAlign: 'center' as const,
-    padding: '1rem',
+    padding: '1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px))',
     borderTop: '1px solid #2a2a2a',
   },
   completionCard: {

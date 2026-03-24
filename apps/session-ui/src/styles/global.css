@@ -21,6 +21,8 @@ body {
 .page-scrollable {
   min-height: 100dvh;
   overscroll-behavior: contain;
+  /* Respect the browser bottom bar (Safari toolbar, Chrome nav) */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* When a scrollable page is present, unlock body + root so content can grow */
