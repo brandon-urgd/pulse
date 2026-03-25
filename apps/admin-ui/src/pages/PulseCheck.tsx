@@ -349,29 +349,23 @@ export default function PulseCheck() {
     </p>
   ) : null;
 
-  const isRerunPending = generateMutation.isPending;
-  const RerunFooter = (
-    <div className={newlyCompletedCount > 0 ? styles.rerunBanner : styles.rerunRow}>
-      {newlyCompletedCount > 0 ? (
-        <p className={styles.rerunBannerText}>
-          {labels.pulseCheck.newSessionsNotice.replace('{count}', String(newlyCompletedCount))}
-        </p>
-      ) : (
-        <p className={styles.rerunNote}>{labels.pulseCheck.rerunNote}</p>
-      )}
+  const NewSessionsBanner = newlyCompletedCount > 0 ? (
+    <div className={styles.rerunBanner} role="status">
+      <p className={styles.rerunBannerText}>
+        {labels.pulseCheck.newSessionsNotice.replace('{count}', String(newlyCompletedCount))}
+      </p>
       <button
         type="button"
-        className={newlyCompletedCount > 0 ? styles.rerunBannerButton : styles.rerunButton}
+        className={styles.rerunBannerButton}
         onClick={() => { setRerunError(''); showOverlay(); generateMutation.mutate(undefined); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-        disabled={isRerunPending}
+        disabled={generateMutation.isPending}
       >
-        {isRerunPending ? labels.pulseCheck.generating : labels.pulseCheck.rerunButton}
+        {generateMutation.isPending ? labels.pulseCheck.generating : labels.pulseCheck.rerunButton}
       </button>
-      {rerunError && (
-        <p className={styles.error} role="alert" aria-live="polite">{rerunError}</p>
-      )}
     </div>
-  );
+  ) : null;
+
+  const isRerunPending = generateMutation.isPending;
 
   // ── Single-session view ─────────────────────────────────────────────────────
   if (!isMultiSession) {
@@ -396,6 +390,7 @@ export default function PulseCheck() {
               : labels.pulseCheck.heading}
           </h1>
           {IncompleteNotice}
+          {NewSessionsBanner}
 
           {(() => {
             // Verdict color based on verdict text sentiment, not energy
@@ -515,7 +510,6 @@ export default function PulseCheck() {
           <p className={styles.meta}>
             {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
           </p>
-          {RerunFooter}
         </div>
       </>
     );
@@ -545,6 +539,7 @@ export default function PulseCheck() {
             : labels.pulseCheck.heading}
         </h1>
         {IncompleteNotice}
+        {NewSessionsBanner}
 
         {/* Verdict + narrative — above everything else */}
         {(() => {
@@ -697,7 +692,6 @@ export default function PulseCheck() {
         <p className={styles.meta}>
           {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
         </p>
-        {RerunFooter}
       </div>
     </>
   );
