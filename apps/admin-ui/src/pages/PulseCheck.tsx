@@ -397,15 +397,24 @@ export default function PulseCheck() {
           </h1>
           {IncompleteNotice}
 
-          <div className={styles.verdictBlock}>
-            <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
-            <p className={styles.verdictText}>{verdict}</p>
-            {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
-            <div className={styles.energyRow}>
-              <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
-              <SignalBadge variant={energy} />
-            </div>
-          </div>
+          {(() => {
+            // Verdict color based on verdict text sentiment, not energy
+            const v = verdict.toLowerCase();
+            const isPositive = v.includes('ready') || v.includes('strong') || v.includes('solid') || v.includes('good');
+            const isNegative = v.includes('not there') || v.includes('needs work') || v.includes('not ready') || v.includes('weak') || v.includes('gaps');
+            const verdictColorClass = isNegative ? styles.verdictBlockResistant : isPositive ? '' : styles.verdictBlockNeutral;
+            return (
+              <div className={`${styles.verdictBlock} ${verdictColorClass}`}>
+                <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
+                <p className={styles.verdictText}>{verdict}</p>
+                {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
+                <div className={styles.energyRow}>
+                  <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
+                  <SignalBadge variant={energy} />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Themes — what the reviewer flagged */}
           {themes.length > 0 && (
@@ -538,19 +547,27 @@ export default function PulseCheck() {
         {IncompleteNotice}
 
         {/* Verdict + narrative — above everything else */}
-        <div className={styles.verdictBlock}>
-          <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
-          <p className={styles.verdictText}>{synthesizedVerdict}</p>
-          {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
-          <p className={styles.verdictSessionCount}>
-            {labels.pulseCheck.basedOnSessions
-              .replace('{count}', String(pc.sessionCount))
-              .replace('{plural}', pc.sessionCount === 1 ? '' : 's')}
-          </p>
-          <p className={styles.verdictMeta}>
-            {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
-          </p>
-        </div>
+        {(() => {
+          const v = synthesizedVerdict.toLowerCase();
+          const isPositive = v.includes('ready') || v.includes('strong') || v.includes('solid') || v.includes('good');
+          const isNegative = v.includes('not there') || v.includes('needs work') || v.includes('not ready') || v.includes('weak') || v.includes('gaps');
+          const verdictColorClass = isNegative ? styles.verdictBlockResistant : isPositive ? '' : styles.verdictBlockNeutral;
+          return (
+            <div className={`${styles.verdictBlock} ${verdictColorClass}`}>
+              <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
+              <p className={styles.verdictText}>{synthesizedVerdict}</p>
+              {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
+              <p className={styles.verdictSessionCount}>
+                {labels.pulseCheck.basedOnSessions
+                  .replace('{count}', String(pc.sessionCount))
+                  .replace('{plural}', pc.sessionCount === 1 ? '' : 's')}
+              </p>
+              <p className={styles.verdictMeta}>
+                {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Item description context */}
         {itemDescription && (

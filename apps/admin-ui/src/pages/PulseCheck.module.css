@@ -137,6 +137,18 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-pulse) 20%, transparent);
 }
 
+.verdictBlockNeutral {
+  border-left-color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.verdictBlockResistant {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-bg);
+  box-shadow: inset 0 0 0 1px var(--color-warning-border-strong);
+}
+
 .verdictLabel {
   font-size: var(--font-size-xs);
   font-weight: 700;
@@ -337,7 +349,7 @@
 .themeDecisionRow {
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
-  border-left: 3px solid transparent;
+  border-left: 3px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
