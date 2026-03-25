@@ -531,10 +531,12 @@ export default function Chat() {
   }
 
   // ── Derived state ───────────────────────────────────────────────────────────
-  // isPaused: only lock the session when the backend explicitly closes it,
-  // or the session status is 'paused'. The time limit is a soft pacing guide —
-  // never hard-lock based on the client-side timer reaching zero.
-  const isPaused = sessionStatus === 'paused' || closingState === 'closed'
+  // isPaused: only lock the session when the backend explicitly pauses it.
+  // closingState === 'closed' no longer pauses here — the Lambda now marks
+  // the session as completed when the grace window expires, so isComplete
+  // handles that case. This prevents the dead-state bug where the input was
+  // disabled but no completion card was shown.
+  const isPaused = sessionStatus === 'paused'
   const isComplete = sessionStatus === 'complete'
   const isDiscarded = sessionStatus === 'discarded'
   const isLoading = sessionStatus === 'loading'
@@ -607,6 +609,14 @@ export default function Chat() {
               onClick={() => setShowExitSheet(true)}
             >
               End session
+            </button>
+          ) : (isComplete || sessionExpired) ? (
+            <button
+              type="button"
+              style={styles.endSessionButton}
+              onClick={() => window.close()}
+            >
+              Close
             </button>
           ) : null}
         </div>
@@ -772,9 +782,7 @@ export default function Chat() {
             onBlur={() => setInputFocused(false)}
             aria-label="Your message"
             placeholder={
-              closingState === 'closed'
-                ? 'Session complete'
-                : isPaused
+              isPaused
                 ? 'Session paused — come back to continue.'
                 : sessionExpired
                 ? 'This session has expired.'

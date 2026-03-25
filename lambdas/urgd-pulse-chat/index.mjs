@@ -246,7 +246,7 @@ Important:
     if (closingState === 'narrowing') {
       systemPrompt += '\n\nThe session is entering its final phase. Begin naturally focusing the conversation — go deeper on the current topic rather than opening new ones. Do not announce this shift. Let the conversation feel like it\'s finding its natural depth, not winding down.'
     } else if (closingState === 'closing') {
-      systemPrompt += '\n\nThe session is in its closing phase. Send your genuine final question — something the reviewer actually wants to answer, not a formality. After they respond, send one warm final reply that acknowledges what they shared. Do not ask new questions. Do not open new topics. Your final reply should feel like a natural end to a good conversation — something like "That\'s really helpful — thank you for taking the time." The reviewer should feel heard, not processed.'
+      systemPrompt += '\n\nThe session is in its closing phase. You MUST wrap up within the next two exchanges. Send your genuine final question — something the reviewer actually wants to answer, not a formality. After they respond, send one warm final reply that acknowledges what they shared, thank them for their time, and include [SESSION_COMPLETE] at the very end. Do not ask new questions. Do not open new topics. If the reviewer has already answered your closing question, skip straight to the thank-you and [SESSION_COMPLETE]. The session will be force-closed if you do not emit [SESSION_COMPLETE] soon.'
     } else if (closingState === 'closed') {
       systemPrompt += '\n\nThis session is complete. Do not respond to further messages.'
     }
@@ -395,7 +395,7 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
     if ((closingState === 'narrowing' || closingState === 'exploring') && windingDown === 'final') {
       // Model is sending its closing question — transition to closing
       newClosingState = 'closing'
-      newGraceMessagesRemaining = 2
+      newGraceMessagesRemaining = 4
     }
 
     if (closingState === 'closing' && !isSpecial) {
@@ -415,7 +415,11 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
 
     // 11. If first message: update status to in_progress, set startedAt
     const isFirstMessage = message === '__session_start__'
-    const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]')
+    // Session is complete if: reviewer ended early, model emitted [SESSION_COMPLETE],
+    // or the grace window expired (closingState transitioned to 'closed').
+    // Without this, the grace window expiry leaves the session in a dead state —
+    // input disabled but no completion card shown.
+    const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]') || newClosingState === 'closed'
 
     // In preview mode: skip all session state updates and downstream invocations
     if (!isPreview) {
