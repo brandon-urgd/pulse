@@ -162,6 +162,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           Math.abs(b.value - raw) < Math.abs(best.value - raw) ? b : best
         ).value;
         setTimeLimitMinutes(snapped);
+      } else if (!itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null && itemData.content) {
+        // Pasted content — no extractText ran, so estimate from word count
+        // ~130 wpm reading speed, clamp 5–60 min, snap to bracket
+        const words = itemData.content.trim().split(/\s+/).length;
+        const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
+        const brackets = labels.itemDetail.timeLimitBrackets;
+        const snapped = brackets.reduce((best, b) =>
+          Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
+        ).value;
+        setTimeLimitMinutes(snapped);
       }
       if (itemData.documentStatus && itemData.documentStatus !== 'none') {
         const fileName = itemData.documentKey
@@ -269,7 +279,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     if (isEditMode) {
       updateMutation.mutate(payload);
     } else if (savedItemId.current) {
-      // Item was auto-created during file upload — update it instead of creating a duplicate
+      // Item was auto-created during file upload or first paste save — update and close
       const targetId = savedItemId.current;
       authedMutate(`/api/manage/items/${targetId}`, 'PUT', payload, navigate)
         .then((resp) => {
@@ -281,7 +291,26 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         })
         .catch(() => setFormError(labels.itemDetail.saveError));
     } else {
-      createMutation.mutate(payload);
+      // First save — create the item
+      // If pasted content with no file upload, stay open to show time estimate
+      const hasPastedContent = content.trim().length > 0 && !Object.keys(fileStatuses).length;
+      if (hasPastedContent) {
+        createMutation.mutate(payload, {
+          onSuccess: () => {
+            // Estimate time from word count, show bracket selector
+            const words = content.trim().split(/\s+/).length;
+            const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
+            const brackets = labels.itemDetail.timeLimitBrackets;
+            const snapped = brackets.reduce((best, b) =>
+              Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
+            ).value;
+            setTimeLimitMinutes(snapped);
+            setFormError('');
+          },
+        });
+      } else {
+        createMutation.mutate(payload);
+      }
     }
   }
 
@@ -532,7 +561,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           <h2 id="item-modal-title" className={styles.modalTitle}>
             {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
           </h2>
-          {isEditMode && (
+          {(isEditMode || savedItemId.current) && (
             <>
               {timeLimitMinutes != null && (
                 <div className={styles.headerTimeLimitWrapper}>
