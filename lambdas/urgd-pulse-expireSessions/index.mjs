@@ -157,6 +157,7 @@ async function triggerPulseChecksForClosedItems(expiredByItem) {
   const runPulseCheckFnName = process.env.RUN_PULSE_CHECK_FUNCTION_NAME
   const sendReadyFnName = process.env.SEND_PULSE_CHECK_READY_FUNCTION_NAME
   const itemsTable = process.env.ITEMS_TABLE
+  const now = new Date().toISOString()
 
   if (!runPulseCheckFnName || !sendReadyFnName) {
     log('info', 'ExpireSessions: pulse check trigger env vars not set, skipping auto-trigger')
@@ -185,6 +186,28 @@ async function triggerPulseChecksForClosedItems(expiredByItem) {
       if (!allTerminal) {
         log('info', 'ExpireSessions: item still has open sessions, skipping auto-trigger', { tenantId, itemId })
         continue
+      }
+
+      // Close the item if it's still active — same as the manual close button
+      if (itemsTable) {
+        try {
+          await dynamo.send(new UpdateItemCommand({
+            TableName: itemsTable,
+            Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+            UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
+            ConditionExpression: '#status <> :closed',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: {
+              ':closed': { S: 'closed' },
+              ':now': { S: now },
+            },
+          }))
+          log('info', 'ExpireSessions: item auto-closed', { tenantId, itemId })
+        } catch (closeErr) {
+          if (closeErr.name !== 'ConditionalCheckFailedException') {
+            log('warn', 'ExpireSessions: failed to auto-close item', { tenantId, itemId, errorName: closeErr.name })
+          }
+        }
       }
 
       // Get item name for the notification email
