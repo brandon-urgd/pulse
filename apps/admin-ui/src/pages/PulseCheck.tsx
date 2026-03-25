@@ -378,9 +378,10 @@ export default function PulseCheck() {
     const singleReviewer = pc.reviewerVerdicts?.[0];
     const verdict = pc.verdict ?? labels.pulseCheck.noVerdict;
     const energy = singleReviewer?.energy ?? 'neutral';
-    const convictions = pc.sharedConviction ?? [];
-    const tensions = pc.repeatedTension ?? [];
+    const narrative = pc.narrative ?? '';
     const questions = pc.openQuestions ?? [];
+    const themes = pc.themes ?? [];
+    const proposedRevisions = pc.proposedRevisions ?? [];
 
     return (
       <>
@@ -399,39 +400,32 @@ export default function PulseCheck() {
           <div className={styles.verdictBlock}>
             <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
             <p className={styles.verdictText}>{verdict}</p>
+            {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
             <div className={styles.energyRow}>
               <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
               <SignalBadge variant={energy} />
             </div>
           </div>
 
-          <section className={styles.section} aria-labelledby="pc-convictions-heading">
-            <h2 id="pc-convictions-heading" className={styles.sectionHeading}>
-              <SignalBadge variant="conviction" />
-              {labels.pulseCheck.convictionsHeading}
-            </h2>
-            {convictions.length > 0 ? (
-              <ul className={styles.quoteList}>
-                {convictions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
-              </ul>
-            ) : (
-              <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
-            )}
-          </section>
-
-          <section className={styles.section} aria-labelledby="pc-tensions-heading">
-            <h2 id="pc-tensions-heading" className={styles.sectionHeading}>
-              <SignalBadge variant="tension" />
-              {labels.pulseCheck.tensionsHeading}
-            </h2>
-            {tensions.length > 0 ? (
-              <ul className={styles.quoteList}>
-                {tensions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
-              </ul>
-            ) : (
-              <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
-            )}
-          </section>
+          {/* Themes — what the reviewer flagged */}
+          {themes.length > 0 && (
+            <section className={styles.synthesisSection} aria-labelledby="single-themes-heading">
+              <h2 id="single-themes-heading" className={styles.synthesisHeading}>{labels.pulseCheck.synthesisHeading}</h2>
+              {themes.map((t) => (
+                <div key={t.themeId} className={styles.section}>
+                  <h3 className={styles.sectionHeading}>
+                    <SignalBadge variant={t.reviewerSignals[0]?.signalType ?? 'conviction'} />
+                    {t.label}
+                  </h3>
+                  <ul className={styles.quoteList}>
+                    {t.reviewerSignals.map((rs, i) => (
+                      <li key={i} className={styles.quoteItem}>"{rs.quote}"</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          )}
 
           <section className={styles.section} aria-labelledby="pc-questions-heading">
             <h2 id="pc-questions-heading" className={styles.sectionHeading}>
@@ -444,6 +438,68 @@ export default function PulseCheck() {
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
+            )}
+          </section>
+
+          {/* Proposed Revisions — same as multi-session */}
+          <section aria-labelledby="single-decisions-heading" className={styles.decisionsSection}>
+            <h2 id="single-decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
+            <p className={styles.decisionsHint}>{labels.pulseCheck.decisionsHint}</p>
+            {proposedRevisions.length === 0 ? (
+              <p className={styles.emptySection}>{labels.pulseCheck.noProposedRevisions}</p>
+            ) : (
+              <>
+                {(['structural', 'conceptual', 'feature', 'line-edit'] as const).map((type) => {
+                  const group = proposedRevisions.filter(r => r.revisionType === type);
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={type} className={styles.revisionGroup}>
+                      <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
+                      <ul className={styles.themeDecisionList}>
+                        {group.map((revision) => {
+                          const decided = decisions[revision.revisionId] ?? null;
+                          return (
+                            <li
+                              key={revision.revisionId}
+                              className={styles.themeDecisionRow}
+                              data-decided={decided ?? undefined}
+                            >
+                              <div className={styles.themeDecisionHeader}>
+                                <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                                <div className={styles.themeDecisionBody}>
+                                  <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
+                                  <FeedbackActionPills
+                                    value={decided}
+                                    onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                                    ariaLabel={`Decision for: ${revision.proposal}`}
+                                  />
+                                </div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+
+                <div className={styles.saveRow}>
+                  <button
+                    type="button"
+                    className={styles.saveButton}
+                    onClick={handleSaveDecisions}
+                    disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || JSON.stringify(decisions) === JSON.stringify(savedDecisionsRef.current)}
+                  >
+                    {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
+                  </button>
+                  {saveStatus === 'saved' && (
+                    <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
+                  )}
+                  {saveStatus === 'error' && (
+                    <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
+                  )}
+                </div>
+              </>
             )}
           </section>
 
