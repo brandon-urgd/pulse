@@ -295,8 +295,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       // If pasted content with no file upload, stay open to show time estimate
       const hasPastedContent = content.trim().length > 0 && !Object.keys(fileStatuses).length;
       if (hasPastedContent) {
+        uploadingCreate.current = true;
         createMutation.mutate(payload, {
           onSuccess: () => {
+            uploadingCreate.current = false;
             // Estimate time from word count, show bracket selector
             const words = content.trim().split(/\s+/).length;
             const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
