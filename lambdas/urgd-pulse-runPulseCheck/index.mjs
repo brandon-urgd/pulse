@@ -41,16 +41,13 @@ export const handler = async (event) => {
     const sessions = sessionsResult.Items || []
     if (sessions.length === 0) return errorResponse(404, 'No sessions found for this item', {}, origin)
 
-    // 2. Block only on not_started sessions — they haven't begun and would be excluded
-    //    from reports entirely. in_progress sessions are underway and will complete
-    //    naturally; the re-run banner handles including them after they finish.
-    const notStartedSessions = sessions.filter(s => s.status?.S === 'not_started')
-    if (notStartedSessions.length > 0) {
-      log('warn', 'RunPulseCheck: not_started sessions remain', { requestId, tenantId, itemId, notStartedCount: notStartedSessions.length })
-      return errorResponse(409, 'Not all sessions are closed. Wait for remaining sessions to complete or expire.', {}, origin)
-    }
+    // 2. Filter out not_started sessions — they haven't begun and contribute nothing.
+    //    in_progress sessions are underway and will complete naturally; the re-run
+    //    banner handles including them after they finish.
+    const activeSessions = sessions.filter(s => s.status?.S !== 'not_started' && s.status?.S !== 'cancelled')
+    if (activeSessions.length === 0) return errorResponse(404, 'No completed sessions to analyze', {}, origin)
 
-    const inProgressCount = sessions.filter(s => s.status?.S === 'in_progress').length
+    const inProgressCount = activeSessions.filter(s => s.status?.S === 'in_progress').length
     const startedAt = new Date().toISOString()
 
     // 3. Write 'generating' sentinel so the frontend polling loop has something to watch
@@ -61,7 +58,7 @@ export const handler = async (event) => {
         itemId: { S: itemId },
         status: { S: 'generating' },
         generatedAt: { S: startedAt },
-        sessionCount: { N: String(sessions.length) },
+        sessionCount: { N: String(activeSessions.length) },
         incompleteCount: { N: String(inProgressCount) },
       },
     }))
