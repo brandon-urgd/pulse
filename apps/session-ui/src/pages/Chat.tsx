@@ -608,7 +608,7 @@ export default function Chat() {
             <button
               type="button"
               style={styles.endSessionButton}
-              onClick={() => window.close()}
+              onClick={() => { window.close(); window.location.href = 'https://pulse.urgdstudios.com'; }}
             >
               End preview
             </button>
@@ -624,7 +624,7 @@ export default function Chat() {
             <button
               type="button"
               style={styles.endSessionButton}
-              onClick={() => window.close()}
+              onClick={() => { window.close(); window.location.href = 'https://pulse.urgdstudios.com'; }}
             >
               Close
             </button>
@@ -680,7 +680,7 @@ export default function Chat() {
                   </a>
                   <button
                     type="button"
-                    onClick={() => window.close()}
+                    onClick={() => { window.close(); window.location.href = 'https://pulse.urgdstudios.com'; }}
                     style={{
                       background: 'transparent',
                       border: '1px solid #3a3a3a',

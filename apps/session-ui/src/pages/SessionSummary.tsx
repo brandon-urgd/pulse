@@ -240,7 +240,7 @@ export default function SessionSummary() {
           <a href={`/s/${sessionId}/chat`} style={styles.backLink}>
             ← Back to conversation
           </a>
-          <button style={styles.closeButton} onClick={() => window.close()}>
+          <button style={styles.closeButton} onClick={() => { window.close(); window.location.href = 'https://pulse.urgdstudios.com'; }}>
             Close
           </button>
         </div>
