@@ -26,6 +26,7 @@ body {
 }
 
 /* When a scrollable page is present, unlock body + root so content can grow */
+html:has(.page-scrollable),
 body:has(.page-scrollable) {
   overflow-y: auto;
   height: auto;
