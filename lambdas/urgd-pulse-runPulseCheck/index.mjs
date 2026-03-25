@@ -20,8 +20,9 @@ const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
-  const tenantId = event?.requestContext?.authorizer?.tenantId
-  const itemId = event?.pathParameters?.itemId
+  // Support both API Gateway (authorizer context) and direct async invocation
+  const tenantId = event?.requestContext?.authorizer?.tenantId ?? event?.tenantId
+  const itemId = event?.pathParameters?.itemId ?? event?.itemId
 
   if (!tenantId) return errorResponse(401, 'Unauthorized', {}, origin)
   if (!itemId) return errorResponse(400, 'itemId is required', {}, origin)
