@@ -733,29 +733,34 @@ export default function Chat() {
             )
           }
 
-          // agent — strip section/completion tags, then split into multi-bubble groups
+          // agent — strip section/completion tags, then split into bubbles
+          // Rule: context stays together, question stands alone.
+          // All paragraphs merge into one "scan return" bubble, except the
+          // final paragraph if it ends with '?' — that becomes its own bubble
+          // so the reviewer always knows what to respond to.
           const cleaned = msg.content
             .replace(/\[SECTION:\d+\]/g, '')
             .replace(/\[SESSION_COMPLETE\]/g, '')
             .trim()
           const paragraphs = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
 
-          // Group short consecutive paragraphs into a single bubble to avoid over-fragmentation.
-          // Paragraphs under 160 chars merge unless the current buffer ends with a question
-          // (questions are natural pause points and should stand alone).
           const grouped: string[] = []
-          let buffer = ''
-          for (const para of paragraphs) {
-            if (!buffer) {
-              buffer = para
-            } else if (buffer.length < 160 && para.length < 160 && !buffer.endsWith('?')) {
-              buffer += '\n\n' + para
+          if (paragraphs.length === 0) {
+            // nothing to render
+          } else if (paragraphs.length === 1) {
+            grouped.push(paragraphs[0])
+          } else {
+            const last = paragraphs[paragraphs.length - 1]
+            const rest = paragraphs.slice(0, -1)
+            if (last.endsWith('?')) {
+              // Context block + standalone question
+              grouped.push(rest.join('\n\n'))
+              grouped.push(last)
             } else {
-              grouped.push(buffer)
-              buffer = para
+              // No trailing question — everything in one bubble
+              grouped.push(paragraphs.join('\n\n'))
             }
           }
-          if (buffer) grouped.push(buffer)
 
           return (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', ...(isFirstInCluster ? {} : { marginTop: '-0.375rem' }) }}>
