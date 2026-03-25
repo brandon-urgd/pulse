@@ -61,6 +61,7 @@ interface PulseCheck {
   incompleteCount?: number;
   generatedAt: string;
   status: 'generating' | 'complete' | 'failed';
+  newSessionsSinceLastRun?: number;
 }
 
 interface PulseCheckResponse {
@@ -156,12 +157,7 @@ export default function PulseCheck() {
     `/api/manage/items/${itemId}/sessions`,
     { enabled: Boolean(itemId) && Boolean(pcResp) }
   );
-  const newlyCompletedCount = (() => {
-    if (!pc?.generatedAt || !sessionsResp?.data) return 0;
-    return sessionsResp.data.filter(
-      s => s.status === 'completed' && s.completedAt && s.completedAt > pc.generatedAt
-    ).length;
-  })();
+  const newlyCompletedCount = pc?.newSessionsSinceLastRun ?? 0;
 
   useEffect(() => {
     if (pc?.decisions) {

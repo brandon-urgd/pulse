@@ -2,10 +2,10 @@
 // GET /api/manage/items/{itemId}/pulse-check
 // Returns pulse check results including verdict, themes, decisions
 
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
-requireEnv(['PULSE_CHECKS_TABLE', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['PULSE_CHECKS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
@@ -91,6 +91,28 @@ export const handler = async (event) => {
     }
 
     const item = result.Item
+    // Count sessions completed since this pulse check was generated
+    let newSessionsSinceLastRun = 0
+    const generatedAt = item.generatedAt?.S
+    if (generatedAt && item.itemId?.S) {
+      try {
+        const sessionsResult = await dynamo.send(new QueryCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          IndexName: 'item-index',
+          KeyConditionExpression: 'itemId = :iid',
+          FilterExpression: '#st = :completed AND completedAt > :gen',
+          ExpressionAttributeNames: { '#st': 'status' },
+          ExpressionAttributeValues: {
+            ':iid': { S: item.itemId.S },
+            ':completed': { S: 'completed' },
+            ':gen': { S: generatedAt },
+          },
+          Select: 'COUNT',
+        }))
+        newSessionsSinceLastRun = sessionsResult.Count ?? 0
+      } catch { /* non-fatal */ }
+    }
+
     const pulseCheck = {
       itemId: item.itemId?.S,
       verdict: item.verdict?.S,
@@ -104,11 +126,12 @@ export const handler = async (event) => {
       proposedRevisions: deserializeProposedRevisions(item.proposedRevisions?.L),
       sessionCount: item.sessionCount?.N ? parseInt(item.sessionCount.N, 10) : 0,
       incompleteCount: item.incompleteCount?.N ? parseInt(item.incompleteCount.N, 10) : 0,
-      generatedAt: item.generatedAt?.S,
+      generatedAt,
       status: item.status?.S,
+      newSessionsSinceLastRun,
     }
 
-    log('info', 'GetPulseCheck: success', { requestId, tenantId, itemId })
+    log('info', 'GetPulseCheck: success', { requestId, tenantId, itemId, newSessionsSinceLastRun })
     return createResponse(200, { data: pulseCheck }, {}, origin)
   } catch (err) {
     log('error', 'GetPulseCheck: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
