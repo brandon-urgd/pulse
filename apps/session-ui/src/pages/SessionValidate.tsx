@@ -11,7 +11,7 @@ import SessionFooter from '../components/SessionFooter'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100dvh',
+    height: '100dvh',
     backgroundColor: '#0f0f0f',
     display: 'flex',
     flexDirection: 'column',
@@ -211,7 +211,7 @@ export default function SessionValidate() {
   }
 
   return (
-    <main className="page-scrollable" style={styles.page}>
+    <main style={styles.page}>
       <div style={styles.card}>
         <span style={styles.wordmark} aria-label="Pulse">pulse</span>
 
