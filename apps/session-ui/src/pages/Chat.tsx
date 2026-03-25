@@ -543,7 +543,7 @@ export default function Chat() {
 
   const inputDisabled = isThinking || isComplete || isPaused || isDiscarded || isLoading || sessionExpired
   const showEndSessionButton =
-    sessionStatus === 'in_progress' && !isThinking && !isPaused && !isComplete && !isDiscarded
+    sessionStatus === 'in_progress' && !isThinking && !isPaused && !isComplete && !isDiscarded && !sessionExpired
 
 
 
