@@ -2,7 +2,7 @@
 // POST /api/manage/items/{itemId}/public-session
 // Creates a single walk-in / QR session with no email requirement
 
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
@@ -116,6 +116,32 @@ export const handler = async (event) => {
     }))
 
     log('info', 'CreatePublicSession: session created', { requestId, tenantId, itemId, sessionId })
+
+    // Activate item if still draft + increment sessionCount
+    const isFirstSession = itemStatus === 'draft'
+    if (isFirstSession) {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET #status = :active, lockedAt = :now, updatedAt = :now ADD sessionCount :n',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':active': { S: 'active' },
+          ':now': { S: now },
+          ':n': { N: '1' },
+        },
+      }))
+    } else {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET updatedAt = :now ADD sessionCount :n',
+        ExpressionAttributeValues: {
+          ':now': { S: now },
+          ':n': { N: '1' },
+        },
+      }))
+    }
 
     // Generate QR code PNG and store in S3
     const qrKey = `pulse/${tenantId}/items/${itemId}/qr/public-${sessionId}.png`

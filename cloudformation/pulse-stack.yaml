@@ -3737,6 +3737,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseItemsTable.Arn
               - Effect: Allow
                 Action:
