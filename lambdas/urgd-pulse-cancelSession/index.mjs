@@ -43,9 +43,9 @@ export const handler = async (event) => {
     }
 
     const status = session.status?.S
-    if (status !== 'not_started') {
-      log('warn', 'CancelSession: cannot cancel session with status', { requestId, tenantId, sessionId, status })
-      return errorResponse(409, 'Only not_started sessions can be cancelled', {}, origin)
+    if (status === 'cancelled') {
+      log('info', 'CancelSession: session already cancelled', { requestId, tenantId, sessionId })
+      return createResponse(200, { message: 'Session already cancelled' }, {}, origin)
     }
 
     // Soft-cancel: mark as "cancelled" so the pulse code returns a clear message if used
