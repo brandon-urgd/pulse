@@ -8,23 +8,6 @@ interface Props {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  log: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  agentRow: {
-    display: 'flex',
-    justifyContent: 'flex-start',
-  },
-  reviewerRow: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-  },
-  contentRow: {
-    display: 'flex',
-    justifyContent: 'flex-start',
-  },
   errorRow: {
     display: 'flex',
     justifyContent: 'center',
@@ -46,9 +29,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     borderRadius: '16px 16px 4px 16px',
-    maxWidth: '75%',
-    minWidth: '80px',
-    padding: '0.75rem 1rem',
+    maxWidth: '85%',
+    padding: '0.625rem 0.875rem',
     width: 'fit-content',
   },
   content: {
@@ -83,12 +65,5 @@ export default function ChatBubble({ type, children }: Props) {
     )
   }
 
-  const rowStyle = type === 'reviewer' ? styles.reviewerRow : styles.contentRow
-  const bubbleStyle = styles[type]
-
-  return (
-    <div style={rowStyle}>
-      <div style={bubbleStyle}>{children}</div>
-    </div>
-  )
+  return <div style={styles[type]}>{children}</div>
 }

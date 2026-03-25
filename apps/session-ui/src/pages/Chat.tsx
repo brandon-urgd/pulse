@@ -688,9 +688,13 @@ export default function Chat() {
             )
           }
 
+          // Determine if this is the first message in a cluster from the same role
+          const prevMsg = messages[i - 1]
+          const isFirstInCluster = !prevMsg || prevMsg.role !== msg.role || prevMsg.content === '__completion__'
+
           if (msg.role === 'reviewer') {
             return (
-              <div key={i} style={styles.messageRowReviewer}>
+              <div key={i} style={{ ...styles.messageRowReviewer, ...(isFirstInCluster ? {} : { marginTop: '-0.375rem' }) }}>
                 <ChatBubble type="reviewer">{msg.content}</ChatBubble>
               </div>
             )
@@ -743,22 +747,28 @@ export default function Chat() {
           }
           if (buffer) grouped.push(buffer)
 
-          return grouped.map((text, pi) => (
-            <div key={`${i}-${pi}`} style={{
-              ...styles.messageRow,
-              ...(pi > 0 ? { marginTop: '-0.5rem' } : {}),
-            }}>
-              {pi === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-                  <PulseDot state="idle" />
-                  <span style={{ fontSize: '0.625rem', color: '#555', letterSpacing: '0.04em', fontWeight: 500 }} aria-hidden="true">Pulse</span>
-                </div>
-              ) : (
-                <div style={{ width: '28px', flexShrink: 0 }} />
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', ...(isFirstInCluster ? {} : { marginTop: '-0.375rem' }) }}>
+              {/* Name label — only on first message in an agent cluster */}
+              {isFirstInCluster && (
+                <span style={{ fontSize: '0.6875rem', color: '#666', fontWeight: 500, marginLeft: '36px', letterSpacing: '0.02em' }}>
+                  Pulse
+                </span>
               )}
-              <ChatBubble type="agent">{text}</ChatBubble>
+              {grouped.map((text, pi) => (
+                <div key={pi} style={styles.messageRow}>
+                  {pi === 0 && isFirstInCluster ? (
+                    <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center' }}>
+                      <PulseDot state="idle" />
+                    </div>
+                  ) : (
+                    <div style={{ width: '28px', flexShrink: 0 }} />
+                  )}
+                  <ChatBubble type="agent">{text}</ChatBubble>
+                </div>
+              ))}
             </div>
-          ))
+          )
         })}
 
         {isThinking && <ThinkingIndicator />}
