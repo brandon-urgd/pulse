@@ -34,13 +34,6 @@ type ClosingState = 'exploring' | 'narrowing' | 'closing' | 'closed'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatTimeLeft(seconds: number): string {
-  if (seconds <= 0) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
 function errorMessage(status: number | undefined): string {
   if (status === 503) return 'The agent is temporarily unavailable. Try sending your message again in a moment.'
   if (status === 504) return 'That took longer than expected. Try sending your message again.'
@@ -591,10 +584,12 @@ export default function Chat() {
           >
             {timeAnnouncement}
           </span>
-          {/* Time display — shows remaining time or "Wrapping up" in closing state */}
-          {!isPreview && timeLimitSeconds > 0 && timerStarted && !isComplete && !isPaused && !isDiscarded && (
+          {/* "Wrapping up" indicator — only shown during closing state.
+             The countdown was removed: time limit is an internal pacing guide
+             for the agent, not a visible clock for the reviewer. */}
+          {closingState === 'closing' && !isComplete && !isPaused && !isDiscarded && (
             <span style={styles.timeDisplay} aria-hidden="true">
-              {closingState === 'closing' ? 'Wrapping up' : formatTimeLeft(Math.max(0, timeLimitSeconds - elapsedSeconds))}
+              Wrapping up
             </span>
           )}
           {isPreview ? (
