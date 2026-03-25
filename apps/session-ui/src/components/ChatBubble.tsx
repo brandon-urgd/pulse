@@ -18,7 +18,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     borderRadius: '16px 16px 16px 4px',
-    maxWidth: '75%',
+    maxWidth: '70%',
     minWidth: '80px',
     padding: '0.75rem 1rem',
     width: 'fit-content',
