@@ -317,8 +317,18 @@ export default function Chat() {
           if (existingMessages.length > 0) {
             await autoSend('__session_resume__', existingMessages)
           }
-        } else if (state.status === 'complete') {
+        } else if (state.status === 'completed' || state.status === 'complete') {
           setSessionStatus('complete')
+          setMessages([...existingMessages, { role: 'content', content: '__completion__' }])
+        } else if (state.status === 'expired') {
+          setSessionExpired(true)
+          setSessionStatus('in_progress')
+          setMessages([...existingMessages, {
+            role: 'error',
+            content: 'This session has expired. The close date has passed.',
+          }])
+        } else if (state.status === 'discarded' || state.status === 'cancelled') {
+          setSessionStatus('discarded')
           setMessages(existingMessages)
         } else {
           setSessionStatus('in_progress')
