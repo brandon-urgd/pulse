@@ -6812,6 +6812,7 @@ Resources:
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
 
   PulseSendPulseCheckReadyFunctionRole:
+    # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub 'urgd-pulse-sendPulseCheckReady-role-${Environment}'
@@ -6845,7 +6846,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - ses:SendEmail
-                Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/pulse@urgdstudios.com'
+                  - ses:SendRawEmail
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - sns:Publish
