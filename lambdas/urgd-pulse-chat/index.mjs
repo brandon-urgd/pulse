@@ -246,7 +246,7 @@ Important:
     if (closingState === 'narrowing') {
       systemPrompt += '\n\nThe session is entering its final phase. Begin naturally focusing the conversation — go deeper on the current topic rather than opening new ones. Do not announce this shift. Let the conversation feel like it\'s finding its natural depth, not winding down.'
     } else if (closingState === 'closing') {
-      systemPrompt += '\n\nThe session is in its closing phase. You MUST wrap up within the next two exchanges. Send your genuine final question — something the reviewer actually wants to answer, not a formality. After they respond, send one warm final reply that acknowledges what they shared, thank them for their time, and include [SESSION_COMPLETE] at the very end. Do not ask new questions. Do not open new topics. If the reviewer has already answered your closing question, skip straight to the thank-you and [SESSION_COMPLETE]. The session will be force-closed if you do not emit [SESSION_COMPLETE] soon.'
+      systemPrompt += '\n\nThe session is in its closing phase. Begin wrapping up naturally. When the current topic feels complete, send a warm closing — thank the reviewer for their time, briefly note what you covered together, and let them know their feedback has been captured. Include [SESSION_COMPLETE] at the very end of your final message. Don\'t rush — finish the current thought first. But don\'t open new topics or ask new questions beyond what\'s already in play.'
     } else if (closingState === 'closed') {
       systemPrompt += '\n\nThis session is complete. Do not respond to further messages.'
     }
@@ -394,8 +394,11 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
 
     if ((closingState === 'narrowing' || closingState === 'exploring') && windingDown === 'final') {
       // Model is sending its closing question — transition to closing
+      // Grace window is a backstop, not a pacing tool. The model should emit
+      // [SESSION_COMPLETE] naturally within a few exchanges. The counter only
+      // fires if the model fails to close on its own — like a circuit breaker.
       newClosingState = 'closing'
-      newGraceMessagesRemaining = 4
+      newGraceMessagesRemaining = 10
     }
 
     if (closingState === 'closing' && !isSpecial) {
