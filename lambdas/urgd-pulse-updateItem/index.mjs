@@ -164,6 +164,8 @@ export const handler = async (event) => {
       updateParts.push('#documentStatus = :documentStatus')
       expressionNames['#documentStatus'] = 'documentStatus'
       expressionValues[':documentStatus'] = { S: 'ready' }
+      updateParts.push('documentKey = :documentKey')
+      expressionValues[':documentKey'] = { S: s3Key }
       updateParts.push('#content = :content')
       expressionNames['#content'] = 'content'
       expressionValues[':content'] = { S: content }

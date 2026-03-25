@@ -105,6 +105,7 @@ export const handler = async (event) => {
     const itemId = randomUUID()
     const now = new Date().toISOString()
     let documentStatus = null
+    let documentKey = null
 
     // Store content in S3 if provided
     if (content && typeof content === 'string' && content.length > 0) {
@@ -116,6 +117,7 @@ export const handler = async (event) => {
         ContentType: 'text/markdown',
       }))
       documentStatus = 'ready'
+      documentKey = s3Key
       log('info', 'CreateItem: stored content in S3', { requestId, tenantId, itemId })
     }
 
@@ -139,6 +141,10 @@ export const handler = async (event) => {
 
     if (content && typeof content === 'string' && content.length > 0) {
       dynamoItem.content = { S: content }
+    }
+
+    if (documentKey) {
+      dynamoItem.documentKey = { S: documentKey }
     }
 
     await dynamo.send(new PutItemCommand({
