@@ -98,8 +98,7 @@ export const handler = async (event) => {
     const timeLimitMinutes = BRACKETS.reduce((best, b) =>
       Math.abs(b - resolvedRaw) < Math.abs(best - resolvedRaw) ? b : best, BRACKETS[0])
 
-    // Cap time limit by tier limit
-    const cappedTimeLimitMinutes = Math.min(timeLimitMinutes, maxTimeLimit)
+    // cappedTimeLimitMinutes is computed after feature flag resolution below
 
     // Check for an existing self-review session — if found, return 409 with existingSessionId
     // so the frontend can offer a "start over" flow
@@ -181,6 +180,9 @@ export const handler = async (event) => {
     // Check sessionTimeLimitMinutes
     const timeLimitResult = resolveFeature(tenantRecord, 'sessionTimeLimitMinutes', systemRecord)
     const maxTimeLimit = timeLimitResult.limit ?? 120
+
+    // Cap time limit by tier limit (must be after feature flag resolution)
+    const cappedTimeLimitMinutes = Math.min(timeLimitMinutes, maxTimeLimit)
 
     if (existingCount >= maxSessions) {
       log('warn', 'CreateSelfSession: session limit exceeded', { requestId, tenantId, itemId, existingCount, maxSessions })
