@@ -201,7 +201,8 @@ export default function FileViewerModal({ url, contentType, filename, originalUr
   const isText = contentType === 'text/plain' || contentType === 'text/markdown'
   const isPdf = contentType === 'application/pdf'
   const isDocx = contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const isImage = contentType.startsWith('image/')
+  const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp'])
+  const isImage = contentType.startsWith('image/') || IMAGE_EXTS.has(filename.split('.').pop()?.toLowerCase() ?? '')
 
   const loadContent = useCallback(async () => {
     setLoadState('loading')
