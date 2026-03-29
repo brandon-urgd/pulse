@@ -477,7 +477,7 @@ jobs:
               --output text
           }
 
-          for key in CloudFrontDistributionId ApiGatewayId S3BucketName FrontendBucketName UserPoolId UserPoolClientId ApiBaseUrl CognitoDomain; do
+          for key in CloudFrontDistributionId ApiGatewayId S3BucketName FrontendBucketName UserPoolId UserPoolClientId ApiBaseUrl CognitoDomain ChatFunctionUrl; do
             val=$(get_output "$key")
             if [ -z "$val" ] || [ "$val" = "None" ]; then
               echo "❌ Missing required output: $key"
@@ -503,6 +503,7 @@ jobs:
           export VITE_USER_POOL_CLIENT_ID="$CF_UserPoolClientId"
           export VITE_COGNITO_DOMAIN="$CF_CognitoDomain"
           export VITE_API_BASE_URL="$CF_ApiBaseUrl"
+          export VITE_CHAT_FUNCTION_URL="$CF_ChatFunctionUrl"
 
           npm run build --workspace=apps/admin-ui
           npm run build --workspace=apps/session-ui

@@ -150,9 +150,32 @@ async function handleChat(event, responseStream) {
   const isStreaming = !!responseStream && !!event?.requestContext?.http
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
-  const sessionId = event?.requestContext?.authorizer?.sessionId
-  const tenantId = event?.requestContext?.authorizer?.tenantId
-  const isPreview = event?.requestContext?.authorizer?.preview === 'true'
+
+  // Auth: API Gateway provides sessionId/tenantId via authorizer context.
+  // Function URL has no authorizer — auth info comes from the request body.
+  let sessionId, tenantId, isPreview
+  if (event?.requestContext?.authorizer?.sessionId) {
+    // API Gateway path
+    sessionId = event.requestContext.authorizer.sessionId
+    tenantId = event.requestContext.authorizer.tenantId
+    isPreview = event.requestContext.authorizer.preview === 'true'
+  } else {
+    // Function URL path — parse auth from body
+    let parsedBody
+    try { parsedBody = JSON.parse(event.body || '{}') } catch { parsedBody = {} }
+    const token = parsedBody.sessionToken || event?.headers?.authorization?.replace('Bearer ', '')
+    if (token) {
+      // Token format: {tenantId}:{sessionId}
+      const parts = token.split(':')
+      if (parts.length === 2) {
+        tenantId = parts[0]
+        sessionId = parts[1]
+      }
+    }
+    // Also accept sessionId from body (for Function URL calls)
+    if (!sessionId && parsedBody.sessionId) sessionId = parsedBody.sessionId
+    isPreview = false
+  }
 
   if (!sessionId || !tenantId) {
     if (isStreaming) {

@@ -87,13 +87,23 @@ export const handler = async (event) => {
       if (resolvedItemType === 'image') {
         imageBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
       } else {
-        // Try extracted text first, then raw document
+        // Try extracted text first, then document.md, then the actual documentKey
         const extractedKey = `pulse/${tenantId}/items/${itemId}/extracted.md`
         documentContext = await getS3Text(process.env.DATA_BUCKET, extractedKey)
         if (!documentContext) {
           const docKey = `pulse/${tenantId}/items/${itemId}/document.md`
           documentContext = await getS3Text(process.env.DATA_BUCKET, docKey)
         }
+        if (!documentContext) {
+          // Fall back to the actual documentKey (for .md/.txt files stored under original name)
+          documentContext = await getS3Text(process.env.DATA_BUCKET, documentKey)
+        }
+        log('info', 'SuggestDescription: document context loaded', {
+          requestId, tenantId, itemId,
+          hasContext: !!documentContext,
+          contextLength: documentContext?.length ?? 0,
+          documentKey,
+        })
       }
     }
 

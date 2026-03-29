@@ -1,5 +1,6 @@
 // Session UI API client
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+const CHAT_FUNCTION_URL = import.meta.env.VITE_CHAT_FUNCTION_URL ?? ''
 
 export interface ValidateSessionResponse {
   sessionToken: string
@@ -122,7 +123,8 @@ export async function sendChatMessage(
 
 /**
  * Send a chat message and return the raw Response for streaming consumption.
- * The caller is responsible for reading the body via getReader().
+ * Uses the Lambda Function URL for response streaming (bypasses API Gateway 29s timeout).
+ * Auth is passed in the request body since Function URL has no authorizer.
  */
 export async function sendChatMessageStreaming(
   sessionId: string,
@@ -130,13 +132,23 @@ export async function sendChatMessageStreaming(
   message: string,
   windingDown?: 'true' | 'final'
 ): Promise<Response> {
-  const res = await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
+  // Use Function URL if available, fall back to API Gateway
+  const chatUrl = CHAT_FUNCTION_URL
+    ? CHAT_FUNCTION_URL
+    : `${API_BASE}/api/session/${sessionId}/chat`
+
+  const res = await fetch(chatUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${sessionToken}`,
     },
-    body: JSON.stringify({ message, ...(windingDown ? { windingDown } : {}) }),
+    body: JSON.stringify({
+      message,
+      sessionId,
+      sessionToken,
+      ...(windingDown ? { windingDown } : {}),
+    }),
   })
 
   if (!res.ok) {

@@ -1142,6 +1142,27 @@ Resources:
           MetricsEnabled: true
           DataTraceEnabled: false
 
+  # Gateway Responses — CORS headers on API Gateway error responses (timeouts, auth failures)
+  PulseGatewayResponse4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'https://${FrontendDomainName}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+
+  PulseGatewayResponse5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'https://${FrontendDomainName}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+
   PulseApiDomainName:
     Type: AWS::ApiGateway::DomainName
     Properties:
@@ -1158,6 +1179,8 @@ Resources:
       DomainName: !Ref PulseApiDomainName
       RestApiId: !Ref PulseApiGateway
       Stage: !Ref Environment
+
+
 
   PulseApiDNS:
     Type: AWS::Route53::RecordSet
@@ -8190,4 +8213,10 @@ Outputs:
     Value: !GetAtt PulseShieldCallbackFunction.Arn
     Export:
       Name: !Sub 'urgd-pulse-${Environment}-shield-callback-arn'
+
+  ChatFunctionUrl:
+    Description: Lambda Function URL for chat streaming — frontend calls this directly instead of API Gateway
+    Value: !GetAtt PulseChatFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub 'urgd-pulse-${Environment}-chat-function-url'
 
