@@ -120,6 +120,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const mountedRef    = useRef(true);
   const savedItemId   = useRef<string | null>(itemId ?? null);
+  const [savedItemIdState, setSavedItemIdState] = useState<string | null>(itemId ?? null);
   const autoSaved     = useRef(false);
   const uploadingCreate = useRef(false);
 
@@ -149,6 +150,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // Section preferences state
   const [feedbackSections, setFeedbackSections] = useState<string[]>([]);
   const [sectionDepthPreferences, setSectionDepthPreferences] = useState<Record<string, 'deep' | 'explore' | 'skim'>>({});
+  const sectionsInitialized = useRef(false); // Guard: don't overwrite user edits on refetch
 
   // ── Derived upload state ────────────────────────────────────────────────────
   // True while any file is still in-flight (uploading/scanning/extracting)
@@ -159,10 +161,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // Per-file time limits accumulate as each file resolves to ready.
   // We track them in a ref so pollFileStatus can update without re-renders.
   const perFileTimeLimits = useRef<Record<string, number>>({});
+  const activeItemId = itemId ?? savedItemIdState;
   const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
-    ['item', itemId],
-    `/api/manage/items/${itemId}`,
-    { enabled: isEditMode }
+    ['item', activeItemId],
+    `/api/manage/items/${activeItemId}`,
+    { enabled: !!activeItemId }
   );
   const itemData = itemResp?.data;
 
@@ -200,8 +203,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           : '_loaded';
         setFileStatuses({ [fileName]: { status: itemData.documentStatus as FileUploadStatus } });
       }
-      // Populate section preferences from item data
-      if (itemData.sectionMap?.sections) {
+      // Populate section preferences from item data (only on first load, not on refetch)
+      if (itemData.sectionMap?.sections && !sectionsInitialized.current) {
+        sectionsInitialized.current = true;
         const defaultIncluded = itemData.feedbackSections
           ?? itemData.sectionMap.sections
               .filter((s) => s.classification === 'substantive')
@@ -240,6 +244,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     {
       onSuccess: (resp) => {
         savedItemId.current = resp.data.itemId;
+        setSavedItemIdState(resp.data.itemId);
         autoSaved.current = true;
         queryClient.invalidateQueries({ queryKey: ['items'] });
         if (!uploadingCreate.current) {
