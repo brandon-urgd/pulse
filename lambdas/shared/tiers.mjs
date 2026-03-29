@@ -115,5 +115,5 @@ export const VALID_TIERS = Object.keys(TIERS)
  * @returns {object}
  */
 export function getTierDefaults(tierName) {
-  return TIERS[tierName] ?? TIERS.free
+  return Object.hasOwn(TIERS, tierName) ? TIERS[tierName] : TIERS.free
 }
