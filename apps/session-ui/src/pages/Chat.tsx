@@ -779,11 +779,10 @@ export default function Chat() {
           <div className="image-panel-desktop" style={{
             width: '60%',
             minWidth: '320px',
-            height: '100%',
             flexShrink: 0,
             borderRight: '1px solid #2a2a2a',
-            borderBottom: '1px solid #2a2a2a',
             overflow: 'hidden',
+            alignSelf: 'stretch',
           }}>
             <ImagePanel imageUrl={imageUrl} onImageError={refreshImageUrl} />
           </div>
