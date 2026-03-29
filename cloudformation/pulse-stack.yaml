@@ -306,6 +306,17 @@ Parameters:
     Default: lambda-packages/urgd-pulse-publicConfig/latest.zip
     Description: S3 key for urgd-pulse-publicConfig Lambda ZIP
 
+  # Spec 2 — S2 CodeKey parameters
+  AnalyzeDocumentCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-analyzeDocument/latest.zip
+    Description: S3 key for urgd-pulse-analyzeDocument Lambda ZIP
+
+  SuggestDescriptionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-suggestDescription/latest.zip
+    Description: S3 key for urgd-pulse-suggestDescription Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
@@ -2721,6 +2732,10 @@ Resources:
                 Action:
                   - s3:PutObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
 
   PulseGetItemFunctionRole:
     Type: AWS::IAM::Role
@@ -2790,6 +2805,10 @@ Resources:
                 Action:
                   - s3:PutObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
 
   PulseDeleteItemFunctionRole:
     Type: AWS::IAM::Role
@@ -3009,6 +3028,7 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
+          ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -3094,6 +3114,7 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
+          ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -5086,11 +5107,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
                 Resource:
                   - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
                 Resource:
                   - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
                   - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
@@ -5437,6 +5460,33 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # Uncomment in Batch 2 — Lambda Function URL for response streaming
+  # REST API Gateway does not support Lambda response streaming.
+  # The frontend will call this Function URL directly for chat streaming.
+  # PulseChatFunctionUrl:
+  #   Type: AWS::Lambda::Url
+  #   Properties:
+  #     AuthType: NONE
+  #     InvokeMode: RESPONSE_STREAM
+  #     TargetFunctionArn: !GetAtt PulseChatFunction.Arn
+  #     Cors:
+  #       AllowOrigins:
+  #         - !Sub 'https://${FrontendDomainName}'
+  #       AllowMethods:
+  #         - POST
+  #       AllowHeaders:
+  #         - Content-Type
+  #         - Authorization
+  #       MaxAge: 86400
+  #
+  # PulseChatFunctionUrlPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !Ref PulseChatFunction
+  #     Action: lambda:InvokeFunctionUrl
+  #     Principal: '*'
+  #     FunctionUrlAuthType: NONE
 
   PulseGetSessionStateFunction:
     Type: AWS::Lambda::Function
@@ -7811,6 +7861,253 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulsePublicConfigFunction.Arn}/invocations'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Spec 2 — S2: IAM Execution Roles (analyzeDocument, suggestDescription)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseAnalyzeDocumentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-analyzeDocument-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AnalyzeDocumentPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseSuggestDescriptionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-suggestDescription-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SuggestDescriptionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Spec 2 — S2: CloudWatch Log Groups (analyzeDocument, suggestDescription)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseAnalyzeDocumentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-analyzeDocument-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseSuggestDescriptionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-suggestDescription-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Spec 2 — S2: Lambda Functions & API Gateway Routes
+  # Uncomment in Batch 2 when Lambda code directories exist
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # # Uncomment in Batch 2
+  # PulseAnalyzeDocumentFunction:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: PulseAnalyzeDocumentLogGroup
+  #   Properties:
+  #     FunctionName: !Sub 'urgd-pulse-analyzeDocument-${Environment}'
+  #     Runtime: nodejs22.x
+  #     Handler: index.handler
+  #     Role: !GetAtt PulseAnalyzeDocumentRole.Arn
+  #     Code:
+  #       S3Bucket: urgd-applicationdata
+  #       S3Key: !Ref AnalyzeDocumentCodeKey
+  #     Timeout: 60
+  #     MemorySize: 512
+  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AnalyzeDocument]
+  #     TracingConfig:
+  #       Mode: Active
+  #     Environment:
+  #       Variables:
+  #         ITEMS_TABLE: !Ref PulseItemsTable
+  #         DATA_BUCKET: !Ref PulseDataBucket
+  #         BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+  #         ENVIRONMENT: !Ref Environment
+  #         VERSION: !Ref DeploymentVersion
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: brand
+  #         Value: urgd
+  #       - Key: studio
+  #         Value: urgd-studios
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: cfn-stack-name
+  #         Value: !Ref AWS::StackName
+  #       - Key: license
+  #         Value: proprietary
+
+  # # Uncomment in Batch 2
+  # PulseSuggestDescriptionFunction:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: PulseSuggestDescriptionLogGroup
+  #   Properties:
+  #     FunctionName: !Sub 'urgd-pulse-suggestDescription-${Environment}'
+  #     Runtime: nodejs22.x
+  #     Handler: index.handler
+  #     Role: !GetAtt PulseSuggestDescriptionRole.Arn
+  #     Code:
+  #       S3Bucket: urgd-applicationdata
+  #       S3Key: !Ref SuggestDescriptionCodeKey
+  #     Timeout: 30
+  #     MemorySize: 512
+  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SuggestDescription]
+  #     TracingConfig:
+  #       Mode: Active
+  #     Environment:
+  #       Variables:
+  #         ITEMS_TABLE: !Ref PulseItemsTable
+  #         DATA_BUCKET: !Ref PulseDataBucket
+  #         BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+  #         ENVIRONMENT: !Ref Environment
+  #         VERSION: !Ref DeploymentVersion
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: brand
+  #         Value: urgd
+  #       - Key: studio
+  #         Value: urgd-studios
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: cfn-stack-name
+  #         Value: !Ref AWS::StackName
+  #       - Key: license
+  #         Value: proprietary
+  #
+  # PulseSuggestDescriptionFunctionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !Ref PulseSuggestDescriptionFunction
+  #     Action: lambda:InvokeFunction
+  #     Principal: apigateway.amazonaws.com
+  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+  #
+  # # POST /api/manage/items/{itemId}/suggest-description
+  # PulseManageItemSuggestDescriptionResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulseManageItemResource
+  #     PathPart: suggest-description
+  #
+  # PulseSuggestDescriptionMethod:
+  #   Type: AWS::ApiGateway::Method
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ResourceId: !Ref PulseManageItemSuggestDescriptionResource
+  #     HttpMethod: POST
+  #     AuthorizationType: CUSTOM
+  #     AuthorizerId: !Ref PulseCognitoAuthorizer
+  #     Integration:
+  #       Type: AWS_PROXY
+  #       IntegrationHttpMethod: POST
+  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSuggestDescriptionFunction.Arn}/invocations'
 
 
 Outputs:
