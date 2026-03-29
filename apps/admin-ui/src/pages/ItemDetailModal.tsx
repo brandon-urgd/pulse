@@ -323,6 +323,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       description: description.trim(),
       closeDate,
       ...(content.trim() ? { content: content.trim() } : {}),
+      ...(feedbackSections.length > 0 ? { feedbackSections } : {}),
+      ...(Object.keys(sectionDepthPreferences).length > 0 ? { sectionDepthPreferences } : {}),
     };
 
     if (isEditMode) {
