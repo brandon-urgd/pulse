@@ -498,6 +498,38 @@
   overflow: hidden;
 }
 
+/* ── Sections pane (right side) ──────────────────────────────────────────── */
+
+.sectionsPane {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  overflow-y: auto;
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.sectionsPaneBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionsPaneActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .previewHeader {
   height: 48px;
   background: var(--color-surface);
@@ -813,6 +845,14 @@
     border-left: none;
     border-top: 1px solid var(--color-border);
   }
+  .sectionsPane {
+    min-width: 0;
+    max-width: 100%;
+    max-height: 50vh;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    animation: none;
+  }
 }
 
 /* ── Mobile — sheet style from bottom ───────────────────────────────────── */
@@ -863,5 +903,8 @@
 @media (prefers-reduced-motion: reduce) {
   .modalExpanded {
     transition: none;
+  }
+  .sectionsPane {
+    animation: none;
   }
 }

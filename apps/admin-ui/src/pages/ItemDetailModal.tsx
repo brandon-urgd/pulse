@@ -347,6 +347,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             ).value;
             setTimeLimitMinutes(snapped);
             setFormError('');
+            // Poll for sectionMap — analyzeDocument runs async after createItem
+            if (savedItemId.current) {
+              pollForSectionMap(savedItemId.current);
+            }
           },
         });
       } else {
@@ -614,6 +618,12 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const isSaving  = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
 
+  // Show the right-side sections pane when sectionMap exists or item has been saved with content
+  const hasSections = !!(itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0);
+  const hasFileReady = Object.values(fileStatuses).some(s => s.status === 'ready');
+  const hasSavedContent = !!(savedItemId.current && content.trim().length > 0 && timeLimitMinutes != null);
+  const showSectionsPane = hasSections || hasFileReady || hasSavedContent;
+
   return (
     <div
       className={styles.overlay}
@@ -622,13 +632,13 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       aria-modal="true"
       aria-labelledby="item-modal-title"
     >
-      <div className={`${styles.modal} ${previewData ? styles.modalExpanded : ''}`}>
+      <div className={`${styles.modal} ${(previewData || showSectionsPane) ? styles.modalExpanded : ''}`}>
         {/* Header */}
         <div className={styles.modalHeader}>
           <h2 id="item-modal-title" className={styles.modalTitle}>
             {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
           </h2>
-          {(isEditMode || savedItemId.current) && (
+          {(isEditMode || savedItemId.current) && !showSectionsPane && (
             <>
               {timeLimitMinutes != null && (isEditMode || !Object.values(fileStatuses).some(s => s.status === 'ready')) && (
                 <div className={styles.headerTimeLimitWrapper}>
@@ -714,10 +724,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           </div>
         )}
 
-        {/* Inner layout — flex row when preview is open, flex column always */}
-        <div className={previewData ? styles.modalInner : styles.modalSinglePane}>
+        {/* Inner layout — flex row when right pane is open */}
+        <div className={(previewData || showSectionsPane) ? styles.modalInner : styles.modalSinglePane}>
           {/* Form pane */}
-          <div className={previewData ? styles.modalFormPane : styles.modalFormSingle}>
+          <div className={(previewData || showSectionsPane) ? styles.modalFormPane : styles.modalFormSingle}>
             {/* Body */}
             <div className={styles.modalBody}>
               {isEditMode && itemLoading ? (
@@ -848,8 +858,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                           );
                         })}
 
-                        {/* Time limit + preview CTA — shown once a file is ready, create mode only */}
-                        {!isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
+                        {/* Time limit + preview CTA — moved to sections pane when visible */}
+                        {!showSectionsPane && !isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
                           <div className={styles.uploadReadyCtas}>
                             <div className={styles.timeLimitRow}>
                               <label htmlFor="timeLimitSelect" className={styles.timeLimitLabel}>
@@ -881,34 +891,6 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         )}
                       </div>
                     </div>
-
-                    {/* Section Panel — visible when sectionMap exists */}
-                    {itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0 && (
-                      <SectionPanel
-                        sections={itemData.sectionMap.sections}
-                        feedbackSections={feedbackSections}
-                        sectionDepthPreferences={sectionDepthPreferences}
-                        onToggleSection={(sectionId, included) => {
-                          setFeedbackSections((prev) =>
-                            included ? [...prev, sectionId] : prev.filter((id) => id !== sectionId)
-                          );
-                        }}
-                        onChangeDepth={(sectionId, depth) => {
-                          setSectionDepthPreferences((prev) => ({ ...prev, [sectionId]: depth }));
-                        }}
-                        disabled={isLocked}
-                      />
-                    )}
-
-                    {/* Coverage Indicator — visible when coverageMap exists */}
-                    {itemData?.coverageMap && itemData?.sectionMap?.sections && itemData.sessionCount > 0 && (
-                      <CoverageIndicator
-                        sections={itemData.sectionMap.sections
-                          .filter((s) => feedbackSections.includes(s.id))
-                          .map((s) => ({ id: s.id, title: s.title }))}
-                        coverageMap={itemData.coverageMap}
-                      />
-                    )}
 
                     <div className={styles.field}>
                       <label htmlFor="description" className={styles.label}>
@@ -985,14 +967,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     disabled={isSaving || isAnyFileInFlight}
                     title={isAnyFileInFlight ? 'Waiting for document to finish processing…' : undefined}
                   >
-                    {isSaving ? '…' : isAnyFileInFlight ? 'Processing…' : labels.itemDetail.saveButton}
+                    {isSaving ? '…' : isAnyFileInFlight ? 'Processing…'
+                      : (!isEditMode && !savedItemId.current && content.trim().length > 0) ? 'Next'
+                      : labels.itemDetail.saveButton}
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Preview pane */}
+          {/* Preview pane — takes priority over sections pane */}
           {previewData && (
             <DocumentPreviewPanel
               url={previewData.url}
@@ -1002,6 +986,86 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
               onClose={() => setPreviewData(null)}
               triggerRef={previewTriggerRef as React.RefObject<HTMLElement | null>}
             />
+          )}
+
+          {/* Sections pane — shown when sectionMap or file ready, hidden when preview is open */}
+          {!previewData && showSectionsPane && (
+            <div className={styles.sectionsPane} role="region" aria-label="Document analysis">
+              {/* Time selector */}
+              {timeLimitMinutes != null && (
+                <div className={styles.sectionsPaneBlock}>
+                  <div className={styles.timeLimitRow}>
+                    <label htmlFor="sectionsPaneTimeSelect" className={styles.timeLimitLabel}>
+                      {labels.itemDetail.timeLimitLabel}
+                    </label>
+                    <select
+                      id="sectionsPaneTimeSelect"
+                      className={styles.timeLimitSelect}
+                      value={timeLimitMinutes}
+                      onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                    >
+                      {labels.itemDetail.timeLimitBrackets
+                        .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                        .map((b) => (
+                        <option key={b.value} value={b.value}>{b.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
+                </div>
+              )}
+
+              {/* Preview + Self-review buttons */}
+              <div className={styles.sectionsPaneActions}>
+                <button
+                  type="button"
+                  className={styles.uploadCtaPreview}
+                  onClick={handleSessionPreview}
+                  disabled={isSessionPreviewLoading}
+                >
+                  {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                </button>
+                {(itemData?.status === 'draft' || itemData?.status === 'active') && (
+                  <button
+                    type="button"
+                    className={styles.headerActionSelfReview}
+                    onClick={() => handleSelfReview()}
+                    disabled={isSelfReviewLoading}
+                    title={labels.itemDetail.selfReviewTooltip}
+                  >
+                    {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
+                  </button>
+                )}
+              </div>
+
+              {/* Section panel */}
+              {hasSections && (
+                <SectionPanel
+                  sections={itemData!.sectionMap!.sections}
+                  feedbackSections={feedbackSections}
+                  sectionDepthPreferences={sectionDepthPreferences}
+                  onToggleSection={(sectionId, included) => {
+                    setFeedbackSections((prev) =>
+                      included ? [...prev, sectionId] : prev.filter((id) => id !== sectionId)
+                    );
+                  }}
+                  onChangeDepth={(sectionId, depth) => {
+                    setSectionDepthPreferences((prev) => ({ ...prev, [sectionId]: depth }));
+                  }}
+                  disabled={isLocked}
+                />
+              )}
+
+              {/* Coverage indicator */}
+              {itemData?.coverageMap && itemData?.sectionMap?.sections && itemData.sessionCount > 0 && (
+                <CoverageIndicator
+                  sections={itemData.sectionMap.sections
+                    .filter((s) => feedbackSections.includes(s.id))
+                    .map((s) => ({ id: s.id, title: s.title }))}
+                  coverageMap={itemData.coverageMap}
+                />
+              )}
+            </div>
           )}
         </div>
       </div>
