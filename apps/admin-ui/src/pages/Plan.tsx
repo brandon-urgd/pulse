@@ -104,9 +104,27 @@ export default function Plan() {
   const enriched = s?.enrichedFeatures ?? {};
   const itemCount = s?.usage?.itemCount ?? 0;
   const sessionCount = s?.usage?.sessionCount ?? 0;
-  const maxItems = enriched.maxActiveItems?.limit ?? 1;
-  const maxSessions = enriched.monthlySessionsTotal?.limit ?? 5;
   const showUpgrade = tier !== 'enterprise' && tier !== 'admin';
+
+  // Trackable limits — usage increments over time, show "X of Y" bars
+  const TRACKABLE: Set<string> = new Set([
+    'maxActiveItems', 'maxSessionsPerItem', 'maxOrgMembers',
+    'monthlySessionsTotal', 'monthlyPublicSessionsTotal', 'monthlyItemsCreated',
+  ]);
+
+  // Map flags to known usage counts (expand as more tracking is added)
+  const usageCounts: Record<string, number> = {
+    maxActiveItems: itemCount,
+    monthlySessionsTotal: sessionCount,
+  };
+
+  // Per-action caps — just display the value with units, no bar
+  const UNIT_SUFFIX: Record<string, string> = {
+    maxUploadSizeMb: ' MB',
+    maxPhotoSizeMb: ' MB',
+    sessionTimeLimitMinutes: ' min',
+    maxDocumentPages: ' pages',
+  };
 
   return (
     <div className={styles.container}>
@@ -124,32 +142,49 @@ export default function Plan() {
         )}
       </section>
 
-      {/* ── Usage ── */}
+      {/* ── Limits ── */}
       <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>{labels.plan?.usageHeading ?? 'Usage'}</h2>
+        <h2 className={styles.sectionHeading}>Limits</h2>
         {isLoading ? (
           <div className={styles.usageGrid}>
-            <div className={`${styles.skeleton} ${styles.skeletonWide}`} />
-            <div className={`${styles.skeleton} ${styles.skeletonWide}`} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className={`${styles.skeleton} ${styles.skeletonWide}`} />
+            ))}
           </div>
-        ) : (
-          <div className={styles.usageGrid}>
-            <div className={styles.usageRow}>
-              <div className={styles.usageHeader}>
-                <span className={styles.usageLabel}>Items</span>
-                <span className={styles.usageCount}>{itemCount} of {maxItems}</span>
-              </div>
-              <UsageBar used={itemCount} max={maxItems} />
+        ) : (() => {
+          const trackable = Object.entries(enriched)
+            .filter(([flag, f]) => f.limit !== null && TRACKABLE.has(flag))
+            .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
+
+          const caps = Object.entries(enriched)
+            .filter(([flag, f]) => f.limit !== null && !TRACKABLE.has(flag))
+            .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
+
+          return (
+            <div className={styles.usageGrid}>
+              {trackable.map(([flag, feature]) => {
+                const max = feature.limit ?? 0;
+                const used = usageCounts[flag] ?? 0;
+                return (
+                  <div key={flag} className={styles.usageRow}>
+                    <div className={styles.usageHeader}>
+                      <span className={styles.usageLabel}>{FEATURE_LABELS[flag] ?? flag}</span>
+                      <span className={styles.usageCount}>{used} of {max}</span>
+                    </div>
+                    <UsageBar used={used} max={max} />
+                  </div>
+                );
+              })}
+              {caps.length > 0 && <hr className={styles.featureDivider} />}
+              {caps.map(([flag, feature]) => (
+                <div key={flag} className={styles.featureRow}>
+                  <span className={styles.featureName}>{FEATURE_LABELS[flag] ?? flag}</span>
+                  <span className={styles.featureLimit}>{feature.limit}{UNIT_SUFFIX[flag] ?? ''}</span>
+                </div>
+              ))}
             </div>
-            <div className={styles.usageRow}>
-              <div className={styles.usageHeader}>
-                <span className={styles.usageLabel}>Sessions</span>
-                <span className={styles.usageCount}>{sessionCount} of {maxSessions}</span>
-              </div>
-              <UsageBar used={sessionCount} max={maxSessions} />
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </section>
 
       {/* ── Features ── */}
@@ -161,21 +196,24 @@ export default function Plan() {
               <div key={i} className={`${styles.skeleton} ${styles.skeletonMed}`} />
             ))}
           </div>
-        ) : (
-          <div className={styles.featureList}>
-            {Object.entries(enriched).map(([flag, feature]) => (
-              <div key={flag} className={styles.featureRow}>
-                <span className={styles.featureName}>{FEATURE_LABELS[flag] ?? flag}</span>
-                <div className={styles.featureRight}>
-                  {feature.limit !== null && (
-                    <span className={styles.featureLimit}>{feature.limit}</span>
-                  )}
-                  <FeatureStatus feature={feature} />
+        ) : (() => {
+          const boolean_ = Object.entries(enriched)
+            .filter(([, f]) => f.limit === null)
+            .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
+
+          return (
+            <div className={styles.featureList}>
+              {boolean_.map(([flag, feature]) => (
+                <div key={flag} className={styles.featureRow}>
+                  <span className={styles.featureName}>{FEATURE_LABELS[flag] ?? flag}</span>
+                  <div className={styles.featureRight}>
+                    <FeatureStatus feature={feature} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       {/* ── Upgrade CTA ── */}

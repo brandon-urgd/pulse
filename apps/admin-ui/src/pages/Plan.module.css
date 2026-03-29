@@ -118,6 +118,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.featureDivider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-2) 0;
+}
+
 .statusAllowed {
   font-size: var(--font-size-xs);
   font-weight: 500;
