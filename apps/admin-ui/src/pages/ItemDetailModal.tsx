@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import { useCan } from '../hooks/useCan';
 import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import styles from './ItemDetailModal.module.css';
@@ -127,6 +128,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
   // Time limit state (for session preview / self-review)
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
+  const { limit: sessionTimeLimit } = useCan('sessionTimeLimitMinutes');
+  const { limit: maxUploadMb } = useCan('maxUploadSizeMb');
 
   // Self-review "start over" confirm state
   const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
@@ -156,7 +159,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       setIsLocked(itemData.status !== 'draft');
       if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
         // Snap to nearest bracket midpoint
-        const brackets = labels.itemDetail.timeLimitBrackets;
+        const brackets = labels.itemDetail.timeLimitBrackets
+          .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
         const raw = itemData.recommendedTimeLimitMinutes;
         const snapped = brackets.reduce((best, b) =>
           Math.abs(b.value - raw) < Math.abs(best.value - raw) ? b : best
@@ -167,7 +171,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         // ~130 wpm reading speed, clamp 5–60 min, snap to bracket
         const words = itemData.content.trim().split(/\s+/).length;
         const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
-        const brackets = labels.itemDetail.timeLimitBrackets;
+        const brackets = labels.itemDetail.timeLimitBrackets
+          .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
         const snapped = brackets.reduce((best, b) =>
           Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
         ).value;
@@ -302,7 +307,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             // Estimate time from word count, show bracket selector
             const words = content.trim().split(/\s+/).length;
             const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
-            const brackets = labels.itemDetail.timeLimitBrackets;
+            const brackets = labels.itemDetail.timeLimitBrackets
+              .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
             const snapped = brackets.reduce((best, b) =>
               Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
             ).value;
@@ -402,7 +408,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
               perFileTimeLimits.current[fileName] = refreshed.recommendedTimeLimitMinutes;
               const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
               // Snap to nearest bracket midpoint
-              const brackets = labels.itemDetail.timeLimitBrackets;
+              const brackets = labels.itemDetail.timeLimitBrackets
+                .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
               const snapped = brackets.reduce((best, b) =>
                 Math.abs(b.value - total) < Math.abs(best.value - total) ? b : best
               ).value;
@@ -577,7 +584,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                       value={timeLimitMinutes}
                       onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
                     >
-                      {labels.itemDetail.timeLimitBrackets.map((b) => (
+                      {labels.itemDetail.timeLimitBrackets
+                        .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                        .map((b) => (
                         <option key={b.value} value={b.value}>{b.label}</option>
                       ))}
                     </select>
@@ -734,7 +743,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
                       <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
                       <div className={styles.uploadArea}>
-                        <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
+                        <p className={styles.uploadHint}>
+                          {`Accepts .md, .txt, .pdf, .docx — max ${maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
+                        </p>
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -810,7 +821,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                                 value={timeLimitMinutes ?? 17}
                                 onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
                               >
-                                {labels.itemDetail.timeLimitBrackets.map((b) => (
+                                {labels.itemDetail.timeLimitBrackets
+                                  .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                                  .map((b) => (
                                   <option key={b.value} value={b.value}>{b.label}</option>
                                 ))}
                               </select>

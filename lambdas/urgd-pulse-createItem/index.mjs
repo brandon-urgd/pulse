@@ -4,6 +4,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
@@ -12,8 +13,17 @@ requireEnv(['ITEMS_TABLE', 'TENANTS_TABLE', 'DATA_BUCKET_NAME', 'CORS_ALLOWED_OR
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const DEFAULT_MAX_ACTIVE_ITEMS_FREE = 1
-const DEFAULT_MAX_ACTIVE_ITEMS_PAID = 25
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 /**
  * Validate that a date string is a valid ISO date in the future.
@@ -71,15 +81,37 @@ export const handler = async (event) => {
       return errorResponse(404, 'Tenant not found', {}, origin)
     }
 
-    // Determine maxActiveItems from tenant features
-    const tier = tenantResult.Item.tier?.S ?? 'free'
-    const featuresMap = tenantResult.Item.features?.M ?? {}
-    let maxActiveItems
-    if (featuresMap.maxActiveItems?.N !== undefined) {
-      maxActiveItems = Number(featuresMap.maxActiveItems.N)
-    } else {
-      maxActiveItems = tier === 'paid' ? DEFAULT_MAX_ACTIVE_ITEMS_PAID : DEFAULT_MAX_ACTIVE_ITEMS_FREE
+    // Fetch SYSTEM record for circuit breakers
+    let systemItem = null
+    try {
+      const systemResult = await dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: 'SYSTEM' } },
+      }))
+      systemItem = systemResult.Item ?? null
+    } catch (err) {
+      log('warn', 'CreateItem: failed to fetch SYSTEM record', { requestId, errorName: err.name })
     }
+
+    // Unmarshal tenant record for resolveFeature
+    const tenantRecord = {
+      tier: tenantResult.Item.tier?.S ?? 'free',
+      features: unmarshalFeatures(tenantResult.Item.features?.M),
+      serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+    }
+    const systemRecord = systemItem ? {
+      serviceFlags: unmarshalFeatures(systemItem.serviceFlags?.M),
+    } : null
+
+    const maxItemsResult = resolveFeature(tenantRecord, 'maxActiveItems', systemRecord)
+    if (!maxItemsResult.allowed) {
+      return errorResponse(
+        maxItemsResult.reason === 'maintenance' ? 503 : 403,
+        maxItemsResult.reason === 'maintenance' ? 'Feature under maintenance' : "You've reached your item limit.",
+        {}, origin
+      )
+    }
+    const maxActiveItems = maxItemsResult.limit
 
     // Count existing active/draft items for this tenant
     const existingItems = await dynamo.send(new QueryCommand({

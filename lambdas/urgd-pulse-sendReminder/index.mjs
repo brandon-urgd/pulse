@@ -6,6 +6,7 @@ import { DynamoDBClient, ScanCommand, GetItemCommand } from '@aws-sdk/client-dyn
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'TENANTS_TABLE', 'ALERTS_TOPIC_ARN', 'APP_URL'])
@@ -17,21 +18,37 @@ const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 const REMINDER_WINDOW_HOURS = 48
 
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
+
 /**
  * Fetches the emailReminders feature flag and inviter email for a tenant.
  * Returns { enabled: true, inviterEmail: null } by default if tenant record not found.
  */
-async function getTenantInfo(tenantId) {
+async function getTenantInfo(tenantId, systemRecord) {
   try {
     const result = await dynamo.send(new GetItemCommand({
       TableName: process.env.TENANTS_TABLE,
       Key: { tenantId: { S: tenantId } },
     }))
     if (!result.Item) return { enabled: true, inviterEmail: null }
-    const featuresMap = result.Item.features?.M ?? {}
-    const enabled = featuresMap.emailReminders?.BOOL !== false
+    const tenantRecord = {
+      tier: result.Item.tier?.S ?? 'free',
+      features: unmarshalFeatures(result.Item.features?.M),
+      serviceFlags: unmarshalFeatures(result.Item.serviceFlags?.M),
+    }
+    const emailResult = resolveFeature(tenantRecord, 'emailReminders', systemRecord)
     const inviterEmail = result.Item.email?.S ?? null
-    return { enabled, inviterEmail }
+    return { enabled: emailResult.allowed, inviterEmail }
   } catch (err) {
     log('warn', 'SendReminder: failed to fetch tenant info, defaulting to enabled', { tenantId, errorName: err.name })
     return { enabled: true, inviterEmail: null }
@@ -154,6 +171,20 @@ export const handler = async (event) => {
   const now = new Date()
   const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_HOURS * 60 * 60 * 1000)
 
+  // Fetch SYSTEM record once for all tenants
+  let systemRecord = null
+  try {
+    const systemResult = await dynamo.send(new GetItemCommand({
+      TableName: process.env.TENANTS_TABLE,
+      Key: { tenantId: { S: 'SYSTEM' } },
+    }))
+    if (systemResult.Item) {
+      systemRecord = { serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M) }
+    }
+  } catch (err) {
+    log('warn', 'SendReminder: failed to fetch SYSTEM record', { errorName: err.name })
+  }
+
   let totalScanned = 0
   let totalSent = 0
   let totalSkipped = 0
@@ -222,7 +253,7 @@ export const handler = async (event) => {
 
       // Check emailReminders feature flag (cached per tenant)
       if (!tenantFlagCache.has(tenantId)) {
-        const info = await getTenantInfo(tenantId)
+        const info = await getTenantInfo(tenantId, systemRecord)
         tenantFlagCache.set(tenantId, info)
       }
 

@@ -3,22 +3,13 @@
 
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { getTierDefaults } from './shared/tiers.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
 requireEnv(['TENANTS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-const FREE_TIER_FEATURES = {
-  publicSignUp: true,
-  maxActiveItems: 1,
-  maxSessionsPerItem: 5,
-  sessionTimeLimitMinutes: 15,
-  pulseCheckGroupMode: false,
-  itemRevisionLoop: false,
-  emailReminders: true,
-}
 
 const FREE_TIER_USAGE = {
   itemCount: 0,
@@ -42,6 +33,17 @@ export const handler = async (event) => {
   log('info', 'CreateTenant: creating tenant record', { requestId, tenantId, isCognitoTrigger })
 
   try {
+    const defaults = getTierDefaults('free')
+    // Convert to DynamoDB attribute map
+    const featuresMap = {}
+    for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value === 'boolean') {
+        featuresMap[key] = { BOOL: value }
+      } else if (typeof value === 'number') {
+        featuresMap[key] = { N: String(value) }
+      }
+    }
+
     await dynamo.send(new PutItemCommand({
       TableName: process.env.TENANTS_TABLE,
       ConditionExpression: 'attribute_not_exists(tenantId)',
@@ -51,17 +53,7 @@ export const handler = async (event) => {
         onboardingComplete: { BOOL: false },
         createdAt: { S: now },
         updatedAt: { S: now },
-        features: {
-          M: {
-            publicSignUp: { BOOL: FREE_TIER_FEATURES.publicSignUp },
-            maxActiveItems: { N: String(FREE_TIER_FEATURES.maxActiveItems) },
-            maxSessionsPerItem: { N: String(FREE_TIER_FEATURES.maxSessionsPerItem) },
-            sessionTimeLimitMinutes: { N: String(FREE_TIER_FEATURES.sessionTimeLimitMinutes) },
-            pulseCheckGroupMode: { BOOL: FREE_TIER_FEATURES.pulseCheckGroupMode },
-            itemRevisionLoop: { BOOL: FREE_TIER_FEATURES.itemRevisionLoop },
-            emailReminders: { BOOL: FREE_TIER_FEATURES.emailReminders },
-          },
-        },
+        features: { M: featuresMap },
         usage: {
           M: {
             itemCount: { N: String(FREE_TIER_USAGE.itemCount) },
@@ -89,7 +81,7 @@ export const handler = async (event) => {
     tenantId,
     tier: 'free',
     onboardingComplete: false,
-    features: FREE_TIER_FEATURES,
+    features: getTierDefaults('free'),
     usage: FREE_TIER_USAGE,
     createdAt: now,
     updatedAt: now,

@@ -287,10 +287,24 @@ export const labels = {
     passwordGenericError: 'Something went wrong. Please try again.',
   },
 
+  // Plan
+  plan: {
+    title: 'Plan',
+    documentTitle: 'Plan — Pulse',
+    tierLabel: 'Current plan',
+    featuresHeading: 'Features',
+    usageHeading: 'Usage',
+    featureAllowed: 'Included',
+    featureLocked: 'Locked',
+    featureMaintenance: 'Maintenance',
+    upgradeButton: 'Upgrade',
+  },
+
   // Layout
   layout: {
     navItems: 'Items',
     navPulseCheck: 'Pulse Check',
+    navPlan: 'Plan',
     navSettings: 'Settings',
     logoAlt: 'ur/gd',
     wordmark: 'pulse',

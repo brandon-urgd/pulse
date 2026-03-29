@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/items': 'Items — Pulse',
   '/admin/settings': 'Settings — Pulse',
   '/admin/pulse-check': 'Pulse Check — Pulse',
+  '/admin/plan': 'Plan — Pulse',
 };
 
 const logoUrl = `${window.location.origin}/logo.svg`;
@@ -15,6 +16,7 @@ const logoUrl = `${window.location.origin}/logo.svg`;
 const NAV_LINKS = [
   { to: '/admin/items', label: () => labels.layout.navItems },
   { to: '/admin/pulse-check', label: () => labels.layout.navPulseCheck },
+  { to: '/admin/plan', label: () => labels.layout.navPlan },
   { to: '/admin/settings', label: () => labels.layout.navSettings },
 ];
 

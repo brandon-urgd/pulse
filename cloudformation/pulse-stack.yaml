@@ -1102,6 +1102,8 @@ Resources:
       - PulseGenerateRevisionMethod
       - PulseGetRevisionsMethod
       - PulseGetPreviewSessionMethod
+      - PulseAdminTenantsMethod
+      - PulsePublicConfigMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
       Description: !Sub 'Deployment ${DeploymentVersion} — ${AWS::StackName}'
@@ -7628,186 +7630,186 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSubmitReportFunction.Arn}/invocations'
 
   # ══════════════════════════════════════════════════════════════════════════════
-  # [S2-S1 Batch 2] Uncomment when Lambda code is ready
+  # Spec 2 S1 — Admin Tenants + Public Config Lambdas
   # ══════════════════════════════════════════════════════════════════════════════
 
   # ── adminTenants Log Group ──
-  # PulseAdminTenantsLogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: !Sub '/aws/lambda/urgd-pulse-adminTenants-${Environment}'
-  #     RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: environment
-  #         Value: !Ref Environment
+  PulseAdminTenantsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-adminTenants-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
 
   # ── adminTenants Lambda Function ──
-  # PulseAdminTenantsFunction:
-  #   Type: AWS::Lambda::Function
-  #   DependsOn: PulseAdminTenantsLogGroup
-  #   Properties:
-  #     FunctionName: !Sub 'urgd-pulse-adminTenants-${Environment}'
-  #     Runtime: nodejs22.x
-  #     Handler: index.handler
-  #     Role: !GetAtt PulseAdminTenantsRole.Arn
-  #     Code:
-  #       S3Bucket: urgd-applicationdata
-  #       S3Key: !Ref AdminTenantsCodeKey
-  #     Timeout: 30
-  #     MemorySize: 512
-  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AdminTenants]
-  #     TracingConfig:
-  #       Mode: Active
-  #     Environment:
-  #       Variables:
-  #         TENANTS_TABLE: !Ref PulseTenantsTable
-  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
-  #         ENVIRONMENT: !Ref Environment
-  #         VERSION: !Ref DeploymentVersion
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: brand
-  #         Value: urgd
-  #       - Key: studio
-  #         Value: urgd-studios
-  #       - Key: environment
-  #         Value: !Ref Environment
-  #       - Key: cfn-stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: license
-  #         Value: proprietary
+  PulseAdminTenantsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseAdminTenantsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-adminTenants-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseAdminTenantsRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref AdminTenantsCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AdminTenants]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
 
-  # PulseAdminTenantsFunctionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref PulseAdminTenantsFunction
-  #     Action: lambda:InvokeFunction
-  #     Principal: apigateway.amazonaws.com
-  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+  PulseAdminTenantsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseAdminTenantsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
   # ── adminTenants API Gateway Resources ──
   # PATCH /api/admin/tenants/{tenantId}
-  # PulseAdminResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulseApiResource
-  #     PathPart: admin
+  PulseAdminResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: admin
 
-  # PulseAdminTenantsResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulseAdminResource
-  #     PathPart: tenants
+  PulseAdminTenantsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseAdminResource
+      PathPart: tenants
 
-  # PulseAdminTenantIdResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulseAdminTenantsResource
-  #     PathPart: '{tenantId}'
+  PulseAdminTenantIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseAdminTenantsResource
+      PathPart: '{tenantId}'
 
-  # PulseAdminTenantsMethod:
-  #   Type: AWS::ApiGateway::Method
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ResourceId: !Ref PulseAdminTenantIdResource
-  #     HttpMethod: PATCH
-  #     AuthorizationType: CUSTOM
-  #     AuthorizerId: !Ref PulseCognitoAuthorizer
-  #     Integration:
-  #       Type: AWS_PROXY
-  #       IntegrationHttpMethod: POST
-  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseAdminTenantsFunction.Arn}/invocations'
+  PulseAdminTenantsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseAdminTenantIdResource
+      HttpMethod: PATCH
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseAdminTenantsFunction.Arn}/invocations'
 
   # ── publicConfig Log Group ──
-  # PulsePublicConfigLogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: !Sub '/aws/lambda/urgd-pulse-publicConfig-${Environment}'
-  #     RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: environment
-  #         Value: !Ref Environment
+  PulsePublicConfigLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-publicConfig-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
 
   # ── publicConfig Lambda Function ──
-  # PulsePublicConfigFunction:
-  #   Type: AWS::Lambda::Function
-  #   DependsOn: PulsePublicConfigLogGroup
-  #   Properties:
-  #     FunctionName: !Sub 'urgd-pulse-publicConfig-${Environment}'
-  #     Runtime: nodejs22.x
-  #     Handler: index.handler
-  #     Role: !GetAtt PulsePublicConfigRole.Arn
-  #     Code:
-  #       S3Bucket: urgd-applicationdata
-  #       S3Key: !Ref PublicConfigCodeKey
-  #     Timeout: 10
-  #     MemorySize: 256
-  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PublicConfig]
-  #     TracingConfig:
-  #       Mode: Active
-  #     Environment:
-  #       Variables:
-  #         TENANTS_TABLE: !Ref PulseTenantsTable
-  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
-  #         ENVIRONMENT: !Ref Environment
-  #         VERSION: !Ref DeploymentVersion
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: brand
-  #         Value: urgd
-  #       - Key: studio
-  #         Value: urgd-studios
-  #       - Key: environment
-  #         Value: !Ref Environment
-  #       - Key: cfn-stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: license
-  #         Value: proprietary
+  PulsePublicConfigFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulsePublicConfigLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-publicConfig-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulsePublicConfigRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PublicConfigCodeKey
+      Timeout: 10
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PublicConfig]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
 
-  # PulsePublicConfigFunctionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref PulsePublicConfigFunction
-  #     Action: lambda:InvokeFunction
-  #     Principal: apigateway.amazonaws.com
-  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+  PulsePublicConfigFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulsePublicConfigFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
 
   # ── publicConfig API Gateway Resources ──
   # GET /api/public/config
-  # PulsePublicResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulseApiResource
-  #     PathPart: public
+  PulsePublicResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: public
 
-  # PulsePublicConfigResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulsePublicResource
-  #     PathPart: config
+  PulsePublicConfigResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulsePublicResource
+      PathPart: config
 
-  # PulsePublicConfigMethod:
-  #   Type: AWS::ApiGateway::Method
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ResourceId: !Ref PulsePublicConfigResource
-  #     HttpMethod: GET
-  #     AuthorizationType: NONE
-  #     Integration:
-  #       Type: AWS_PROXY
-  #       IntegrationHttpMethod: POST
-  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulsePublicConfigFunction.Arn}/invocations'
+  PulsePublicConfigMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulsePublicConfigResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulsePublicConfigFunction.Arn}/invocations'
 
 
 Outputs:

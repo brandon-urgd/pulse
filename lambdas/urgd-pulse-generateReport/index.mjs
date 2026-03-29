@@ -7,12 +7,25 @@ import { DynamoDBClient, QueryCommand, PutItemCommand, GetItemCommand } from '@a
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 
 requireEnv(['TRANSCRIPTS_TABLE', 'REPORTS_TABLE', 'SESSIONS_TABLE', 'BEDROCK_MODEL_ID'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 // X-Ray annotations — gracefully no-ops outside Lambda environment
 async function addXRayAnnotations(annotations) {
@@ -68,6 +81,38 @@ export const handler = async (event) => {
     if (!itemId) {
       log('error', 'GenerateReport: session has no itemId', { sessionId, tenantId })
       return
+    }
+
+    // Check aiReports feature flag
+    if (process.env.TENANTS_TABLE) {
+      try {
+        const [tenantResult, systemResult] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        const tenantRecord = tenantResult.Item ? {
+          tier: tenantResult.Item.tier?.S ?? 'free',
+          features: unmarshalFeatures(tenantResult.Item.features?.M),
+          serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+        } : { tier: 'free', features: {}, serviceFlags: {} }
+        const systemRecord = systemResult.Item ? {
+          serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
+        } : null
+
+        const aiReportsResult = resolveFeature(tenantRecord, 'aiReports', systemRecord)
+        if (!aiReportsResult.allowed) {
+          log('info', 'GenerateReport: aiReports feature blocked', { sessionId, tenantId, reason: aiReportsResult.reason })
+          return
+        }
+      } catch (err) {
+        log('warn', 'GenerateReport: failed to check aiReports flag, proceeding', { sessionId, tenantId, errorName: err.name })
+      }
     }
 
     // 2. Query full transcript

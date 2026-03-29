@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import { useCan } from '../hooks/useCan';
 import InviteModal from './InviteModal';
 import styles from './ItemDetail.module.css';
 
@@ -126,6 +127,8 @@ export default function ItemDetail() {
   // Time limit state
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
   const perFileTimeLimits = useRef<Record<string, number>>({});
+  const { limit: sessionTimeLimit } = useCan('sessionTimeLimitMinutes');
+  const { limit: maxUploadMb } = useCan('maxUploadSizeMb');
 
   // True while any file is still in-flight
   const isAnyFileInFlight = Object.values(fileStatuses).some(
@@ -440,7 +443,8 @@ export default function ItemDetail() {
             if (status === 'ready' && refreshed?.data?.recommendedTimeLimitMinutes) {
               perFileTimeLimits.current[fileName] = refreshed.data.recommendedTimeLimitMinutes;
               const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
-              const brackets = labels.itemDetail.timeLimitBrackets;
+              const brackets = labels.itemDetail.timeLimitBrackets
+                .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
               const snapped = brackets.reduce((best, b) =>
                 Math.abs(b.value - total) < Math.abs(best.value - total) ? b : best
               ).value;
@@ -641,7 +645,9 @@ export default function ItemDetail() {
           {/* Upload area */}
           <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
           <div className={styles.uploadArea}>
-            <p className={styles.uploadHint}>{labels.itemDetail.uploadAcceptHint}</p>
+            <p className={styles.uploadHint}>
+              {`Accepts .md, .txt, .pdf, .docx — max ${maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
+            </p>
             <input
               ref={fileInputRef}
               type="file"
@@ -704,7 +710,9 @@ export default function ItemDetail() {
                     value={timeLimitMinutes ?? 17}
                     onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
                   >
-                    {labels.itemDetail.timeLimitBrackets.map((b) => (
+                    {labels.itemDetail.timeLimitBrackets
+                      .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                      .map((b) => (
                       <option key={b.value} value={b.value}>{b.label}</option>
                     ))}
                   </select>

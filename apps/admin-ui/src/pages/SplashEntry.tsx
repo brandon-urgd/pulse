@@ -25,6 +25,7 @@ export default function SplashEntry() {
   const [animating, setAnimating] = useState(false);
   const [termsIsUpdated, setTermsIsUpdated] = useState(false);
   const [termsAccepting, setTermsAccepting] = useState(false);
+  const [signupAllowed, setSignupAllowed] = useState(true); // fail-open default
 
   // Form fields
   const [pulseCode, setPulseCode] = useState('');
@@ -59,6 +60,20 @@ export default function SplashEntry() {
     });
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch public config to check if signup is allowed
+  useEffect(() => {
+    fetch(`${API_BASE}/api/public/config`)
+      .then(res => res.ok ? res.json() : null)
+      .then((data: { data?: { publicSignup?: { allowed?: boolean } } } | null) => {
+        if (data?.data?.publicSignup?.allowed === false) {
+          setSignupAllowed(false);
+        }
+      })
+      .catch(() => {
+        // fail-open: if fetch fails, allow signup
+      });
   }, []);
 
   function transitionTo(next: EntryState) {
@@ -280,9 +295,15 @@ export default function SplashEntry() {
               <button type="button" className="pulse-btn" onClick={() => transitionTo('login')}>
                 {labels.splash.loginButton}
               </button>
-              <button type="button" className="pulse-btn" onClick={() => transitionTo('register')}>
-                {labels.splash.signUpButton}
-              </button>
+              {signupAllowed ? (
+                <button type="button" className="pulse-btn" onClick={() => transitionTo('register')}>
+                  {labels.splash.signUpButton}
+                </button>
+              ) : (
+                <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+                  {labels.register.signupClosed}
+                </p>
+              )}
             </div>
           )}
 

@@ -27,21 +27,6 @@ interface SettingsResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function UsageBar({ used, max }: { used: number; max: number }) {
-  const pct = max > 0 ? Math.min((used / max) * 100, 100) : 0;
-  const fillClass = pct >= 100
-    ? styles.usageFillFull
-    : pct >= 80
-      ? styles.usageFillWarning
-      : styles.usageFill;
-
-  return (
-    <div className={styles.usageTrack} role="progressbar" aria-valuenow={used} aria-valuemin={0} aria-valuemax={max}>
-      <div className={fillClass} style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
 function mapCognitoPasswordError(err: unknown): string {
   const msg = (err as Error)?.message ?? '';
   if (msg.includes('NotAuthorizedException') || msg.includes('Incorrect username or password')) {
@@ -301,10 +286,6 @@ export default function Settings() {
   }
 
   const s = data?.data;
-  const itemCount    = s?.usage?.itemCount    ?? 0;
-  const sessionCount = s?.usage?.sessionCount ?? 0;
-  const maxItems     = s?.features?.maxActiveItems    ?? 1;
-  const maxSessions  = s?.features?.maxSessionsPerItem ?? 5;
 
   return (
     <div className={styles.container}>
@@ -319,10 +300,6 @@ export default function Settings() {
               <div className={styles.fieldRow}>
                 <span className={styles.fieldLabel}>{labels.settings.emailLabel}</span>
                 <div className={`${styles.skeleton} ${styles.skeletonMed}`} />
-              </div>
-              <div className={styles.fieldRow}>
-                <span className={styles.fieldLabel}>{labels.settings.tierLabel}</span>
-                <div className={`${styles.skeleton} ${styles.skeletonShort}`} />
               </div>
             </>
           ) : (
@@ -363,14 +340,6 @@ export default function Settings() {
                     </button>
                   </div>
                 )}
-              </div>
-              <div className={styles.fieldRow}>
-                <span className={styles.fieldLabel}>{labels.settings.tierLabel}</span>
-                <span>
-                  <span className={styles.tierBadge}>
-                    {s?.tier === 'free' ? labels.settings.tierFree : (s?.tier ?? labels.settings.tierFree)}
-                  </span>
-                </span>
               </div>
               <div className={styles.fieldRow}>
                 <span className={styles.fieldLabel}>{labels.settings.changePasswordHeading}</span>
@@ -428,42 +397,6 @@ export default function Settings() {
             </>
           )}
         </div>
-      </section>
-
-      {/* ── Usage ── */}
-      <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>{labels.settings.usageSection}</h2>
-        {isLoading ? (
-          <div className={styles.fieldGrid}>
-            <div className={`${styles.skeleton} ${styles.skeletonMed}`} style={{ height: 40 }} />
-            <div className={`${styles.skeleton} ${styles.skeletonMed}`} style={{ height: 40 }} />
-          </div>
-        ) : (
-          <div className={styles.fieldGrid}>
-            <div className={styles.usageRow}>
-              <div className={styles.usageHeader}>
-                <span className={styles.usageLabel}>{labels.settings.itemsLabel}</span>
-                <span className={styles.usageCount}>
-                  {labels.settings.itemsUsage
-                    .replace('{used}', String(itemCount))
-                    .replace('{max}', String(maxItems))}
-                </span>
-              </div>
-              <UsageBar used={itemCount} max={maxItems} />
-            </div>
-            <div className={styles.usageRow}>
-              <div className={styles.usageHeader}>
-                <span className={styles.usageLabel}>{labels.settings.sessionsLabel}</span>
-                <span className={styles.usageCount}>
-                  {labels.settings.sessionsUsage
-                    .replace('{used}', String(sessionCount))
-                    .replace('{max}', String(maxSessions))}
-                </span>
-              </div>
-              <UsageBar used={sessionCount} max={maxSessions} />
-            </div>
-          </div>
-        )}
       </section>
 
       {/* ── Appearance ── */}

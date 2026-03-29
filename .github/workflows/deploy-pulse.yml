@@ -67,10 +67,7 @@ jobs:
         run: pip install --quiet cfn-lint checkov semgrep
 
       - name: cfn-lint
-        # W2001: Unused parameters — AdminTenantsCodeKey, PublicConfigCodeKey are referenced by
-        # commented-out Lambda resources (uncommented in Spec 2 S1 Batch 2). PublicSignup env var
-        # removed from register Lambda (replaced by SYSTEM record lookup). Remove W2001 ignore
-        # after Batch 2 uncomments the Lambda resources.
+        # W2001: PublicSignup parameter unused in template (kept for deploy-pipeline parameter file generation)
         run: |
           set -euo pipefail
           cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045 W2001

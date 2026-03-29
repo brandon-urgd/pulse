@@ -1,0 +1,258 @@
+/* ── Page ────────────────────────────────────────────────────────────────── */
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+.heading {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin: 0 0 var(--space-8);
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sectionHeading {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+/* ── Tier badge ──────────────────────────────────────────────────────────── */
+
+.tierRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.tierLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tierBadge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tierFree {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.tierIndividual {
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
+}
+
+.tierPro {
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
+}
+
+.tierEnterprise {
+  background: color-mix(in srgb, var(--color-accent-pulse) 15%, transparent);
+  color: var(--color-accent-pulse);
+}
+
+.tierAdmin {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
+}
+
+/* ── Feature list ────────────────────────────────────────────────────────── */
+
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.featureRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.featureName {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.featureRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.featureLimit {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusAllowed {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-success);
+}
+
+.statusLocked {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.statusMaintenance {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-warning);
+}
+
+/* ── Usage bars ──────────────────────────────────────────────────────────── */
+
+.usageGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.usageRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.usageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.usageLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.usageCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.usageTrack {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.usageFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-pulse);
+  transition: width 0.4s ease;
+}
+
+.usageFillWarning {
+  composes: usageFill;
+  background: var(--color-warning);
+}
+
+.usageFillFull {
+  composes: usageFill;
+  background: var(--color-error);
+}
+
+/* ── Upgrade CTA ─────────────────────────────────────────────────────────── */
+
+.upgradeSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.upgradeHint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.upgradeButton {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-pulse);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.upgradeButton:hover {
+  opacity: 0.88;
+}
+
+.upgradeButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────────────── */
+
+.skeleton {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonShort { width: 80px; }
+.skeletonMed   { width: 160px; }
+.skeletonWide  { width: 100%; height: 40px; }
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  .container {
+    padding: var(--space-4);
+  }
+
+  .featureRow {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+}

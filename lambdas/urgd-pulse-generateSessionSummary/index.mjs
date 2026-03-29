@@ -2,14 +2,27 @@
 // Invoked async by chat Lambda after session completion
 // Generates AI summary of the session transcript
 
-import { DynamoDBClient, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 
 requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'BEDROCK_MODEL_ID'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 export const handler = async (event) => {
   const { sessionId, tenantId } = event
@@ -20,6 +33,38 @@ export const handler = async (event) => {
   }
 
   try {
+    // Check aiReports feature flag
+    if (process.env.TENANTS_TABLE) {
+      try {
+        const [tenantResult, systemResult] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        const tenantRecord = tenantResult.Item ? {
+          tier: tenantResult.Item.tier?.S ?? 'free',
+          features: unmarshalFeatures(tenantResult.Item.features?.M),
+          serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+        } : { tier: 'free', features: {}, serviceFlags: {} }
+        const systemRecord = systemResult.Item ? {
+          serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
+        } : null
+
+        const aiReportsResult = resolveFeature(tenantRecord, 'aiReports', systemRecord)
+        if (!aiReportsResult.allowed) {
+          log('info', 'GenerateSessionSummary: aiReports feature blocked', { sessionId, tenantId, reason: aiReportsResult.reason })
+          return
+        }
+      } catch (err) {
+        log('warn', 'GenerateSessionSummary: failed to check aiReports flag, proceeding', { sessionId, tenantId, errorName: err.name })
+      }
+    }
+
     // 1. Query full transcript
     const transcriptResult = await dynamo.send(new QueryCommand({
       TableName: process.env.TRANSCRIPTS_TABLE,

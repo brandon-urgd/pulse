@@ -11,6 +11,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv([
@@ -22,6 +23,18 @@ const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 // X-Ray annotations — gracefully no-ops outside Lambda environment
 async function addXRayAnnotations(annotations) {
@@ -72,18 +85,34 @@ export const handler = async (event) => {
 
   try {
     // 1. Check itemRevisionLoop feature flag
-    const tenantResult = await dynamo.send(new GetItemCommand({
-      TableName: process.env.TENANTS_TABLE,
-      Key: { tenantId: { S: tenantId } },
-      ProjectionExpression: 'features',
-    }))
+    const [tenantResult, systemResult] = await Promise.all([
+      dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: tenantId } },
+      })),
+      dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: 'SYSTEM' } },
+      })),
+    ])
 
-    const features = tenantResult.Item?.features?.M ?? {}
-    const revisionEnabled = features.itemRevisionLoop?.BOOL !== false
+    const tenantRecord = tenantResult.Item ? {
+      tier: tenantResult.Item.tier?.S ?? 'free',
+      features: unmarshalFeatures(tenantResult.Item.features?.M),
+      serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+    } : { tier: 'free', features: {}, serviceFlags: {} }
+    const systemRecord = systemResult.Item ? {
+      serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
+    } : null
 
-    if (!revisionEnabled) {
-      log('info', 'GenerateRevision: itemRevisionLoop flag is off', { requestId, tenantId, itemId })
-      return errorResponse(403, 'Item revision is not enabled for your account', {}, origin)
+    const revisionResult = resolveFeature(tenantRecord, 'itemRevisionLoop', systemRecord)
+    if (!revisionResult.allowed) {
+      log('info', 'GenerateRevision: itemRevisionLoop flag is off', { requestId, tenantId, itemId, reason: revisionResult.reason })
+      return errorResponse(
+        revisionResult.reason === 'maintenance' ? 503 : 403,
+        revisionResult.reason === 'maintenance' ? 'Feature under maintenance' : 'Item revision is not enabled for your account',
+        {}, origin
+      )
     }
 
     // 2. Get pulse check — must exist and be complete

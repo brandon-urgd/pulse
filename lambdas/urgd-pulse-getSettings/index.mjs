@@ -1,8 +1,9 @@
 // ur/gd pulse — Get Settings Lambda
 // GET /api/manage/settings → returns tenant settings with live usage counts
 
-import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, BatchGetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveAllFeatures } from './shared/features.mjs'
 
 requireEnv(['TENANTS_TABLE', 'ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
@@ -35,10 +36,16 @@ export const handler = async (event) => {
   log('info', 'GetSettings: fetching tenant', { requestId, tenantId })
 
   try {
-    const [tenantResult, itemsResult, sessionsResult] = await Promise.all([
-      dynamo.send(new GetItemCommand({
-        TableName: process.env.TENANTS_TABLE,
-        Key: { tenantId: { S: tenantId } },
+    const [batchResult, itemsResult, sessionsResult] = await Promise.all([
+      dynamo.send(new BatchGetItemCommand({
+        RequestItems: {
+          [process.env.TENANTS_TABLE]: {
+            Keys: [
+              { tenantId: { S: tenantId } },
+              { tenantId: { S: 'SYSTEM' } },
+            ],
+          },
+        },
       })),
       // Count active/draft items for this tenant
       dynamo.send(new QueryCommand({
@@ -62,12 +69,18 @@ export const handler = async (event) => {
       })),
     ])
 
-    if (!tenantResult.Item) {
+    const records = batchResult.Responses?.[process.env.TENANTS_TABLE] ?? []
+    const tenantItem = records.find(r => r.tenantId?.S === tenantId)
+    const systemItem = records.find(r => r.tenantId?.S === 'SYSTEM')
+
+    if (!tenantItem) {
       log('warn', 'GetSettings: tenant not found', { requestId, tenantId })
       return errorResponse(404, 'Tenant not found', {}, origin)
     }
 
-    const tenant = unmarshal(tenantResult.Item)
+    const tenant = unmarshal(tenantItem)
+    const systemRecord = systemItem ? unmarshal(systemItem) : null
+    const enrichedFeatures = resolveAllFeatures(tenant, systemRecord)
     const itemCount = itemsResult.Count ?? 0
     const sessionCount = sessionsResult.Count ?? 0
 
@@ -78,6 +91,7 @@ export const handler = async (event) => {
         email: tenant.email ?? null,
         tier: tenant.tier ?? 'free',
         features: tenant.features ?? {},
+        enrichedFeatures,
         usage: { itemCount, sessionCount },
         onboardingComplete: tenant.onboardingComplete ?? false,
         preferences: tenant.preferences ?? {},

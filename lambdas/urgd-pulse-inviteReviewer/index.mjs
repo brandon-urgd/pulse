@@ -6,6 +6,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 import { randomBytes, randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -18,8 +19,18 @@ const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
-const DEFAULT_MAX_SESSIONS_FREE = 5
-const DEFAULT_MAX_SESSIONS_PAID = 50
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 /**
  * Generates a unique 8-character alphanumeric pulse code.
@@ -139,6 +150,9 @@ export const handler = async (event) => {
       ? BRACKETS.reduce((best, b) => Math.abs(b - rawItemMinutes) < Math.abs(best - rawItemMinutes) ? b : best, BRACKETS[0])
       : 17
 
+    // Cap time limit by tier limit
+    const cappedTimeLimitMinutes = Math.min(sessionTimeLimitMinutes, maxTimeLimit)
+
     // Item must be draft or active to invite
     if (itemStatus !== 'draft' && itemStatus !== 'active') {
       return errorResponse(409, 'Item is not accepting new invitations', {}, origin)
@@ -156,30 +170,47 @@ export const handler = async (event) => {
     const existingCount = existingSessionsResult.Count ?? 0
 
     // Fetch tenant record for feature flags + inviter identity
-    let maxSessions = DEFAULT_MAX_SESSIONS_FREE
+    let maxSessions = 5
     let inviterName = null
     let inviterEmail = null
+    let tenantRecord = { tier: 'free', features: {}, serviceFlags: {} }
+    let systemRecord = null
     if (process.env.TENANTS_TABLE) {
       try {
-        const tenantRecord = await dynamo.send(new GetItemCommand({
-          TableName: process.env.TENANTS_TABLE,
-          Key: { tenantId: { S: tenantId } },
-        }))
-        if (tenantRecord.Item) {
-          const tier = tenantRecord.Item.tier?.S ?? 'free'
-          const featuresMap = tenantRecord.Item.features?.M ?? {}
-          if (featuresMap.maxSessionsPerItem?.N !== undefined) {
-            maxSessions = Number(featuresMap.maxSessionsPerItem.N)
-          } else {
-            maxSessions = tier === 'paid' ? DEFAULT_MAX_SESSIONS_PAID : DEFAULT_MAX_SESSIONS_FREE
+        const [tenantFetch, systemFetch] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        if (tenantFetch.Item) {
+          tenantRecord = {
+            tier: tenantFetch.Item.tier?.S ?? 'free',
+            features: unmarshalFeatures(tenantFetch.Item.features?.M),
+            serviceFlags: unmarshalFeatures(tenantFetch.Item.serviceFlags?.M),
           }
-          inviterName = tenantRecord.Item.displayName?.S ?? null
-          inviterEmail = tenantRecord.Item.email?.S ?? null
+          inviterName = tenantFetch.Item.displayName?.S ?? null
+          inviterEmail = tenantFetch.Item.email?.S ?? null
+        }
+        if (systemFetch.Item) {
+          systemRecord = { serviceFlags: unmarshalFeatures(systemFetch.Item.serviceFlags?.M) }
         }
       } catch (err) {
         log('warn', 'InviteReviewer: could not fetch tenant record, using defaults', { requestId, tenantId })
       }
     }
+
+    // Check maxSessionsPerItem limit
+    const maxSessionsResult = resolveFeature(tenantRecord, 'maxSessionsPerItem', systemRecord)
+    maxSessions = maxSessionsResult.limit ?? 5
+
+    // Check sessionTimeLimitMinutes
+    const timeLimitResult = resolveFeature(tenantRecord, 'sessionTimeLimitMinutes', systemRecord)
+    const maxTimeLimit = timeLimitResult.limit ?? 120
 
     if (existingCount + emails.length > maxSessions) {
       log('warn', 'InviteReviewer: session limit exceeded', { requestId, tenantId, itemId, existingCount, requested: emails.length, maxSessions })
@@ -206,7 +237,7 @@ export const handler = async (event) => {
           reviewerEmail: { S: email },
           pulseCode: { S: pulseCode },
           status: { S: 'not_started' },
-          timeLimitMinutes: { N: String(sessionTimeLimitMinutes) },
+          timeLimitMinutes: { N: String(cappedTimeLimitMinutes) },
           createdAt: { S: now },
           ...(closeDate ? { expiresAt: { S: closeDate } } : {}),
         },

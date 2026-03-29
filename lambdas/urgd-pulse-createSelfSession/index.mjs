@@ -7,14 +7,24 @@
 
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const DEFAULT_MAX_SESSIONS_FREE = 5
-const DEFAULT_MAX_SESSIONS_PAID = 50
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -72,6 +82,9 @@ export const handler = async (event) => {
     const timeLimitMinutes = BRACKETS.reduce((best, b) =>
       Math.abs(b - resolvedRaw) < Math.abs(best - resolvedRaw) ? b : best, BRACKETS[0])
 
+    // Cap time limit by tier limit
+    const cappedTimeLimitMinutes = Math.min(timeLimitMinutes, maxTimeLimit)
+
     // Check for an existing self-review session — if found, return 409 with existingSessionId
     // so the frontend can offer a "start over" flow
     const existingSessionsResult = await dynamo.send(new QueryCommand({
@@ -105,27 +118,53 @@ export const handler = async (event) => {
 
     const existingCount = allSessionsResult.Count ?? 0
 
-    // Fetch tenant record for feature flags
-    let maxSessions = DEFAULT_MAX_SESSIONS_FREE
+    // Fetch tenant + SYSTEM records for feature flag resolution
+    let tenantRecord = { tier: 'free', features: {}, serviceFlags: {} }
+    let systemRecord = null
     if (process.env.TENANTS_TABLE) {
       try {
-        const tenantRecord = await dynamo.send(new GetItemCommand({
-          TableName: process.env.TENANTS_TABLE,
-          Key: { tenantId: { S: tenantId } },
-        }))
-        if (tenantRecord.Item) {
-          const tier = tenantRecord.Item.tier?.S ?? 'free'
-          const featuresMap = tenantRecord.Item.features?.M ?? {}
-          if (featuresMap.maxSessionsPerItem?.N !== undefined) {
-            maxSessions = Number(featuresMap.maxSessionsPerItem.N)
-          } else {
-            maxSessions = tier === 'paid' ? DEFAULT_MAX_SESSIONS_PAID : DEFAULT_MAX_SESSIONS_FREE
+        const [tenantFetch, systemFetch] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        if (tenantFetch.Item) {
+          tenantRecord = {
+            tier: tenantFetch.Item.tier?.S ?? 'free',
+            features: unmarshalFeatures(tenantFetch.Item.features?.M),
+            serviceFlags: unmarshalFeatures(tenantFetch.Item.serviceFlags?.M),
           }
         }
+        if (systemFetch.Item) {
+          systemRecord = { serviceFlags: unmarshalFeatures(systemFetch.Item.serviceFlags?.M) }
+        }
       } catch (err) {
-        log('warn', 'CreateSelfSession: could not fetch tenant record, using defaults', { requestId, tenantId })
+        log('warn', 'CreateSelfSession: failed to fetch tenant/SYSTEM records', { requestId, tenantId, errorName: err.name })
       }
     }
+
+    // Check selfReview feature flag
+    const selfReviewResult = resolveFeature(tenantRecord, 'selfReview', systemRecord)
+    if (!selfReviewResult.allowed) {
+      return errorResponse(
+        selfReviewResult.reason === 'maintenance' ? 503 : 403,
+        selfReviewResult.reason === 'maintenance' ? 'Feature under maintenance' : 'Feature not available on your plan',
+        {}, origin
+      )
+    }
+
+    // Check maxSessionsPerItem limit
+    const maxSessionsResult = resolveFeature(tenantRecord, 'maxSessionsPerItem', systemRecord)
+    const maxSessions = maxSessionsResult.limit ?? 5
+
+    // Check sessionTimeLimitMinutes
+    const timeLimitResult = resolveFeature(tenantRecord, 'sessionTimeLimitMinutes', systemRecord)
+    const maxTimeLimit = timeLimitResult.limit ?? 120
 
     if (existingCount >= maxSessions) {
       log('warn', 'CreateSelfSession: session limit exceeded', { requestId, tenantId, itemId, existingCount, maxSessions })
@@ -146,7 +185,7 @@ export const handler = async (event) => {
         reviewerEmail: { S: '' },
         isSelfReview: { BOOL: true },
         status: { S: 'not_started' },
-        timeLimitMinutes: { N: String(timeLimitMinutes) },
+        timeLimitMinutes: { N: String(cappedTimeLimitMinutes) },
         createdAt: { S: now },
         updatedAt: { S: now },
         ...(closeDate ? { expiresAt: { S: closeDate } } : {}),

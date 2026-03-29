@@ -1,15 +1,28 @@
 // ur/gd pulse — Extract Text Lambda
 // Reads PDF or DOCX from data bucket, extracts text, stores as extracted.md
 
-import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 /**
  * Extract file extension (lowercase, including dot) from S3 key.
@@ -85,6 +98,45 @@ export const handler = async (event) => {
       // Dynamically import pdf-parse to avoid issues with module loading
       const pdfParse = (await import('pdf-parse')).default
       const pdfData = await pdfParse(fileBuffer)
+
+      // Check maxDocumentPages feature flag
+      if (process.env.TENANTS_TABLE) {
+        try {
+          const [tenantResult, systemResult] = await Promise.all([
+            dynamo.send(new GetItemCommand({
+              TableName: process.env.TENANTS_TABLE,
+              Key: { tenantId: { S: tenantId } },
+            })),
+            dynamo.send(new GetItemCommand({
+              TableName: process.env.TENANTS_TABLE,
+              Key: { tenantId: { S: 'SYSTEM' } },
+            })),
+          ])
+          const tenantRecord = tenantResult.Item ? {
+            tier: tenantResult.Item.tier?.S ?? 'free',
+            features: unmarshalFeatures(tenantResult.Item.features?.M),
+            serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+          } : { tier: 'free', features: {}, serviceFlags: {} }
+          const systemRecord = systemResult.Item ? {
+            serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
+          } : null
+
+          const pagesResult = resolveFeature(tenantRecord, 'maxDocumentPages', systemRecord)
+          if (!pagesResult.allowed) {
+            log('warn', 'ExtractText: maxDocumentPages feature blocked', { tenantId, itemId, reason: pagesResult.reason })
+            await updateDocumentStatus(tenantId, itemId, 'extraction_failed')
+            return
+          }
+          if (pagesResult.limit && pdfData.numpages > pagesResult.limit) {
+            log('warn', 'ExtractText: document exceeds page limit', { tenantId, itemId, pages: pdfData.numpages, limit: pagesResult.limit })
+            await updateDocumentStatus(tenantId, itemId, 'extraction_failed')
+            return
+          }
+        } catch (err) {
+          log('warn', 'ExtractText: failed to check maxDocumentPages, proceeding', { tenantId, itemId, errorName: err.name })
+        }
+      }
+
       extractedText = pdfData.text
     } else if (ext === '.docx') {
       const mammoth = await import('mammoth')

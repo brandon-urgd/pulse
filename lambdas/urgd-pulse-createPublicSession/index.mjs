@@ -6,6 +6,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } fro
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 import { randomBytes, randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -14,6 +15,18 @@ requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'DATA_BUCKET', 'CORS_ALLOWED_ORIGIN
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
 
 /**
  * Generates a unique 8-character alphanumeric pulse code (no ambiguous chars).
@@ -81,6 +94,52 @@ export const handler = async (event) => {
       return errorResponse(409, 'Item is not accepting new sessions', {}, origin)
     }
 
+    // Fetch tenant + SYSTEM records for feature flag resolution
+    let tenantRecord = { tier: 'free', features: {}, serviceFlags: {} }
+    let systemRecord = null
+    if (process.env.TENANTS_TABLE) {
+      try {
+        const [tenantResult, systemResult] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        if (tenantResult.Item) {
+          tenantRecord = {
+            tier: tenantResult.Item.tier?.S ?? 'free',
+            features: unmarshalFeatures(tenantResult.Item.features?.M),
+            serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+          }
+        }
+        if (systemResult.Item) {
+          systemRecord = { serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M) }
+        }
+      } catch (err) {
+        log('warn', 'CreatePublicSession: failed to fetch tenant/SYSTEM records', { requestId, tenantId, errorName: err.name })
+      }
+    }
+
+    // Check publicSessions feature flag
+    const publicSessionsResult = resolveFeature(tenantRecord, 'publicSessions', systemRecord)
+    if (!publicSessionsResult.allowed) {
+      return errorResponse(
+        publicSessionsResult.reason === 'maintenance' ? 503 : 403,
+        publicSessionsResult.reason === 'maintenance' ? 'Feature under maintenance' : 'Feature not available on your plan',
+        {}, origin
+      )
+    }
+
+    // Check maxSessionsPerItem limit
+    const maxSessionsResult = resolveFeature(tenantRecord, 'maxSessionsPerItem', systemRecord)
+
+    // Check sessionTimeLimitMinutes
+    const timeLimitResult = resolveFeature(tenantRecord, 'sessionTimeLimitMinutes', systemRecord)
+
     // Read recommended time limit from item — snap to bracket midpoints
     const BRACKETS = [12, 17, 25, 37]
     const rawItemMinutes = itemResult.Item.recommendedTimeLimitMinutes?.N
@@ -89,6 +148,13 @@ export const handler = async (event) => {
     const sessionTimeLimitMinutes = rawItemMinutes
       ? BRACKETS.reduce((best, b) => Math.abs(b - rawItemMinutes) < Math.abs(best - rawItemMinutes) ? b : best, BRACKETS[0])
       : 17
+
+    // Cap time limit by tier limit
+    const maxTimeLimit = timeLimitResult.limit ?? 120
+    const cappedTimeLimitMinutes = Math.min(sessionTimeLimitMinutes, maxTimeLimit)
+
+    // Check session count against maxSessionsPerItem
+    const maxSessions = maxSessionsResult.limit ?? 5
 
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()
@@ -103,7 +169,7 @@ export const handler = async (event) => {
       pulseCode: { S: pulseCode },
       status: { S: 'not_started' },
       isPublic: { BOOL: true },
-      timeLimitMinutes: { N: String(sessionTimeLimitMinutes) },
+      timeLimitMinutes: { N: String(cappedTimeLimitMinutes) },
       expiresAt: { S: closeDate },
       createdAt: { S: now },
     }

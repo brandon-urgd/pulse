@@ -6,6 +6,7 @@ import { S3Client } from '@aws-sdk/client-s3'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'QUARANTINE_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
@@ -13,8 +14,20 @@ requireEnv(['ITEMS_TABLE', 'QUARANTINE_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 
+function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
+}
+
 const ALLOWED_EXTENSIONS = new Set(['.md', '.txt', '.pdf', '.docx'])
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE_DEFAULT = 10 * 1024 * 1024 // 10MB fallback
 
 /**
  * Extract file extension (lowercase, including dot) from filename.
@@ -63,12 +76,59 @@ export const handler = async (event) => {
   // Validate file size
   if (fileSize !== undefined && fileSize !== null) {
     const size = Number(fileSize)
-    if (!Number.isFinite(size) || size > MAX_FILE_SIZE) {
+    if (!Number.isFinite(size) || size > MAX_FILE_SIZE_DEFAULT) {
       return errorResponse(400, 'File too large', {}, origin)
     }
   }
 
   try {
+    // Fetch tenant + SYSTEM records for maxUploadSizeMb check
+    let maxUploadBytes = MAX_FILE_SIZE_DEFAULT
+    if (process.env.TENANTS_TABLE) {
+      try {
+        const [tenantResult, systemResult] = await Promise.all([
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+          })),
+          dynamo.send(new GetItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: 'SYSTEM' } },
+          })),
+        ])
+        const tenantRecord = tenantResult.Item ? {
+          tier: tenantResult.Item.tier?.S ?? 'free',
+          features: unmarshalFeatures(tenantResult.Item.features?.M),
+          serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+        } : { tier: 'free', features: {}, serviceFlags: {} }
+        const systemRecord = systemResult.Item ? {
+          serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
+        } : null
+
+        const uploadResult = resolveFeature(tenantRecord, 'maxUploadSizeMb', systemRecord)
+        if (!uploadResult.allowed) {
+          return errorResponse(
+            uploadResult.reason === 'maintenance' ? 503 : 403,
+            uploadResult.reason === 'maintenance' ? 'Feature under maintenance' : 'Feature not available on your plan',
+            {}, origin
+          )
+        }
+        if (uploadResult.limit) {
+          maxUploadBytes = uploadResult.limit * 1024 * 1024
+        }
+      } catch (err) {
+        log('warn', 'GetUploadUrl: failed to check maxUploadSizeMb, using default', { requestId, tenantId, errorName: err.name })
+      }
+    }
+
+    // Re-validate file size against tier limit
+    if (fileSize !== undefined && fileSize !== null) {
+      const size = Number(fileSize)
+      if (!Number.isFinite(size) || size > maxUploadBytes) {
+        return errorResponse(400, 'File too large', {}, origin)
+      }
+    }
+
     // Verify item exists and belongs to this tenant before issuing a presigned URL
     const itemResult = await dynamo.send(new GetItemCommand({
       TableName: process.env.ITEMS_TABLE,

@@ -12,6 +12,7 @@ import SessionReport from './pages/SessionReport';
 import PulseCheck from './pages/PulseCheck';
 import PulseCheckIndex from './pages/PulseCheckIndex';
 import Settings from './pages/Settings';
+import Plan from './pages/Plan';
 import ForgotPassword from './pages/ForgotPassword';
 
 configureAmplify();
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="items/:itemId/sessions/:sessionId/report" element={<SessionReport />} />
             <Route path="pulse-check" element={<PulseCheckIndex />} />
             <Route path="pulse-check/:itemId" element={<PulseCheck />} />
+            <Route path="plan" element={<Plan />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 
