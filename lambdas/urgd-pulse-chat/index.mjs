@@ -930,12 +930,14 @@ ${uncoveredSections.map(s => `- ${s}`).join('\n')}
 
   // ── Section transition rules ──
   prompt += `Section transitions:
+- You MUST cover ALL ${totalSections} listed sections before ending the session. Do not skip any section. Do not end the session with uncovered sections remaining.
+- After the depth-appropriate number of exchanges for the current section, transition to the next section. Do not linger on one section at the expense of others.
 - When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text.
 - Before transitioning, consider whether the feedback focus applies to the upcoming content.
 - When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
 - Never ask the reviewer to react to something you haven't shown them. Summarize or quote first, then ask.
 - If the reviewer goes off-topic, gently guide them back.
-- If the reviewer hints at something deeper, follow up before moving on.
+- If the reviewer hints at something deeper, follow up before moving on — but keep an eye on the remaining sections.
 - If the reviewer disagrees with something, welcome it. Don't defend the document.
 - If the reviewer asks about something the document doesn't cover, say so honestly.
 
