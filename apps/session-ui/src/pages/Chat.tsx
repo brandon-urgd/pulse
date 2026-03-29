@@ -778,7 +778,7 @@ export default function Chat() {
         )}
 
         {/* Chat column */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', borderLeft: itemType === 'image' && imageUrl ? '1px solid #2a2a2a' : 'none' }}>
           {/* Chat area */}
           <div
             ref={chatAreaRef}

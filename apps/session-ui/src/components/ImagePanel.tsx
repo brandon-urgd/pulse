@@ -9,7 +9,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     height: '100%',
     background: '#0a0a0a',
-    borderRight: '1px solid #2a2a2a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

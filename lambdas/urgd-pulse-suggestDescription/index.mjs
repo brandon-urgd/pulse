@@ -133,6 +133,7 @@ Rules:
 - Write in first person from the perspective of the person requesting feedback ("I'd like feedback on...")
 - Be specific about what aspects to focus on
 - Keep it to 2-3 sentences
+- Always include who the intended audience is — the type of person giving feedback. Examples: "from the perspective of a potential client," "from someone who would use this product," "from a design colleague," "from a non-technical stakeholder." This helps the AI agent tailor its questions to the right lens.
 - If they provided rough notes AND a document, read the actual document content carefully and ground your suggestion in what the document actually says. Do not invent or assume content that isn't in the document.
 - If they mention a specific section by name, read that section in the document and reference its actual content in your suggestion — not generic assumptions about what a section with that name might contain.
 - If they provided a document without rough notes, identify the most consequential claims, decisions, or open questions in the document and suggest feedback on those.
