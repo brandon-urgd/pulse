@@ -26,20 +26,14 @@
   border-bottom: none;
 }
 
-.sectionInfo {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .sectionTitle {
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .badge {

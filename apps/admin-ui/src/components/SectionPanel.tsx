@@ -44,16 +44,14 @@ export default function SectionPanel({
 
           return (
             <div key={section.id} className={styles.sectionRow}>
-              <div className={styles.sectionInfo}>
-                <span className={styles.sectionTitle}>{section.title}</span>
-                <span
-                  className={`${styles.badge} ${
-                    isSubstantive ? styles.badgeSubstantive : styles.badgeLightweight
-                  }`}
-                >
-                  {isSubstantive ? labels.sections.keySection : labels.sections.supporting}
-                </span>
-              </div>
+              <span className={styles.sectionTitle}>{section.title}</span>
+              <span
+                className={`${styles.badge} ${
+                  isSubstantive ? styles.badgeSubstantive : styles.badgeLightweight
+                }`}
+              >
+                {isSubstantive ? labels.sections.keySection : labels.sections.supporting}
+              </span>
 
               <label className={styles.toggle}>
                 <input

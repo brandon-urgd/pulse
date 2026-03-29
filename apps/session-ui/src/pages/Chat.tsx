@@ -823,34 +823,13 @@ export default function Chat() {
             )
           }
 
-          // agent — strip section/completion tags, then split into bubbles
-          // Rule: context stays together, question stands alone.
-          // All paragraphs merge into one "scan return" bubble, except the
-          // final paragraph if it ends with '?' — that becomes its own bubble
-          // so the reviewer always knows what to respond to.
+          // agent — strip section/completion tags, render as single bubble
           const cleaned = msg.content
             .replace(/\[SECTION:\d+\]/g, '')
             .replace(/\[SESSION_COMPLETE\]/g, '')
             .trim()
-          const paragraphs = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean)
 
-          const grouped: string[] = []
-          if (paragraphs.length === 0) {
-            // nothing to render
-          } else if (paragraphs.length === 1) {
-            grouped.push(paragraphs[0])
-          } else {
-            const last = paragraphs[paragraphs.length - 1]
-            const rest = paragraphs.slice(0, -1)
-            if (last.endsWith('?')) {
-              // Context block + standalone question
-              grouped.push(rest.join('\n\n'))
-              grouped.push(last)
-            } else {
-              // No trailing question — everything in one bubble
-              grouped.push(paragraphs.join('\n\n'))
-            }
-          }
+          if (!cleaned) return null
 
           return (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', ...(isFirstInCluster ? {} : { marginTop: '-0.375rem' }) }}>
@@ -860,18 +839,16 @@ export default function Chat() {
                   Pulse
                 </span>
               )}
-              {grouped.map((text, pi) => (
-                <div key={pi} style={styles.messageRow}>
-                  {pi === 0 && isFirstInCluster ? (
-                    <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center' }}>
-                      <PulseDot state="idle" />
-                    </div>
-                  ) : (
-                    <div style={{ width: '28px', flexShrink: 0 }} />
-                  )}
-                  <ChatBubble type="agent">{text}</ChatBubble>
-                </div>
-              ))}
+              <div style={styles.messageRow}>
+                {isFirstInCluster ? (
+                  <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center' }}>
+                    <PulseDot state="idle" />
+                  </div>
+                ) : (
+                  <div style={{ width: '28px', flexShrink: 0 }} />
+                )}
+                <ChatBubble type="agent">{cleaned}</ChatBubble>
+              </div>
             </div>
           )
         })}

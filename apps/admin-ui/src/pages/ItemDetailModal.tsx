@@ -171,10 +171,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
   useEffect(() => {
     if (itemData) {
-      setItemName(itemData.itemName);
-      setDescription(itemData.description);
-      setCloseDate(itemData.closeDate ? (itemData.closeDate.includes('T') ? itemData.closeDate.slice(0, 16) : `${itemData.closeDate}T00:00`) : '');
-      setContent(itemData.content ?? '');
+      // In edit mode, always populate form fields from server data.
+      // In create mode, only populate fields the user hasn't touched yet
+      // (the auto-create sends placeholder values like "(no description)" that
+      // would overwrite what the user is typing).
+      if (isEditMode) {
+        setItemName(itemData.itemName);
+        setDescription(itemData.description);
+        setCloseDate(itemData.closeDate ? (itemData.closeDate.includes('T') ? itemData.closeDate.slice(0, 16) : `${itemData.closeDate}T00:00`) : '');
+        setContent(itemData.content ?? '');
+      }
       setIsLocked(itemData.status !== 'draft');
       if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
         // Snap to nearest bracket midpoint
@@ -496,6 +502,35 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       if (mountedRef.current) setTimeout(poll, 2000)
     }
     setTimeout(poll, 3000) // initial delay — give analyzeDocument a head start
+  }
+
+  // ── Recalculate time from section selection ──────────────────────────────────
+  function recalcTimeFromSections(
+    included: string[],
+    depths: Record<string, 'deep' | 'explore' | 'skim'>
+  ) {
+    if (!itemData?.sectionMap?.sections || !itemData.recommendedTimeLimitMinutes) return
+    const allSections = itemData.sectionMap.sections
+    const totalWeight = allSections.reduce((sum, s) => sum + (s.classification === 'substantive' ? 2 : 1), 0)
+    if (totalWeight === 0) return
+
+    const depthMultiplier: Record<string, number> = { deep: 1.5, explore: 1, skim: 0.5 }
+    const includedWeight = allSections
+      .filter((s) => included.includes(s.id))
+      .reduce((sum, s) => {
+        const base = s.classification === 'substantive' ? 2 : 1
+        const mult = depthMultiplier[depths[s.id] ?? 'explore'] ?? 1
+        return sum + base * mult
+      }, 0)
+
+    const ratio = includedWeight / totalWeight
+    const rawMinutes = Math.max(5, Math.round(itemData.recommendedTimeLimitMinutes * ratio))
+    const brackets = labels.itemDetail.timeLimitBrackets
+      .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+    const snapped = brackets.reduce((best, b) =>
+      Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
+    ).value
+    setTimeLimitMinutes(snapped)
   }
 
   // ── Remove document handler ─────────────────────────────────────────────────
@@ -1050,12 +1085,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                   feedbackSections={feedbackSections}
                   sectionDepthPreferences={sectionDepthPreferences}
                   onToggleSection={(sectionId, included) => {
-                    setFeedbackSections((prev) =>
-                      included ? [...prev, sectionId] : prev.filter((id) => id !== sectionId)
-                    );
+                    const next = included
+                      ? [...feedbackSections, sectionId]
+                      : feedbackSections.filter((id) => id !== sectionId);
+                    setFeedbackSections(next);
+                    recalcTimeFromSections(next, sectionDepthPreferences);
                   }}
                   onChangeDepth={(sectionId, depth) => {
-                    setSectionDepthPreferences((prev) => ({ ...prev, [sectionId]: depth }));
+                    const next = { ...sectionDepthPreferences, [sectionId]: depth };
+                    setSectionDepthPreferences(next);
+                    recalcTimeFromSections(feedbackSections, next);
                   }}
                   disabled={isLocked}
                 />
