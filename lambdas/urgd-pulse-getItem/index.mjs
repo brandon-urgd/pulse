@@ -46,6 +46,12 @@ function normalizeItem(raw) {
     ...(raw.documentKey !== undefined ? { documentKey: raw.documentKey } : {}),
     ...(raw.extractedKey !== undefined ? { extractedKey: raw.extractedKey } : {}),
     ...(raw.recommendedTimeLimitMinutes !== undefined ? { recommendedTimeLimitMinutes: raw.recommendedTimeLimitMinutes } : {}),
+    ...(raw.itemType !== undefined ? { itemType: raw.itemType } : {}),
+    ...(raw.sectionMap !== undefined ? { sectionMap: raw.sectionMap } : {}),
+    ...(raw.feedbackSections !== undefined ? { feedbackSections: raw.feedbackSections } : {}),
+    ...(raw.sectionDepthPreferences !== undefined ? { sectionDepthPreferences: raw.sectionDepthPreferences } : {}),
+    ...(raw.coverageMap !== undefined ? { coverageMap: raw.coverageMap } : {}),
+    ...(raw.totalSections !== undefined ? { totalSections: raw.totalSections } : {}),
   }
 }
 
