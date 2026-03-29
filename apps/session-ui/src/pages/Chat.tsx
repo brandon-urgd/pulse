@@ -5,13 +5,19 @@ import {
   deleteSessionTranscript,
   getSessionState,
   sendChatMessage,
+  sendChatMessageStreaming,
 } from '../api/session'
+import { consumeStream } from '../hooks/useStreaming'
 import ChatBubble from '../components/ChatBubble'
 import PulseDot from '../components/PulseDot'
 import PulseLine from '../components/PulseLine'
 import FileAttachmentBar from '../components/FileAttachmentBar'
 import ThinkingIndicator from '../components/ThinkingIndicator'
 import ExitSheet from '../components/ExitSheet'
+import StreamingBubble from '../components/StreamingBubble'
+import ImagePanel from '../components/ImagePanel'
+import ExpandableImageHeader from '../components/ExpandableImageHeader'
+import CompletionCard from '../components/CompletionCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -270,6 +276,14 @@ export default function Chat() {
   const [announced80, setAnnounced80] = useState(false)
   const [announced95, setAnnounced95] = useState(false)
 
+  // Image session state
+  const [itemType, setItemType] = useState<'document' | 'image'>('document')
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
+
   const chatAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -299,6 +313,8 @@ export default function Chat() {
         setTimeLimitSeconds(state.timeLimitMinutes * 60)
         setFiles(state.files ?? [])
         if (state.closingState) setClosingState(state.closingState)
+        if (state.itemType) setItemType(state.itemType)
+        if (state.imageUrl) setImageUrl(state.imageUrl)
 
         const existingMessages: Message[] = state.messages.map((m) => ({
           role: m.role,
@@ -463,39 +479,79 @@ export default function Chat() {
 
   async function handleSend() {
     const text = inputValue.trim()
-    if (!text || !sessionToken || isThinking || sessionStatus !== 'in_progress') return
+    if (!text || !sessionToken || isThinking || isStreaming || sessionStatus !== 'in_progress') return
 
     const userMsg: Message = { role: 'reviewer', content: text }
     const nextMessages = [...messages, userMsg]
     setMessages(nextMessages)
     setInputValue('')
-    setIsThinking(true)
+    setIsStreaming(true)
+    setStreamingText('')
     startTimer()
 
     try {
       const wd = windingDown ?? undefined
-      const resp = await sendChatMessage(sessionId, sessionToken, text, wd as 'true' | 'final' | undefined)
-      const agentMsg: Message = { role: 'agent', content: resp.message, section: resp.section }
-      const finalMessages = [...nextMessages, agentMsg]
-      setMessages(finalMessages)
-      setCurrentSection(resp.section)
-      if (resp.closingState) setClosingState(resp.closingState)
+      const response = await sendChatMessageStreaming(sessionId, sessionToken, text, wd as 'true' | 'final' | undefined)
 
-      if (resp.sessionComplete) {
-        setSessionStatus('complete')
-        if (timerRef.current) clearInterval(timerRef.current)
-        // Add completion card
-        const completionMsg: Message = {
-          role: 'content',
-          content: '__completion__',
+      let sessionComplete = false
+      let fullText = ''
+
+      await consumeStream(response, {
+        onToken: (tokenText) => {
+          setStreamingText((prev) => prev + tokenText)
+        },
+        onSection: (n) => {
+          setCurrentSection(n)
+        },
+        onComplete: (completedText) => {
+          fullText = completedText
+          sessionComplete = true
+        },
+        onError: (err) => {
+          // Preserve partial text as an agent message, then show error
+          const partialText = fullText || ''
+          const partialMessages = partialText
+            ? [...nextMessages, { role: 'agent' as const, content: partialText }]
+            : nextMessages
+          setMessages([
+            ...partialMessages,
+            { role: 'error' as const, content: err.message + ' Tap retry to try again.' },
+          ])
+          setIsStreaming(false)
+          setStreamingText('')
+        },
+      })
+
+      if (sessionComplete) {
+        // Stream completed successfully — add agent message
+        const agentMsg: Message = { role: 'agent', content: fullText }
+        const finalMessages = [...nextMessages, agentMsg]
+        setMessages(finalMessages)
+        setStreamingText('')
+        setIsStreaming(false)
+
+        // Check if session is complete (the [SESSION_COMPLETE] tag was detected)
+        // We detect this by checking if the raw stream contained the tag
+        // The consumeStream already stripped it, but onComplete fires after
+        // For now, fall back to the non-streaming response check
+        // The backend will also update session status
+        try {
+          const state = await getSessionState(sessionId, sessionToken)
+          if (state.closingState) setClosingState(state.closingState)
+          if (state.status === 'completed' || state.status === 'complete') {
+            setSessionStatus('complete')
+            if (timerRef.current) clearInterval(timerRef.current)
+            setMessages([...finalMessages, { role: 'content', content: '__completion__' }])
+          }
+        } catch {
+          // Best-effort state refresh
         }
-        setMessages([...finalMessages, completionMsg])
       }
     } catch (err) {
       const status = (err as Error & { status?: number }).status
+      setIsStreaming(false)
+      setStreamingText('')
       handleSendError(status, nextMessages)
-    } finally {
-      setIsThinking(false)
     }
   }
 
@@ -551,9 +607,9 @@ export default function Chat() {
   const isDiscarded = sessionStatus === 'discarded'
   const isLoading = sessionStatus === 'loading'
 
-  const inputDisabled = isThinking || isComplete || isPaused || isDiscarded || isLoading || sessionExpired
+  const inputDisabled = isThinking || isStreaming || isComplete || isPaused || isDiscarded || isLoading || sessionExpired
   const showEndSessionButton =
-    sessionStatus === 'in_progress' && !isThinking && !isPaused && !isComplete && !isDiscarded && !sessionExpired
+    sessionStatus === 'in_progress' && !isThinking && !isStreaming && !isPaused && !isComplete && !isDiscarded && !sessionExpired
 
 
 
@@ -584,6 +640,15 @@ export default function Chat() {
   // ── Main render ─────────────────────────────────────────────────────────────
   return (
     <div style={styles.page}>
+      {/* Hide desktop image panel on mobile */}
+      <style>{`
+        @media (max-width: 768px) {
+          .image-panel-desktop { display: none !important; }
+        }
+        @media (min-width: 769px) {
+          .image-header-mobile { display: none !important; }
+        }
+      `}</style>
       {/* Top bar */}
       <div style={styles.topBar}>
         <span style={styles.wordmark}>pulse</span>
@@ -639,14 +704,23 @@ export default function Chat() {
         </div>
       )}
 
-      {/* Progress line */}
-      <div style={styles.pulseLineWrapper}>
-        <PulseLine
-          current={isComplete ? totalSections : currentSection}
-          total={totalSections}
-          animationDuration={pulseLineAnimation}
-        />
-      </div>
+      {/* Progress line — hidden when totalSections === 1 (image items, single-section docs) */}
+      {totalSections > 1 && (
+        <div style={styles.pulseLineWrapper}>
+          <PulseLine
+            current={isComplete ? totalSections : currentSection}
+            total={totalSections}
+            animationDuration={pulseLineAnimation}
+          />
+        </div>
+      )}
+
+      {/* Expandable image header — mobile image sessions */}
+      {itemType === 'image' && imageUrl && (
+        <div className="image-header-mobile">
+          <ExpandableImageHeader imageUrl={imageUrl} />
+        </div>
+      )}
 
       {/* File attachment bar */}
       {files.length > 0 && sessionToken && (
@@ -657,44 +731,42 @@ export default function Chat() {
         />
       )}
 
-      {/* Chat area */}
-      <div
-        ref={chatAreaRef}
-        className="chat-scroll-area"
-        style={styles.chatArea}
-        role="log"
-        aria-live="polite"
-        aria-label="Chat messages"
-      >
+      {/* Split-pane wrapper for image sessions (desktop) */}
+      <div style={{
+        display: 'flex',
+        flex: 1,
+        overflow: 'hidden',
+      }}>
+        {/* Desktop image panel — hidden on mobile via media query inline */}
+        {itemType === 'image' && imageUrl && (
+          <div className="image-panel-desktop" style={{
+            width: '40%',
+            minWidth: '280px',
+            height: '100%',
+            flexShrink: 0,
+          }}>
+            <ImagePanel imageUrl={imageUrl} />
+          </div>
+        )}
+
+        {/* Chat column */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          {/* Chat area */}
+          <div
+            ref={chatAreaRef}
+            className="chat-scroll-area"
+            style={styles.chatArea}
+            role="log"
+            aria-live="polite"
+            aria-label="Chat messages"
+          >
         {messages.map((msg, i) => {
           if (msg.content === '__completion__') {
             return (
-              <div key={i} style={styles.completionCard}>
-                <h2 style={styles.completionHeading}>Thanks — your feedback has been captured.</h2>
-                <p style={styles.completionBody}>
-                  Your responses have been shared with the team.
-                </p>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <a href={`/s/${sessionId}/summary`} style={styles.completionLink}>
-                    View session summary →
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => { window.close(); if (!window.closed) history.back(); }}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid #3a3a3a',
-                      color: '#888',
-                      fontSize: '0.875rem',
-                      borderRadius: '8px',
-                      padding: '0.25rem 0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
+              <CompletionCard
+                key={i}
+                sessionId={sessionId}
+              />
             )
           }
 
@@ -787,6 +859,7 @@ export default function Chat() {
         })}
 
         {isThinking && <ThinkingIndicator />}
+        {isStreaming && streamingText && <StreamingBubble text={streamingText} />}
       </div>
 
       {/* Input area */}
@@ -830,6 +903,8 @@ export default function Chat() {
           </button>
         </div>
       )}
+        </div>{/* end chat column */}
+      </div>{/* end split-pane wrapper */}
 
       {/* Exit sheet */}
       {showExitSheet && (

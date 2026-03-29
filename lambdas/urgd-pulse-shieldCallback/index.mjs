@@ -15,6 +15,7 @@ const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' 
 
 const TEXT_EXTENSIONS = new Set(['.md', '.txt'])
 const EXTRACT_EXTENSIONS = new Set(['.pdf', '.docx'])
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 
 /**
  * Extract file extension (lowercase, including dot) from S3 key.
@@ -118,7 +119,16 @@ export const handler = async (event) => {
 
       const ext = getExtension(objectKey)
 
-      if (TEXT_EXTENSIONS.has(ext)) {
+      if (IMAGE_EXTENSIONS.has(ext)) {
+        // Image files: skip text extraction, set documentStatus to ready immediately
+        // Set itemType to 'image' on the item record
+        await updateDocumentStatus(tenantId, itemId, 'ready', {
+          itemType: { S: 'image' },
+          recommendedTimeLimitMinutes: { N: '7' },
+          totalSections: { N: '1' },
+        })
+        log('info', 'ShieldCallback: image file — documentStatus set to ready, itemType set to image', { tenantId, itemId, ext })
+      } else if (TEXT_EXTENSIONS.has(ext)) {
         // .md or .txt — read content, compute time recommendation, mark as ready
         let recommendedTimeLimitMinutes = 12 // default floor (10–15 min bracket)
         try {

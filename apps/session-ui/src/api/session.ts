@@ -61,6 +61,8 @@ export interface SessionStateResponse {
   timeLimitMinutes: number
   files: Array<{ fileId: string; filename: string; contentType: string }>
   closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
+  itemType?: 'document' | 'image'
+  imageUrl?: string | null
 }
 
 export interface ChatResponse {
@@ -116,6 +118,33 @@ export async function sendChatMessage(
 
   const json = await res.json()
   return json.data ?? json
+}
+
+/**
+ * Send a chat message and return the raw Response for streaming consumption.
+ * The caller is responsible for reading the body via getReader().
+ */
+export async function sendChatMessageStreaming(
+  sessionId: string,
+  sessionToken: string,
+  message: string,
+  windingDown?: 'true' | 'final'
+): Promise<Response> {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ message, ...(windingDown ? { windingDown } : {}) }),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw makeError(body, 'Chat request failed', res.status)
+  }
+
+  return res
 }
 
 export async function getSessionState(

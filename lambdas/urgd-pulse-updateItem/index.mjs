@@ -3,6 +3,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
@@ -10,6 +11,7 @@ requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 /**
  * Unmarshal a DynamoDB item into a plain JS object (handles S/N/BOOL/M/L/NULL)
@@ -83,7 +85,7 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { itemName, description, closeDate, content } = body
+  const { itemName, description, closeDate, content, feedbackSections, sectionDepthPreferences, itemType: requestedItemType } = body
 
   // Validate optional fields if provided
   if (itemName !== undefined) {
@@ -172,6 +174,38 @@ export const handler = async (event) => {
       log('info', 'UpdateItem: stored content in S3 and DynamoDB', { requestId, tenantId, itemId })
     }
 
+    // Store feedbackSections if provided (5.4)
+    if (Array.isArray(feedbackSections)) {
+      updateParts.push('feedbackSections = :feedbackSections')
+      expressionValues[':feedbackSections'] = { L: feedbackSections.map(s => ({ S: String(s) })) }
+    }
+
+    // Store sectionDepthPreferences if provided (5.4)
+    if (sectionDepthPreferences && typeof sectionDepthPreferences === 'object') {
+      const m = {}
+      for (const [key, val] of Object.entries(sectionDepthPreferences)) {
+        m[key] = { S: String(val) }
+      }
+      updateParts.push('sectionDepthPreferences = :sdp')
+      expressionValues[':sdp'] = { M: m }
+    }
+
+    // Set itemType if provided (5.4)
+    const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+    if (requestedItemType) {
+      const resolvedItemType = IMAGE_MIME_TYPES.has(requestedItemType) ? 'image' : 'document'
+      updateParts.push('itemType = :itemType')
+      expressionValues[':itemType'] = { S: resolvedItemType }
+
+      // For image items: set totalSections to 1 and recommendedTimeLimitMinutes to 7
+      if (resolvedItemType === 'image') {
+        updateParts.push('totalSections = :totalSections')
+        expressionValues[':totalSections'] = { N: '1' }
+        updateParts.push('recommendedTimeLimitMinutes = :rtlm')
+        expressionValues[':rtlm'] = { N: '7' }
+      }
+    }
+
     const updateResult = await dynamo.send(new UpdateItemCommand({
       TableName: process.env.ITEMS_TABLE,
       Key: {
@@ -185,6 +219,23 @@ export const handler = async (event) => {
     }))
 
     const updatedItem = normalizeItem(unmarshal(updateResult.Attributes))
+
+    // Invoke analyzeDocument async if content was updated (5.4)
+    if (content !== undefined && typeof content === 'string' && content.length > 0) {
+      const resolvedType = requestedItemType && IMAGE_MIME_TYPES.has(requestedItemType) ? 'image' : (currentItem.itemType || 'document')
+      if (resolvedType !== 'image' && process.env.ANALYZE_DOCUMENT_FUNCTION_ARN) {
+        try {
+          await lambdaClient.send(new InvokeCommand({
+            FunctionName: process.env.ANALYZE_DOCUMENT_FUNCTION_ARN,
+            InvocationType: 'Event',
+            Payload: JSON.stringify({ itemId, tenantId }),
+          }))
+          log('info', 'UpdateItem: analyzeDocument invoked async', { requestId, tenantId, itemId })
+        } catch (err) {
+          log('warn', 'UpdateItem: failed to invoke analyzeDocument', { requestId, tenantId, itemId, errorName: err.name })
+        }
+      }
+    }
 
     log('info', 'UpdateItem: item updated', { requestId, tenantId, itemId })
 

@@ -3,12 +3,15 @@
 // Returns current session state including transcript history
 
 import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { createHash } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 
 function hashKey(key) {
   return createHash('sha256').update(key).digest('hex').slice(0, 16)
@@ -38,10 +41,18 @@ export const handler = async (event) => {
     const session = sessionResult.Item
     const itemId = session.itemId?.S
     const currentSection = parseInt(session.currentSection?.N || '1', 10)
-    const totalSections = parseInt(session.totalSections?.N || '5', 10)
     const status = session.status?.S || 'not_started'
     const timeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
     const closingState = session.closingState?.S || 'exploring'
+
+    // Dynamic totalSections from frozenSnapshot (5.3)
+    let totalSections
+    const frozenSnapshot = session.frozenSnapshot?.M
+    if (frozenSnapshot?.feedbackSections?.L) {
+      totalSections = frozenSnapshot.feedbackSections.L.length
+    } else {
+      totalSections = parseInt(session.totalSections?.N || '5', 10)
+    }
 
     // 2. Query all transcripts ordered by ULID ascending
     const transcriptResult = await dynamo.send(new QueryCommand({
@@ -65,6 +76,8 @@ export const handler = async (event) => {
 
     // 3. Get item record to build files array
     let files = []
+    let itemType = 'document'
+    let imageUrl = null
     if (itemId && tenantId) {
       try {
         const itemResult = await dynamo.send(new GetItemCommand({
@@ -76,6 +89,7 @@ export const handler = async (event) => {
           const item = itemResult.Item
           const documentKey = item.documentKey?.S
           const documentStatus = item.documentStatus?.S
+          itemType = item.itemType?.S || 'document'
 
           // 4. Build files array
           if (documentKey && documentStatus !== 'none' && documentStatus) {
@@ -86,12 +100,30 @@ export const handler = async (event) => {
               docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               md: 'text/markdown',
               txt: 'text/plain',
+              jpg: 'image/jpeg',
+              jpeg: 'image/jpeg',
+              png: 'image/png',
+              webp: 'image/webp',
+              gif: 'image/gif',
             }
             files = [{
               fileId: hashKey(documentKey),
               filename,
               contentType: contentTypeMap[ext] || 'application/octet-stream',
             }]
+          }
+
+          // Generate presigned URL for image items (5.3)
+          if (itemType === 'image' && documentKey && process.env.DATA_BUCKET) {
+            try {
+              imageUrl = await getSignedUrl(
+                s3,
+                new GetObjectCommand({ Bucket: process.env.DATA_BUCKET, Key: documentKey }),
+                { expiresIn: 3600 }
+              )
+            } catch (imgErr) {
+              log('warn', 'GetSessionState: failed to generate image presigned URL', { requestId, sessionId, tenantId, errorName: imgErr.name })
+            }
           }
         }
       } catch (itemErr) {
@@ -110,6 +142,8 @@ export const handler = async (event) => {
         timeLimitMinutes,
         files,
         closingState,
+        itemType,
+        imageUrl,
       },
     }, {}, origin)
   } catch (err) {

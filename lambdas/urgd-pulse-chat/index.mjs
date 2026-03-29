@@ -1,10 +1,11 @@
 // ur/gd pulse — Chat Lambda
 // POST /api/session/{sessionId}/chat
 // Handles AI-guided feedback conversation via Bedrock
+// S2-S2: Streaming via InvokeModelWithResponseStream + awslambda.streamifyResponse()
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
@@ -47,6 +48,17 @@ async function getS3Text(bucket, key) {
   }
 }
 
+async function getS3Bytes(bucket, key) {
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+    const chunks = []
+    for await (const chunk of res.Body) chunks.push(chunk)
+    return Buffer.concat(chunks)
+  } catch {
+    return null
+  }
+}
+
 async function putMetrics(metrics) {
   try {
     await cloudwatch.send(new PutMetricDataCommand({
@@ -58,15 +70,92 @@ async function putMetrics(metrics) {
   }
 }
 
-export const handler = async (event) => {
+/**
+ * Unmarshal a DynamoDB Map attribute into a plain JS object.
+ */
+function unmarshalMap(m) {
+  if (!m?.M) return null
+  const result = {}
+  for (const [key, val] of Object.entries(m.M)) {
+    if ('S' in val) result[key] = val.S
+    else if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('M' in val) result[key] = unmarshalMap(val)
+    else if ('L' in val) result[key] = val.L.map(v => {
+      if ('S' in v) return v.S
+      if ('N' in v) return Number(v.N)
+      if ('M' in v) return unmarshalMap(v)
+      return null
+    })
+    else if ('NULL' in val) result[key] = null
+  }
+  return result
+}
+
+/**
+ * Unmarshal a DynamoDB List attribute into a plain JS array.
+ */
+function unmarshalList(l) {
+  if (!l?.L) return null
+  return l.L.map(v => {
+    if ('S' in v) return v.S
+    if ('N' in v) return Number(v.N)
+    if ('M' in v) return unmarshalMap(v)
+    return null
+  })
+}
+
+/**
+ * Marshal a sectionCoverage map into DynamoDB Map format.
+ */
+function marshalSectionCoverage(coverage) {
+  const m = {}
+  for (const [sectionId, data] of Object.entries(coverage)) {
+    m[sectionId] = {
+      M: {
+        touched: { BOOL: data.touched },
+        depth: data.depth ? { S: data.depth } : { NULL: true },
+      },
+    }
+  }
+  return { M: m }
+}
+
+/**
+ * Marshal a coverageMap into DynamoDB Map format.
+ */
+function marshalCoverageMap(coverageMap) {
+  const m = {}
+  for (const [sectionId, data] of Object.entries(coverageMap)) {
+    m[sectionId] = {
+      M: {
+        sessionCount: { N: String(data.sessionCount) },
+        avgDepth: data.avgDepth ? { S: data.avgDepth } : { NULL: true },
+        reviewerIds: { L: (data.reviewerIds || []).map(id => ({ S: id })) },
+      },
+    }
+  }
+  return { M: m }
+}
+
+
+/**
+ * Core chat handler logic — shared between streaming and non-streaming paths.
+ */
+async function handleChat(event, responseStream) {
+  const isStreaming = !!responseStream
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
   const sessionId = event?.requestContext?.authorizer?.sessionId
   const tenantId = event?.requestContext?.authorizer?.tenantId
-  // Preview flag passed from sessionAuth authorizer context
   const isPreview = event?.requestContext?.authorizer?.preview === 'true'
 
   if (!sessionId || !tenantId) {
+    if (isStreaming) {
+      responseStream.write(JSON.stringify({ error: true, statusCode: 401, message: 'Unauthorized' }))
+      responseStream.end()
+      return
+    }
     return errorResponse(401, 'Unauthorized', {}, origin)
   }
 
@@ -74,12 +163,22 @@ export const handler = async (event) => {
   try {
     body = JSON.parse(event.body || '{}')
   } catch {
+    if (isStreaming) {
+      responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'Invalid request body' }))
+      responseStream.end()
+      return
+    }
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
   const { message, windingDown } = body
 
   if (!message || typeof message !== 'string') {
+    if (isStreaming) {
+      responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'message is required' }))
+      responseStream.end()
+      return
+    }
     return errorResponse(400, 'message is required', {}, origin)
   }
 
@@ -91,6 +190,11 @@ export const handler = async (event) => {
     }))
 
     if (!sessionResult.Item) {
+      if (isStreaming) {
+        responseStream.write(JSON.stringify({ error: true, statusCode: 404, message: 'Session not found' }))
+        responseStream.end()
+        return
+      }
       return errorResponse(404, 'Session not found', {}, origin)
     }
 
@@ -99,6 +203,11 @@ export const handler = async (event) => {
     // 2. Validate confidentialityAcceptedAt
     if (!session.confidentialityAcceptedAt?.S) {
       log('warn', 'Chat: confidentiality not accepted', { requestId, sessionId, tenantId })
+      if (isStreaming) {
+        responseStream.write(JSON.stringify({ error: true, statusCode: 403, message: 'Confidentiality agreement not accepted' }))
+        responseStream.end()
+        return
+      }
       return errorResponse(403, 'Confidentiality agreement not accepted', {}, origin)
     }
 
@@ -106,20 +215,50 @@ export const handler = async (event) => {
     const status = session.status?.S
     if (status === 'expired' || status === 'completed') {
       log('info', 'Chat: session not active', { requestId, sessionId, tenantId, status })
+      if (isStreaming) {
+        responseStream.write(JSON.stringify({ error: true, statusCode: 410, message: 'Session is no longer active' }))
+        responseStream.end()
+        return
+      }
       return errorResponse(410, 'Session is no longer active', {}, origin)
     }
 
+    // 4.2: Concurrent request guard — check streamingLock
+    const streamingLock = session.streamingLock?.S
+    if (streamingLock) {
+      const lockAge = Date.now() - new Date(streamingLock).getTime()
+      if (lockAge < 60000) {
+        log('warn', 'Chat: concurrent request rejected (streamingLock active)', { requestId, sessionId, tenantId, lockAge })
+        if (isStreaming) {
+          responseStream.write(JSON.stringify({ error: true, statusCode: 409, message: 'Please wait for the current response' }))
+          responseStream.end()
+          return
+        }
+        return errorResponse(409, 'Please wait for the current response', {}, origin)
+      }
+    }
+
     const itemId = session.itemId?.S
+
+    // Read frozenSnapshot from session if available (4.4)
+    const frozenSnapshot = unmarshalMap(session.frozenSnapshot)
+    let sectionCoverage = unmarshalMap(session.sectionCoverage) || {}
+
+    // Determine totalSections from frozenSnapshot or fallback
+    let totalSections
+    if (frozenSnapshot?.feedbackSections && Array.isArray(frozenSnapshot.feedbackSections)) {
+      totalSections = frozenSnapshot.feedbackSections.length
+    } else {
+      totalSections = parseInt(session.totalSections?.N || '5', 10)
+    }
+
     let currentSection = parseInt(session.currentSection?.N || '1', 10)
-    const totalSections = parseInt(session.totalSections?.N || '5', 10)
     const timeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
     const startedAt = session.startedAt?.S
-    // closingState: exploring → narrowing → closing → closed
     let closingState = session.closingState?.S || 'exploring'
-    // graceMessagesRemaining: how many reviewer messages left in the grace window
     let graceMessagesRemaining = parseInt(session.graceMessagesRemaining?.N || '2', 10)
 
-    // 4. Prepare reviewer message — written atomically with agent response after Bedrock succeeds
+    // 4. Prepare reviewer message
     const reviewerMessageId = ulid()
     const isSpecial = SPECIAL_MESSAGES.includes(message)
     const transcriptContent = isSpecial ? `[${message}]` : message
@@ -137,201 +276,132 @@ export const handler = async (event) => {
       content: item.content?.S || '',
     }))
 
-    // 6. Load item content from S3
+    // 6. Load item metadata and content from DynamoDB + S3
     let itemContent = ''
-    if (itemId && tenantId) {
-      const extractedKey = `pulse/${tenantId}/items/${itemId}/extracted.md`
-      const documentKey = `pulse/${tenantId}/items/${itemId}/document.md`
-      itemContent = await getS3Text(process.env.DATA_BUCKET, extractedKey)
-        || await getS3Text(process.env.DATA_BUCKET, documentKey)
-        || ''
-    }
-
-    // 6b. Load item metadata (name, description) from DynamoDB
     let itemName = 'this item'
     let itemDescription = ''
+    let itemType = 'document'
+    let coverageMap = null
+    let documentKey = null
+
     if (itemId && tenantId) {
       try {
         const itemResult = await dynamo.send(new GetItemCommand({
           TableName: process.env.ITEMS_TABLE,
           Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-          ProjectionExpression: 'itemName, description',
         }))
         if (itemResult.Item) {
           itemName = itemResult.Item.itemName?.S || 'this item'
           itemDescription = itemResult.Item.description?.S || ''
+          itemType = itemResult.Item.itemType?.S || 'document'
+          documentKey = itemResult.Item.documentKey?.S || null
+          // 4.4: Read coverageMap from item record
+          if (itemResult.Item.coverageMap?.M) {
+            coverageMap = unmarshalMap(itemResult.Item.coverageMap)
+          }
         }
       } catch {
-        // Non-fatal — fall back to generic name
+        // Non-fatal
+      }
+
+      // Load document content for non-image items
+      if (itemType !== 'image') {
+        const extractedKey = `pulse/${tenantId}/items/${itemId}/extracted.md`
+        const docKey = `pulse/${tenantId}/items/${itemId}/document.md`
+        itemContent = await getS3Text(process.env.DATA_BUCKET, extractedKey)
+          || await getS3Text(process.env.DATA_BUCKET, docKey)
+          || ''
       }
     }
 
-    // 7. Build system prompt
-    let systemPrompt = `You are Pulse — an AI feedback agent built by ur/gd Studios. You guide reviewers through structured, one-on-one feedback sessions.
-
-Your personality:
-- Warm, calm, and conversational — like a thoughtful colleague, not a chatbot
-- Respectful of the reviewer's time and attention
-- Patient and unhurried — one question at a time, never overwhelming
-- Quietly confident — you know the material, but you're here to listen, not lecture
-- Brief and natural — keep messages short and human. No walls of text.
-- Less is more. Silence and brevity are tools, not failures. You don't need to fill every turn with insight.
-
-Assume the reviewer has not read the document. Your job is to bring the content to them — summarize sections in your own words, quote specific phrases when they matter, and give the reviewer enough context to react without needing to read anything first. The original document is available for reference if they want it, but the session should work completely without it.
-
-Communication style:
-- Mirror the reviewer's energy. If they send a one-liner, respond with a one-liner. If they write a paragraph, you can write more. Match their pace.
-- Vary your response length and shape. Sometimes a single sentence is the right reply. Sometimes you need a longer bubble to summarize something properly. If your last three responses were the same shape, your next one must be different.
-- Not every response needs context + analysis + question. If the reviewer just confirmed something, a short acknowledgment and a direct question is enough. Don't pad it with analysis the reviewer didn't ask for.
-- Each paragraph you write appears as its own chat bubble. Group related thoughts into one bubble — two to four sentences that belong together. A question always gets its own bubble.
-- Most responses should be one to three bubbles. Four is the upper end, reserved for when you're introducing a new section with real substance. If you're consistently sending four bubbles, you're over-talking.
-- Use bullet points or numbered lists when listing specific items — features, deliverables, phases, names, exclusions. A list inside a single bubble is cleaner than stringing items together in prose. Keep lists to seven items or fewer.
-- Do not use markdown formatting like bold (**text**) or headers (##). Plain text and lists only.
-- Acknowledge what the reviewer said before moving on — but keep acknowledgments short. One sentence max. Don't restate what they said back to them.
-
-Examples of good response shapes:
-
-Short (after reviewer confirms something):
-"That tracks. Does the payment schedule concern you at all?"
-
-Medium (introducing a topic):
-"The SOW breaks the project into four phases: Discovery, Design, Development, and QA.
-
-Does that scope feel right, or is anything missing?"
-
-With a list (when content has enumerable items):
-"Here's what's included in the development phase:
-- Full product catalog with filtering and search
-- Customer account portal with order history
-- Wholesale/B2B portal with tier-based pricing
-- Responsive design across all viewports
-
-Anything jump out as too vague or missing?"
-
-One-liner (when the reviewer's answer was complete):
-"Noted. Moving on — the document mentions a five-day acceptance window for each milestone."
-
-Anti-patterns — do not do these:
-- Don't restate what the reviewer just said. "That's a great point about the timeline" is filler. Just move forward.
-- Don't analyze something the reviewer didn't ask about. If they said "looks good," don't write two paragraphs about why it's good.
-- Don't always follow the same structure. If your last three responses were acknowledge → context → question, break the pattern.
-- Don't start every response with an acknowledgment. Sometimes just start with the next topic.
-- Don't use the same transition phrase twice. Ever.
-
-Asking good questions:
-- Match the question to the content type. Never use the word "feel" when asking about legal, financial, or structural content. Reserve "feel" for questions about values, culture, or personal vision. For everything else, use "match," "reflect," "look right," or "work for you."
-- For factual or identity content (names, dates, structure): ask if it's accurate or if anything looks off. "Does that match how you'd describe it?" or "Anything there that doesn't look right?"
-- For process or operational content: ask if it reflects how things actually work. "Does that match reality day to day?"
-- For values, vision, or opinion content: then open-ended questions work. "How does that sit with you?" is fine here.
-- Keep questions short and specific. One sentence. Give the reviewer something concrete to react to.
-
-The item being reviewed:
-- Name: "${itemName}"
-
-${itemDescription
-  ? `Feedback focus (from the person who created this session):
-"${itemDescription}"
-
-This is your primary steering signal. It tells you what the tenant cares about most. Shape your questions around it. When choosing which parts of a section to dig into vs. skim, use this as your filter. Sections that connect to this focus deserve your best, most specific questions. Sections that don't can be acknowledged more briefly.`
-  : `No specific feedback focus was provided. Default to a balanced walkthrough: for each section, identify the most consequential claim, decision, or assumption and ask the reviewer to react to it. Prioritize sections that contain tradeoffs, risks, or open questions over sections that are purely informational.`}
-
-Document content:
-${itemContent || '(No document content available)'}
-
-Session structure:
-- This is a ${totalSections}-section review. Current section: ${currentSection} of ${totalSections}.
-- Each section should have at least two substantive exchanges before transitioning. If the reviewer gives a short confirmation, ask one follow-up before moving on — even if it's just "Anything you'd change about that section if you could?" A single yes/no doesn't count as exploring a topic.
-- Each section should feel like a natural conversation, not an interrogation.
-- When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text. The reviewer never sees this tag.
-- Before transitioning to a new section, consider whether the tenant's feedback focus applies to the upcoming content. If it does, lead with a question that connects the section to that focus. If it doesn't, acknowledge the section more briefly and move on. Not every section deserves equal depth — the feedback focus tells you where to invest.
-- When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
-
-Important:
-- Never show [SECTION:N] or [SESSION_COMPLETE] tags inline with your conversational text. Always place them on their own line at the very end.
-- Never refer to sections by number with the reviewer. Transition naturally — sometimes just start talking about the next topic without announcing it.
-- Ask one focused question at a time. Wait for their answer. Your question must be its own paragraph, separated by a blank line from everything above it.
-- When introducing a section, paraphrase the key idea briefly. Don't recite the document — distill it. Pull direct quotes only when the exact wording matters.
-- Never ask the reviewer to react to something you haven't shown them. Summarize or quote first, then ask.
-- If the reviewer goes off-topic, gently guide them back without being dismissive.
-- If the reviewer gives a short answer, that's okay — acknowledge it and move on. Don't push.
-- If the reviewer hints at something deeper ("we've changed a lot," "that part concerns me"), follow up. Don't move on until you've given them space to share. This is the most valuable part of the session.
-- Only move to the next section when the current topic feels genuinely explored — not after a single question-and-answer exchange.
-- If the reviewer confirms everything is fine for three or more consecutive turns, gently probe for something they might not have considered. Try: "One thing I notice the document doesn't address is..." — but only when it's genuine, not manufactured.
-- If the reviewer disagrees with something in the document, welcome it. Don't defend the document — your job is to capture their honest reaction.
-- If the reviewer asks about something the document doesn't cover, say so honestly. Never make up details.
-- If the reviewer responds with depth, match their level. If they respond with short answers, give them more context before your next question. Calibrate.
-- If the reviewer seems uncertain or confused, offer to show them more. Only when the moment calls for it — not after every summary.`
-
-    if (windingDown === 'true') {
-      systemPrompt += '\n\nThe session is approaching its suggested time. This is a soft pacing signal — not a hard stop. Let the reviewer finish their current thought completely before you begin steering toward a natural close. Never cut off a response mid-thought. If they\'re in the middle of something meaningful, follow it through. Then begin wrapping the current topic naturally. Don\'t mention the time limit directly.'
-    } else if (windingDown === 'final') {
-      systemPrompt += '\n\nThe session is near the end of its suggested time. This is still a soft signal — if the reviewer is mid-thought or has just said something worth following up on, honor that first. Then deliver a brief, warm closing. Thank the reviewer for their time. Summarize what you covered together in a sentence or two. Let them know they can come back to continue. Never leave a reviewer feeling cut off.'
+    // 4.3: Load image for image items
+    let imageBase64 = null
+    let imageMediaType = 'image/jpeg'
+    if (itemType === 'image' && documentKey) {
+      const imageBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
+      if (imageBytes) {
+        imageBase64 = imageBytes.toString('base64')
+        const ext = (documentKey || '').split('.').pop()?.toLowerCase() || 'jpeg'
+        const mediaTypeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
+        imageMediaType = mediaTypeMap[ext] || 'image/jpeg'
+      }
     }
 
-    // Reflection pause guidance — added to all sessions
-    systemPrompt += '\n\nReflection pauses: At key moments — after presenting a complex or consequential section, or just before your closing question — you may invite the reviewer to take a moment before answering. Use phrases like "Take a moment before answering." or "What\'s your gut reaction to that?" These signal that thoughtful answers are valued. Use sparingly — not every exchange, just when the content genuinely warrants it.'
+    // 7. Build system prompt (4.5: overhauled)
+    const systemPrompt = buildSystemPrompt({
+      itemName, itemDescription, itemContent, itemType,
+      totalSections, currentSection, closingState,
+      windingDown, message, isSpecial,
+      frozenSnapshot, coverageMap, imageBase64,
+    })
 
-    // Closing state system prompt additions
-    if (closingState === 'narrowing') {
-      systemPrompt += '\n\nThe session is entering its final phase. Begin naturally focusing the conversation — go deeper on the current topic rather than opening new ones. Do not announce this shift. Let the conversation feel like it\'s finding its natural depth, not winding down.'
-    } else if (closingState === 'closing') {
-      systemPrompt += '\n\nThe session is in its closing phase. Begin wrapping up naturally. When the current topic feels complete, send a warm closing — thank the reviewer for their time, briefly note what you covered together, and let them know their feedback has been captured. Include [SESSION_COMPLETE] at the very end of your final message. Don\'t rush — finish the current thought first. But don\'t open new topics or ask new questions beyond what\'s already in play.'
-    } else if (closingState === 'closed') {
-      systemPrompt += '\n\nThis session is complete. Do not respond to further messages.'
-    }
-
-    if (message === '__session_start__') {
-      systemPrompt += `\n\nThis is the very start of the session. Send your opening as a series of short, distinct thoughts — not one big block. Structure it like this:
-
-1. First message: A warm, brief greeting. Introduce yourself as Pulse. One to two sentences max. Example tone: "Hey! I'm Pulse, an AI feedback agent powered by ur/gd Studios."
-
-2. Then explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think — just a conversation, nothing formal."
-
-3. Then let them know they're in control: "You can take your time, and if you ever want to stop early, just tap 'End session' at the top."
-
-4. Then invite them to begin: "Ready to dive in? Or any questions before we start?"
-
-Keep each thought to one or two sentences. Be warm but not over-the-top. This should feel like the start of a good conversation, not a briefing. Do NOT mention the number of sections.`
-    } else if (message === '__session_resume__') {
-      systemPrompt += '\n\nThe reviewer has returned to continue their session. Welcome them back warmly and briefly. Reference where you left off. Keep it to two or three short sentences — don\'t re-explain the whole process.'
-    } else if (message === '__session_end__') {
-      systemPrompt += '\n\nThe reviewer has chosen to end the session early. Thank them genuinely for the time they gave. Briefly mention what you covered together (one sentence). Keep it warm and short — no more than three sentences total.'
-    }
-
-    // Build messages for Bedrock — reviewer message written atomically after Bedrock succeeds
+    // Build messages for Bedrock
     const bedrockMessages = [...history]
     if (message === '__session_end__') {
       bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
     } else if (!isSpecial) {
-      // Regular message — add to Bedrock context (will be written atomically on success)
       bedrockMessages.push({ role: 'user', content: message })
     } else if (message === '__session_start__' || message === '__session_resume__') {
-      // Seed Bedrock with the trigger so it has a user turn to respond to
       bedrockMessages.push({ role: 'user', content: transcriptContent })
     }
 
-    // Coalesce consecutive same-role messages — Bedrock requires strictly alternating
-    // user/assistant roles. Race conditions (double-send, network retry) can produce
-    // consecutive user messages in the transcript. Merge them so Bedrock never rejects.
+    // Coalesce consecutive same-role messages
     const coalescedMessages = []
     for (const msg of bedrockMessages) {
       const prev = coalescedMessages[coalescedMessages.length - 1]
       if (prev && prev.role === msg.role) {
-        prev.content += '\n\n' + msg.content
+        // Handle both string and array content
+        if (typeof prev.content === 'string' && typeof msg.content === 'string') {
+          prev.content += '\n\n' + msg.content
+        }
       } else {
         coalescedMessages.push({ ...msg })
       }
     }
 
-    // Bedrock requires the first message to be role: 'user'. If history starts with
-    // an orphaned assistant message (shouldn't happen, but defensive), drop it.
+    // Drop orphaned leading assistant messages
     while (coalescedMessages.length > 0 && coalescedMessages[0].role !== 'user') {
       coalescedMessages.shift()
     }
 
     if (coalescedMessages.length === 0) {
       log('error', 'Chat: no valid messages after coalescing', { requestId, sessionId, tenantId })
+      if (isStreaming) {
+        responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'No valid messages to process' }))
+        responseStream.end()
+        return
+      }
       return errorResponse(400, 'No valid messages to process', {}, origin)
+    }
+
+    // 4.3: For image sessions on first message, inject image content block
+    if (itemType === 'image' && imageBase64) {
+      const lastUserIdx = coalescedMessages.length - 1
+      const lastMsg = coalescedMessages[lastUserIdx]
+      if (lastMsg.role === 'user') {
+        const textContent = typeof lastMsg.content === 'string' ? lastMsg.content : ''
+        coalescedMessages[lastUserIdx] = {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } },
+            { type: 'text', text: textContent },
+          ],
+        }
+      }
+    }
+
+    // 4.2: Set streamingLock before Bedrock call
+    if (!isPreview) {
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+          UpdateExpression: 'SET streamingLock = :lock',
+          ExpressionAttributeValues: { ':lock': { S: new Date().toISOString() } },
+        }))
+      } catch (err) {
+        log('warn', 'Chat: failed to set streamingLock', { requestId, sessionId, errorName: err.name })
+      }
     }
 
     // 8. Invoke Bedrock
@@ -343,20 +413,69 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       messages: coalescedMessages,
     }
 
-    const bedrockResponse = await bedrock.send(new InvokeModelCommand({
-      modelId: process.env.BEDROCK_MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify(bedrockPayload),
-    }))
+    let agentText = ''
+    let tokensIn = 0
+    let tokensOut = 0
+
+    if (isStreaming) {
+      // 4.1: Streaming path
+      try {
+        const streamResponse = await bedrock.send(new InvokeModelWithResponseStreamCommand({
+          modelId: process.env.BEDROCK_MODEL_ID,
+          contentType: 'application/json',
+          accept: 'application/json',
+          body: JSON.stringify(bedrockPayload),
+        }))
+
+        for await (const event of streamResponse.body) {
+          if (event.chunk) {
+            const chunkData = JSON.parse(new TextDecoder().decode(event.chunk.bytes))
+            if (chunkData.type === 'content_block_delta' && chunkData.delta?.text) {
+              const text = chunkData.delta.text
+              agentText += text
+              responseStream.write(text)
+            } else if (chunkData.type === 'message_delta' && chunkData.usage) {
+              tokensOut = chunkData.usage.output_tokens || 0
+            } else if (chunkData.type === 'message_start' && chunkData.message?.usage) {
+              tokensIn = chunkData.message.usage.input_tokens || 0
+            }
+          }
+        }
+
+        responseStream.end()
+      } catch (streamErr) {
+        log('error', 'Chat: streaming error', { requestId, sessionId, tenantId, errorName: streamErr.name })
+        try { responseStream.end() } catch { /* ignore */ }
+        // Clear streamingLock on error
+        if (!isPreview) {
+          try {
+            await dynamo.send(new UpdateItemCommand({
+              TableName: process.env.SESSIONS_TABLE,
+              Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+              UpdateExpression: 'REMOVE streamingLock',
+            }))
+          } catch { /* ignore */ }
+        }
+        throw streamErr
+      }
+    } else {
+      // Non-streaming fallback (API Gateway proxy)
+      const bedrockResponse = await bedrock.send(new InvokeModelCommand({
+        modelId: process.env.BEDROCK_MODEL_ID,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify(bedrockPayload),
+      }))
+
+      const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
+      agentText = responseBody.content?.[0]?.text || ''
+      tokensIn = responseBody.usage?.input_tokens || 0
+      tokensOut = responseBody.usage?.output_tokens || 0
+    }
 
     const bedrockLatency = Date.now() - bedrockStart
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const agentText = responseBody.content?.[0]?.text || ''
-    const tokensIn = responseBody.usage?.input_tokens || 0
-    const tokensOut = responseBody.usage?.output_tokens || 0
 
-    // Annotate X-Ray trace with Bedrock metadata
+    // Annotate X-Ray trace
     await addXRayAnnotations({
       bedrockModelId: process.env.BEDROCK_MODEL_ID,
       bedrockLatencyMs: bedrockLatency,
@@ -364,8 +483,7 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       bedrockTokensOut: tokensOut,
     })
 
-    // 9. Atomically write reviewer + agent messages — nothing written if Bedrock failed
-    // In preview mode: skip all DynamoDB writes — transcript and session state are not persisted
+    // 9. Atomically write reviewer + agent messages
     const agentMessageId = ulid()
     const now = new Date().toISOString()
     if (!isPreview) {
@@ -398,6 +516,8 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
         ],
       }))
     }
+
+    // 10. Section tracking
     const sectionMatch = agentText.match(/\[SECTION:(\d+)\]/)
     if (sectionMatch) {
       const newSection = parseInt(sectionMatch[1], 10)
@@ -406,33 +526,39 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       }
     }
 
+    // 4.4: Update sectionCoverage when [SECTION:N] tags detected
+    if (sectionMatch && frozenSnapshot?.feedbackSections) {
+      const sectionNum = parseInt(sectionMatch[1], 10)
+      const sectionIdx = sectionNum - 1
+      if (sectionIdx >= 0 && sectionIdx < frozenSnapshot.feedbackSections.length) {
+        const sectionId = frozenSnapshot.feedbackSections[sectionIdx]
+        if (sectionId && sectionCoverage[sectionId]) {
+          sectionCoverage[sectionId] = {
+            touched: true,
+            depth: frozenSnapshot.sectionDepthPreferences?.[sectionId] || 'explore',
+          }
+        }
+      }
+    }
+
     // 10b. Compute closing state transitions
-    // Time-based: narrowing at ~70% elapsed, closing when model sends closing question
-    // Turn-based grace window: closing → closed after 2 reviewer messages + 1 agent reply
     let newClosingState = closingState
     let newGraceMessagesRemaining = graceMessagesRemaining
 
     if (closingState === 'exploring' && !isSpecial && startedAt && timeLimitMinutes > 0) {
       const elapsedMs = Date.now() - new Date(startedAt).getTime()
       const remainingMs = (timeLimitMinutes * 60 * 1000) - elapsedMs
-      // Absolute threshold: narrowing when 4 minutes remain — scales correctly at all session lengths
       if (remainingMs <= 4 * 60 * 1000) {
         newClosingState = 'narrowing'
       }
     }
 
     if ((closingState === 'narrowing' || closingState === 'exploring') && windingDown === 'final') {
-      // Model is sending its closing question — transition to closing
-      // Grace window is a backstop, not a pacing tool. The model should emit
-      // [SESSION_COMPLETE] naturally within a few exchanges. The counter only
-      // fires if the model fails to close on its own — like a circuit breaker.
       newClosingState = 'closing'
       newGraceMessagesRemaining = 10
     }
 
     if (closingState === 'closing' && !isSpecial) {
-      // Count down grace window: each reviewer message decrements the counter
-      // After the agent's final reply (graceMessagesRemaining === 0), transition to closed
       if (graceMessagesRemaining <= 0) {
         newClosingState = 'closed'
       } else {
@@ -440,28 +566,37 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       }
     }
 
-    // SESSION_COMPLETE tag always closes regardless of state
     if (agentText.includes('[SESSION_COMPLETE]')) {
       newClosingState = 'closed'
     }
 
-    // 11. If first message: update status to in_progress, set startedAt
+    // 11. Session state updates
     const isFirstMessage = message === '__session_start__'
-    // Session is complete if: reviewer ended early, model emitted [SESSION_COMPLETE],
-    // or the grace window expired (closingState transitioned to 'closed').
-    // Without this, the grace window expiry leaves the session in a dead state —
-    // input disabled but no completion card shown.
     const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]') || newClosingState === 'closed'
 
-    // In preview mode: skip all session state updates and downstream invocations
     if (!isPreview) {
-      const updateExprParts = ['#updatedAt = :updatedAt', 'currentSection = :cs', 'closingState = :closingState', 'graceMessagesRemaining = :grace']
+      const updateExprParts = [
+        '#updatedAt = :updatedAt',
+        'currentSection = :cs',
+        'closingState = :closingState',
+        'graceMessagesRemaining = :grace',
+      ]
       const updateNames = { '#updatedAt': 'updatedAt' }
       const updateValues = {
         ':updatedAt': { S: new Date().toISOString() },
         ':cs': { N: String(currentSection) },
         ':closingState': { S: newClosingState },
         ':grace': { N: String(newGraceMessagesRemaining) },
+      }
+
+      // Clear streamingLock after stream completes (4.2)
+      updateExprParts.push('streamingLock = :noLock')
+      updateValues[':noLock'] = { NULL: true }
+
+      // Update sectionCoverage if we have a frozenSnapshot (4.4)
+      if (frozenSnapshot?.feedbackSections) {
+        updateExprParts.push('sectionCoverage = :sc')
+        updateValues[':sc'] = marshalSectionCoverage(sectionCoverage)
       }
 
       if (isFirstMessage) {
@@ -471,7 +606,6 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
         updateValues[':startedAt'] = { S: new Date().toISOString() }
       }
 
-      // 13. If sessionComplete: update status to completed, set completedAt
       if (sessionComplete) {
         updateExprParts.push('#status = :status', 'completedAt = :completedAt')
         updateNames['#status'] = 'status'
@@ -487,7 +621,16 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
         ExpressionAttributeValues: updateValues,
       }))
 
-      // 13. Invoke generateSessionSummary and generateReport async if complete
+      // 4.4: On session complete, update item coverageMap with aggregate coverage
+      if (sessionComplete && frozenSnapshot?.feedbackSections && itemId) {
+        try {
+          await updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionId, session.reviewerEmail?.S || session.tenantId?.S || 'anonymous')
+        } catch (err) {
+          log('warn', 'Chat: failed to update item coverageMap', { requestId, sessionId, tenantId, errorName: err.name })
+        }
+      }
+
+      // Invoke downstream Lambdas on session complete
       if (sessionComplete) {
         const generateSummaryFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
         if (generateSummaryFnName) {
@@ -532,17 +675,25 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
       sessionComplete,
     })
 
-    return createResponse(200, {
-      data: {
-        message: agentText,
-        section: currentSection,
-        sessionComplete,
-        closingState: newClosingState,
-      },
-    }, {}, origin)
+    // For non-streaming path, return JSON response
+    if (!isStreaming) {
+      return createResponse(200, {
+        data: {
+          message: agentText,
+          section: currentSection,
+          sessionComplete,
+          closingState: newClosingState,
+        },
+      }, {}, origin)
+    }
   } catch (err) {
     log('error', 'Chat: unexpected error', { requestId, sessionId, tenantId, errorName: err.name, errorMessage: err.message, stack: err.stack })
     await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
+
+    if (isStreaming) {
+      try { responseStream.end() } catch { /* ignore */ }
+      return
+    }
 
     if (err.name === 'AccessDeniedException') {
       return errorResponse(503, 'AI service temporarily unavailable', {}, origin)
@@ -553,3 +704,264 @@ Keep each thought to one or two sentences. Be warm but not over-the-top. This sh
     return errorResponse(500, 'Failed to process chat message', {}, origin)
   }
 }
+
+
+/**
+ * Update item coverageMap with aggregate coverage from this session (4.4).
+ */
+async function updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionId, reviewerId) {
+  // Read current item coverageMap
+  const itemResult = await dynamo.send(new GetItemCommand({
+    TableName: process.env.ITEMS_TABLE,
+    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+    ProjectionExpression: 'coverageMap',
+  }))
+
+  const existingCoverage = itemResult.Item?.coverageMap?.M ? unmarshalMap(itemResult.Item.coverageMap) : {}
+
+  // Merge this session's coverage into the aggregate
+  for (const [sectionId, data] of Object.entries(sectionCoverage)) {
+    if (!data.touched) continue
+
+    if (!existingCoverage[sectionId]) {
+      existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
+    }
+
+    const entry = existingCoverage[sectionId]
+    entry.sessionCount = (entry.sessionCount || 0) + 1
+    entry.avgDepth = data.depth || entry.avgDepth
+    if (!entry.reviewerIds) entry.reviewerIds = []
+    if (reviewerId && !entry.reviewerIds.includes(reviewerId)) {
+      entry.reviewerIds.push(reviewerId)
+    }
+  }
+
+  // Ensure untouched sections have entries too
+  for (const [sectionId, data] of Object.entries(sectionCoverage)) {
+    if (!existingCoverage[sectionId]) {
+      existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
+    }
+  }
+
+  await dynamo.send(new UpdateItemCommand({
+    TableName: process.env.ITEMS_TABLE,
+    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+    UpdateExpression: 'SET coverageMap = :cm, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':cm': marshalCoverageMap(existingCoverage),
+      ':now': { S: new Date().toISOString() },
+    },
+  }))
+}
+
+/**
+ * Build the system prompt (4.5: overhauled).
+ * Behavioral guardrails at top, then conversational instructions.
+ */
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64 }) {
+  // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
+  let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
+- Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
+- Never fabricate details about the document or image. If you don't know something, say so.
+- Never show [SECTION:N] or [SESSION_COMPLETE] tags inline with your conversational text. Always place them on their own line at the very end.
+- Never refer to sections by number with the reviewer. Transition naturally.
+- Ask one focused question at a time. Wait for their answer.
+- Do not use markdown formatting like bold (**text**) or headers (##). Plain text and lists only.
+- Each paragraph you write appears as its own chat bubble. Group related thoughts into one bubble.
+- A question always gets its own bubble, separated by a blank line.
+- Most responses should be one to three bubbles. Four is the upper end.
+
+`
+
+  // ── Agent identity (4.5/8.1: informed expert, not coordinator) ──
+  prompt += `You are Pulse — an AI feedback agent built by ur/gd Studios. You are an informed expert who has carefully read and understood the material being reviewed. You guide reviewers through structured, one-on-one feedback sessions.
+
+Your approach:
+- You have read the material thoroughly. You know its structure, key claims, and potential weak points.
+- Before asking a question, share a brief observation about what you noticed in the material. This shows the reviewer you've done the work and gives them something concrete to react to.
+- When a reviewer gives a short answer (fewer than 15 words), acknowledge briefly and ask a follow-up that invites elaboration. Don't move to a new topic until you've given them a chance to expand.
+- When transitioning between sections, connect themes you've noticed across sections when natural connections arise. "This connects to what you said earlier about..." builds continuity.
+- Warm, calm, and conversational — like a thoughtful colleague who has done their homework.
+- Respectful of the reviewer's time and attention.
+- Brief and natural — keep messages short and human. No walls of text.
+- Less is more. Silence and brevity are tools, not failures.
+
+`
+
+  // ── Communication style ──
+  prompt += `Communication style:
+- Mirror the reviewer's energy. Match their pace.
+- Vary your response length and shape. If your last three responses were the same shape, your next one must be different.
+- Not every response needs context + analysis + question. Sometimes a short acknowledgment and a direct question is enough.
+- Use bullet points or numbered lists when listing specific items. Keep lists to seven items or fewer.
+- Acknowledge what the reviewer said before moving on — but keep acknowledgments short. One sentence max.
+
+Asking good questions:
+- Match the question to the content type. Never use "feel" for legal, financial, or structural content. Use "match," "reflect," "look right," or "work for you."
+- Keep questions short and specific. One sentence. Give the reviewer something concrete to react to.
+
+`
+
+  // ── Item context ──
+  prompt += `The item being reviewed:
+- Name: "${itemName}"
+- Type: ${itemType}
+
+`
+
+  // ── Anchor pattern (4.5/8.10): reference tenant's feedback focus ──
+  if (itemDescription) {
+    prompt += `Feedback focus (from the person who created this session):
+"${itemDescription}"
+
+This is your primary steering signal. Shape your questions around it. Periodically reference this focus to keep the conversation on track — especially when transitioning between sections or when the conversation drifts. Sections that connect to this focus deserve your best, most specific questions.
+
+`
+  } else {
+    prompt += `No specific feedback focus was provided. Default to a balanced walkthrough: for each section, identify the most consequential claim, decision, or assumption and ask the reviewer to react to it.
+
+`
+  }
+
+  // ── Document/image content ──
+  if (itemType === 'image') {
+    prompt += `This is an image feedback session. The image has been provided to you directly. Describe what you see in the image in your own words before asking your first question.
+
+`
+  } else {
+    prompt += `Document content:
+${itemContent || '(No document content available)'}
+
+`
+  }
+
+  // ── Section structure and depth-aware pacing (4.5/8.7) ──
+  if (frozenSnapshot?.feedbackSections && frozenSnapshot.sectionDepthPreferences) {
+    const sections = frozenSnapshot.feedbackSections
+    const depths = frozenSnapshot.sectionDepthPreferences
+    const sectionMap = frozenSnapshot.sectionMap
+
+    prompt += `Session structure:
+- This session covers ${totalSections} section${totalSections !== 1 ? 's' : ''}. Current section: ${currentSection} of ${totalSections}.
+- Section pacing by depth preference:
+`
+    for (let i = 0; i < sections.length; i++) {
+      const sId = sections[i]
+      const depth = depths[sId] || 'explore'
+      const sectionInfo = sectionMap?.sections?.find(s => s.id === sId)
+      const title = sectionInfo?.title || `Section ${i + 1}`
+      const pacingNote = depth === 'deep' ? 'thorough — multiple exchanges, dig into details'
+        : depth === 'explore' ? 'cover well — 1-2 substantive exchanges'
+        : 'brief acknowledgment — mention key point, move on quickly'
+      prompt += `  ${i + 1}. "${title}" (${depth}): ${pacingNote}\n`
+    }
+    prompt += '\n'
+  } else {
+    prompt += `Session structure:
+- This is a ${totalSections}-section review. Current section: ${currentSection} of ${totalSections}.
+- Each section should have at least two substantive exchanges before transitioning.
+
+`
+  }
+
+  // ── Coverage routing (4.4): inject gap info ──
+  if (coverageMap) {
+    const uncoveredSections = []
+    if (frozenSnapshot?.feedbackSections) {
+      for (const sId of frozenSnapshot.feedbackSections) {
+        const coverage = coverageMap[sId]
+        if (!coverage || coverage.sessionCount === 0) {
+          const sectionInfo = frozenSnapshot.sectionMap?.sections?.find(s => s.id === sId)
+          uncoveredSections.push(sectionInfo?.title || sId)
+        }
+      }
+    }
+    if (uncoveredSections.length > 0) {
+      prompt += `Coverage gaps from previous reviewers — the following sections have NOT been covered yet. Prioritize these sections and spend more time on them:
+${uncoveredSections.map(s => `- ${s}`).join('\n')}
+
+`
+    }
+  }
+
+  // ── Section transition rules ──
+  prompt += `Section transitions:
+- When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text.
+- Before transitioning, consider whether the feedback focus applies to the upcoming content.
+- When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
+- Never ask the reviewer to react to something you haven't shown them. Summarize or quote first, then ask.
+- If the reviewer goes off-topic, gently guide them back.
+- If the reviewer hints at something deeper, follow up before moving on.
+- If the reviewer disagrees with something, welcome it. Don't defend the document.
+- If the reviewer asks about something the document doesn't cover, say so honestly.
+
+`
+
+  // ── Closing phase (4.5/8.5) ──
+  prompt += `Closing phase:
+- When the session nears completion, synthesize the key themes from the conversation.
+- Deliver a personalized closing that references the most interesting or important thing the reviewer shared.
+- Your closing should feel like a natural conclusion to a good conversation, not a form letter.
+
+`
+
+  // ── Winding down signals ──
+  if (windingDown === 'true') {
+    prompt += 'The session is approaching its suggested time. Let the reviewer finish their current thought before steering toward a natural close. Don\'t mention the time limit directly.\n\n'
+  } else if (windingDown === 'final') {
+    prompt += 'The session is near the end of its suggested time. Honor any mid-thought, then deliver a brief, warm closing. Thank the reviewer. Summarize what you covered in a sentence or two.\n\n'
+  }
+
+  // ── Reflection pauses ──
+  prompt += 'Reflection pauses: At key moments, you may invite the reviewer to take a moment before answering. Use sparingly.\n\n'
+
+  // ── Closing state ──
+  if (closingState === 'narrowing') {
+    prompt += 'The session is entering its final phase. Go deeper on the current topic rather than opening new ones. Do not announce this shift.\n\n'
+  } else if (closingState === 'closing') {
+    prompt += 'The session is in its closing phase. Wrap up naturally. Include [SESSION_COMPLETE] at the very end of your final message.\n\n'
+  } else if (closingState === 'closed') {
+    prompt += 'This session is complete. Do not respond to further messages.\n\n'
+  }
+
+  // ── Special message handling ──
+  if (message === '__session_start__') {
+    if (itemType === 'image') {
+      // 4.5/8.6: Photo session opening
+      prompt += `This is the very start of the session. This is an image feedback session. Structure your opening like this:
+
+1. A warm, brief greeting. Introduce yourself as Pulse. One to two sentences.
+2. Describe what you see in the image in your own words — be specific about what stands out to you. This shows the reviewer you've looked carefully.
+3. Then explain what you're here to do and invite them to share their thoughts.
+
+Keep each thought to one or two sentences. Do NOT mention sections.\n`
+    } else {
+      prompt += `This is the very start of the session. Send your opening as a series of short, distinct thoughts:
+
+1. A warm, brief greeting. Introduce yourself as Pulse. One to two sentences.
+2. Explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think — just a conversation, nothing formal."
+3. Let them know they're in control: "You can take your time, and if you ever want to stop early, just tap 'End session' at the top."
+4. Invite them to begin: "Ready to dive in? Or any questions before we start?"
+
+Keep each thought to one or two sentences. Do NOT mention the number of sections.\n`
+    }
+  } else if (message === '__session_resume__') {
+    prompt += 'The reviewer has returned to continue their session. Welcome them back warmly and briefly. Reference where you left off.\n'
+  } else if (message === '__session_end__') {
+    prompt += 'The reviewer has chosen to end the session early. Thank them genuinely. Briefly mention what you covered together. Keep it warm and short.\n'
+  }
+
+  return prompt
+}
+
+
+// 4.1: Streaming handler wrapped with awslambda.streamifyResponse()
+// Falls back to standard handler when responseStream is not available (API Gateway proxy)
+const streamingHandler = async (event, responseStream, context) => {
+  return handleChat(event, responseStream)
+}
+
+// Export: use streamifyResponse if available (Lambda streaming), otherwise standard handler
+export const handler = typeof globalThis.awslambda?.streamifyResponse === 'function'
+  ? globalThis.awslambda.streamifyResponse(streamingHandler)
+  : async (event) => handleChat(event, null)

@@ -106,7 +106,7 @@ export const labels = {
     fieldContentHint: 'Paste content directly, upload a file, or both.',
     contentPasteLabel: 'Paste content',
     contentUploadLabel: 'Upload a document',
-    uploadAcceptHint: 'Accepts .md, .txt, .pdf, .docx — max 10 MB. Uploading a new file replaces the previous one.',
+    uploadAcceptHint: 'Accepts .md, .txt, .pdf, .docx, .jpg, .jpeg, .png, .webp, .gif — max 10 MB. Uploading a new file replaces the previous one.',
     uploadChooseFile: 'Choose file',
     uploadStatusScanning: 'Scanning…',
     uploadStatusExtracting: 'Extracting…',
@@ -158,6 +158,7 @@ export const labels = {
     timeLimitLabel: 'Session time',
     timeLimitHint: 'This is a pacing estimate for Pulse — not a hard cutoff. The agent will naturally wrap up around this time, but reviewers can always finish their thought.',
     timeLimitBrackets: [
+      { label: '5–10 min', value: 7 },
       { label: '10–15 min', value: 12 },
       { label: '15–20 min', value: 17 },
       { label: '20–30 min', value: 25 },
@@ -483,5 +484,69 @@ export const labels = {
     errorMessage: "Couldn't send your report. Try again.",
     charLimitWarning: '{remaining} characters remaining',
     charLimitExceeded: 'Message must be 5,000 characters or fewer',
+  },
+
+  // Sections (SectionPanel)
+  sections: {
+    sectionPanelTitle: 'Document Sections',
+    keySection: 'Key section',
+    supporting: 'Supporting',
+    includeToggle: 'Include in feedback',
+    depthDeep: 'Deep',
+    depthExplore: 'Explore',
+    depthSkim: 'Skim',
+    validationAllExcluded: 'At least one section must be included.',
+    analyzing: 'Analyzing document sections…',
+    noSections: 'No sections detected.',
+  },
+
+  // Coverage
+  coverage: {
+    coverageTitle: 'Section Coverage',
+    covered: 'Covered',
+    notCovered: 'Not yet covered',
+    gapCallout: 'Some sections haven\u2019t received feedback yet.',
+    gapCalloutPrefix: 'Uncovered sections:',
+  },
+
+  // Assessment Helper
+  assessmentHelper: {
+    trigger: '💡 Help me with this',
+    generateButton: 'Generate',
+    generateDisabledTooltip: 'Save the item first to enable AI suggestions.',
+    useThis: 'Use This',
+    editFirst: 'Edit First',
+    noInputMessage: 'Add some text or upload a document first so Pulse can generate a suggestion.',
+    errorMessage: 'Couldn\u2019t generate a suggestion. Try writing it yourself, or try again.',
+    staticExamplesDocument: [
+      'I\u2019d like feedback on whether the argument is clear and well-supported.',
+      'Is the structure logical? Are there gaps in the reasoning?',
+      'What\u2019s your honest reaction to the tone and voice?',
+    ],
+    staticExamplesImage: [
+      'What\u2019s your first impression of this design?',
+      'Does the visual hierarchy guide your eye effectively?',
+      'Is there anything that feels off or out of place?',
+    ],
+  },
+
+  // Streaming
+  streaming: {
+    errorRetry: 'Something went wrong. Tap to retry.',
+    errorTimeout: 'No response received. Tap to retry.',
+    concurrentRequest: 'Please wait for the current response.',
+  },
+
+  // Completion
+  completion: {
+    cardTitle: 'Thanks — your feedback has been captured.',
+    emailCta: 'Get a copy of your session summary',
+  },
+
+  // Image session
+  imageSession: {
+    viewPhoto: '📷 View Photo',
+    expandLabel: 'Expand photo',
+    collapseLabel: 'Collapse photo',
   },
 } as const;

@@ -41,6 +41,22 @@ function generatePulseCode() {
   return code
 }
 
+/**
+ * Build initial sectionCoverage map from item's feedbackSections (5.5).
+ */
+function buildInitialSectionCoverage(item) {
+  const feedbackSections = item.feedbackSections?.L
+  if (!feedbackSections || feedbackSections.length === 0) return { M: {} }
+  const m = {}
+  for (const s of feedbackSections) {
+    const sId = s.S || s
+    if (sId) {
+      m[sId] = { M: { touched: { BOOL: false }, depth: { NULL: true } } }
+    }
+  }
+  return { M: m }
+}
+
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -175,6 +191,17 @@ export const handler = async (event) => {
     }
     if (sessionName && typeof sessionName === 'string') {
       sessionItem.sessionName = { S: sessionName.trim().slice(0, 100) }
+    }
+    // 5.5: Frozen snapshot
+    if (itemResult.Item.sectionMap?.M) {
+      sessionItem.frozenSnapshot = {
+        M: {
+          sectionMap: itemResult.Item.sectionMap,
+          feedbackSections: itemResult.Item.feedbackSections || { L: [] },
+          sectionDepthPreferences: itemResult.Item.sectionDepthPreferences || { M: {} },
+        },
+      }
+      sessionItem.sectionCoverage = buildInitialSectionCoverage(itemResult.Item)
     }
     await dynamo.send(new PutItemCommand({
       TableName: process.env.SESSIONS_TABLE,

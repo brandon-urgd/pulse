@@ -1115,6 +1115,7 @@ Resources:
       - PulseGetPreviewSessionMethod
       - PulseAdminTenantsMethod
       - PulsePublicConfigMethod
+      - PulseSuggestDescriptionMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
       Description: !Sub 'Deployment ${DeploymentVersion} — ${AWS::StackName}'
@@ -5169,6 +5170,10 @@ Resources:
                 Action:
                   - dynamodb:Query
                 Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/*'
 
   PulseGetSessionSummaryFunctionRole:
     Type: AWS::IAM::Role
@@ -5464,29 +5469,30 @@ Resources:
   # Uncomment in Batch 2 — Lambda Function URL for response streaming
   # REST API Gateway does not support Lambda response streaming.
   # The frontend will call this Function URL directly for chat streaming.
-  # PulseChatFunctionUrl:
-  #   Type: AWS::Lambda::Url
-  #   Properties:
-  #     AuthType: NONE
-  #     InvokeMode: RESPONSE_STREAM
-  #     TargetFunctionArn: !GetAtt PulseChatFunction.Arn
-  #     Cors:
-  #       AllowOrigins:
-  #         - !Sub 'https://${FrontendDomainName}'
-  #       AllowMethods:
-  #         - POST
-  #       AllowHeaders:
-  #         - Content-Type
-  #         - Authorization
-  #       MaxAge: 86400
-  #
-  # PulseChatFunctionUrlPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref PulseChatFunction
-  #     Action: lambda:InvokeFunctionUrl
-  #     Principal: '*'
-  #     FunctionUrlAuthType: NONE
+  PulseChatFunctionUrl:
+    # checkov:skip=CKV_AWS_258:Lambda Function URL AuthType is intentionally NONE — auth is handled inside the Lambda via session token validation, not at the URL level. REST API Gateway does not support response streaming.
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE
+      InvokeMode: RESPONSE_STREAM
+      TargetFunctionArn: !GetAtt PulseChatFunction.Arn
+      Cors:
+        AllowOrigins:
+          - !Sub 'https://${FrontendDomainName}'
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 86400
+
+  PulseChatFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseChatFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
 
   PulseGetSessionStateFunction:
     Type: AWS::Lambda::Function
@@ -5509,6 +5515,7 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -8000,114 +8007,111 @@ Resources:
 
   # ══════════════════════════════════════════════════════════════════════════════
   # Spec 2 — S2: Lambda Functions & API Gateway Routes
-  # Uncomment in Batch 2 when Lambda code directories exist
   # ══════════════════════════════════════════════════════════════════════════════
 
-  # # Uncomment in Batch 2
-  # PulseAnalyzeDocumentFunction:
-  #   Type: AWS::Lambda::Function
-  #   DependsOn: PulseAnalyzeDocumentLogGroup
-  #   Properties:
-  #     FunctionName: !Sub 'urgd-pulse-analyzeDocument-${Environment}'
-  #     Runtime: nodejs22.x
-  #     Handler: index.handler
-  #     Role: !GetAtt PulseAnalyzeDocumentRole.Arn
-  #     Code:
-  #       S3Bucket: urgd-applicationdata
-  #       S3Key: !Ref AnalyzeDocumentCodeKey
-  #     Timeout: 60
-  #     MemorySize: 512
-  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AnalyzeDocument]
-  #     TracingConfig:
-  #       Mode: Active
-  #     Environment:
-  #       Variables:
-  #         ITEMS_TABLE: !Ref PulseItemsTable
-  #         DATA_BUCKET: !Ref PulseDataBucket
-  #         BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
-  #         ENVIRONMENT: !Ref Environment
-  #         VERSION: !Ref DeploymentVersion
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: brand
-  #         Value: urgd
-  #       - Key: studio
-  #         Value: urgd-studios
-  #       - Key: environment
-  #         Value: !Ref Environment
-  #       - Key: cfn-stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: license
-  #         Value: proprietary
+  PulseAnalyzeDocumentFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseAnalyzeDocumentLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-analyzeDocument-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseAnalyzeDocumentRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref AnalyzeDocumentCodeKey
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AnalyzeDocument]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
 
-  # # Uncomment in Batch 2
-  # PulseSuggestDescriptionFunction:
-  #   Type: AWS::Lambda::Function
-  #   DependsOn: PulseSuggestDescriptionLogGroup
-  #   Properties:
-  #     FunctionName: !Sub 'urgd-pulse-suggestDescription-${Environment}'
-  #     Runtime: nodejs22.x
-  #     Handler: index.handler
-  #     Role: !GetAtt PulseSuggestDescriptionRole.Arn
-  #     Code:
-  #       S3Bucket: urgd-applicationdata
-  #       S3Key: !Ref SuggestDescriptionCodeKey
-  #     Timeout: 30
-  #     MemorySize: 512
-  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SuggestDescription]
-  #     TracingConfig:
-  #       Mode: Active
-  #     Environment:
-  #       Variables:
-  #         ITEMS_TABLE: !Ref PulseItemsTable
-  #         DATA_BUCKET: !Ref PulseDataBucket
-  #         BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
-  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
-  #         ENVIRONMENT: !Ref Environment
-  #         VERSION: !Ref DeploymentVersion
-  #     Tags:
-  #       - Key: project
-  #         Value: pulse
-  #       - Key: brand
-  #         Value: urgd
-  #       - Key: studio
-  #         Value: urgd-studios
-  #       - Key: environment
-  #         Value: !Ref Environment
-  #       - Key: cfn-stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: license
-  #         Value: proprietary
-  #
-  # PulseSuggestDescriptionFunctionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref PulseSuggestDescriptionFunction
-  #     Action: lambda:InvokeFunction
-  #     Principal: apigateway.amazonaws.com
-  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
-  #
-  # # POST /api/manage/items/{itemId}/suggest-description
-  # PulseManageItemSuggestDescriptionResource:
-  #   Type: AWS::ApiGateway::Resource
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ParentId: !Ref PulseManageItemResource
-  #     PathPart: suggest-description
-  #
-  # PulseSuggestDescriptionMethod:
-  #   Type: AWS::ApiGateway::Method
-  #   Properties:
-  #     RestApiId: !Ref PulseApiGateway
-  #     ResourceId: !Ref PulseManageItemSuggestDescriptionResource
-  #     HttpMethod: POST
-  #     AuthorizationType: CUSTOM
-  #     AuthorizerId: !Ref PulseCognitoAuthorizer
-  #     Integration:
-  #       Type: AWS_PROXY
-  #       IntegrationHttpMethod: POST
-  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSuggestDescriptionFunction.Arn}/invocations'
+  PulseSuggestDescriptionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSuggestDescriptionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-suggestDescription-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseSuggestDescriptionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref SuggestDescriptionCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SuggestDescription]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseSuggestDescriptionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseSuggestDescriptionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # POST /api/manage/items/{itemId}/suggest-description
+  PulseManageItemSuggestDescriptionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageItemResource
+      PathPart: suggest-description
+
+  PulseSuggestDescriptionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageItemSuggestDescriptionResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSuggestDescriptionFunction.Arn}/invocations'
 
 
 Outputs:

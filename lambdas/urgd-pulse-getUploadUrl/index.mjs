@@ -26,7 +26,8 @@ function unmarshalFeatures(m) {
   return result
 }
 
-const ALLOWED_EXTENSIONS = new Set(['.md', '.txt', '.pdf', '.docx'])
+const ALLOWED_EXTENSIONS = new Set(['.md', '.txt', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif'])
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 const MAX_FILE_SIZE_DEFAULT = 10 * 1024 * 1024 // 10MB fallback
 
 /**
@@ -115,6 +116,21 @@ export const handler = async (event) => {
         }
         if (uploadResult.limit) {
           maxUploadBytes = uploadResult.limit * 1024 * 1024
+        }
+
+        // For image files, enforce maxPhotoSizeMb instead
+        if (IMAGE_EXTENSIONS.has(ext)) {
+          const photoResult = resolveFeature(tenantRecord, 'maxPhotoSizeMb', systemRecord)
+          if (!photoResult.allowed) {
+            return errorResponse(
+              photoResult.reason === 'maintenance' ? 503 : 403,
+              photoResult.reason === 'maintenance' ? 'Feature under maintenance' : 'Feature not available on your plan',
+              {}, origin
+            )
+          }
+          if (photoResult.limit) {
+            maxUploadBytes = photoResult.limit * 1024 * 1024
+          }
         }
       } catch (err) {
         log('warn', 'GetUploadUrl: failed to check maxUploadSizeMb, using default', { requestId, tenantId, errorName: err.name })

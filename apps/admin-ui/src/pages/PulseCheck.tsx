@@ -69,7 +69,18 @@ interface PulseCheckResponse {
 }
 
 interface ItemResponse {
-  data: { itemId: string; itemName: string; sessionCount: number; status: string; description: string };
+  data: {
+    itemId: string;
+    itemName: string;
+    sessionCount: number;
+    status: string;
+    description: string;
+    feedbackSections?: string[];
+    coverageMap?: Record<string, { sessionCount: number; avgDepth?: string; reviewerIds?: string[] }>;
+    sectionMap?: {
+      sections: Array<{ id: string; title: string; classification: string }>;
+    };
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -126,6 +137,18 @@ export default function PulseCheck() {
   const itemName = itemResp?.data?.itemName ?? '';
   const itemStatus = itemResp?.data?.status ?? '';
   const itemDescription = itemResp?.data?.description ?? '';
+  const itemFeedbackSections = itemResp?.data?.feedbackSections ?? [];
+  const itemCoverageMap = itemResp?.data?.coverageMap ?? {};
+  const itemSectionMap = itemResp?.data?.sectionMap;
+
+  // Compute uncovered sections
+  const uncoveredSections = itemFeedbackSections.filter((sId) => {
+    const entry = itemCoverageMap[sId];
+    return !entry || entry.sessionCount === 0;
+  });
+  const uncoveredSectionNames = uncoveredSections
+    .map((sId) => itemSectionMap?.sections?.find((s) => s.id === sId)?.title ?? sId)
+    .filter(Boolean);
 
   const { data: pcResp, isLoading, isError, refetch } = useAuthedQuery<PulseCheckResponse>(
     ['pulse-check', itemId],
@@ -345,6 +368,16 @@ export default function PulseCheck() {
     </p>
   ) : null;
 
+  const CoverageGapCallout = uncoveredSectionNames.length > 0 ? (
+    <div className={styles.incompleteNotice} role="note">
+      <p style={{ margin: 0 }}>
+        {labels.coverage.gapCallout}{' '}
+        <strong>{labels.coverage.gapCalloutPrefix}</strong>{' '}
+        {uncoveredSectionNames.join(', ')}
+      </p>
+    </div>
+  ) : null;
+
   const NewSessionsBanner = newlyCompletedCount > 0 ? (
     <div className={styles.rerunBanner} role="status">
       <p className={styles.rerunBannerText}>
@@ -386,6 +419,7 @@ export default function PulseCheck() {
               : labels.pulseCheck.heading}
           </h1>
           {IncompleteNotice}
+          {CoverageGapCallout}
           {NewSessionsBanner}
 
           {(() => {
@@ -535,6 +569,7 @@ export default function PulseCheck() {
             : labels.pulseCheck.heading}
         </h1>
         {IncompleteNotice}
+        {CoverageGapCallout}
         {NewSessionsBanner}
 
         {/* Verdict + narrative — above everything else */}

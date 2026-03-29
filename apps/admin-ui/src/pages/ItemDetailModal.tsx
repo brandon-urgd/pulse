@@ -7,6 +7,9 @@ import { labels } from '../config/labels-registry';
 import { useCan } from '../hooks/useCan';
 import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
+import SectionPanel, { type Section } from '../components/SectionPanel';
+import CoverageIndicator from '../components/CoverageIndicator';
+import AssessmentHelper from '../components/AssessmentHelper';
 import styles from './ItemDetailModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +35,15 @@ interface Item {
   sessionCount: number;
   updatedAt: string;
   recommendedTimeLimitMinutes?: number;
+  itemType?: 'document' | 'image';
+  sectionMap?: {
+    sections: Section[];
+    totalSubstantiveSections: number;
+    analyzedAt: string;
+  };
+  feedbackSections?: string[];
+  sectionDepthPreferences?: Record<string, 'deep' | 'explore' | 'skim'>;
+  coverageMap?: Record<string, { sessionCount: number; avgDepth?: string; reviewerIds?: string[] }>;
 }
 
 interface CreateItemPayload {
@@ -134,6 +146,10 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // Self-review "start over" confirm state
   const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
 
+  // Section preferences state
+  const [feedbackSections, setFeedbackSections] = useState<string[]>([]);
+  const [sectionDepthPreferences, setSectionDepthPreferences] = useState<Record<string, 'deep' | 'explore' | 'skim'>>({});
+
   // ── Derived upload state ────────────────────────────────────────────────────
   // True while any file is still in-flight (uploading/scanning/extracting)
   const isAnyFileInFlight = Object.values(fileStatuses).some(
@@ -183,6 +199,23 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           ? itemData.documentKey.split('/').pop() ?? '_loaded'
           : '_loaded';
         setFileStatuses({ [fileName]: { status: itemData.documentStatus as FileUploadStatus } });
+      }
+      // Populate section preferences from item data
+      if (itemData.sectionMap?.sections) {
+        const defaultIncluded = itemData.feedbackSections
+          ?? itemData.sectionMap.sections
+              .filter((s) => s.classification === 'substantive')
+              .map((s) => s.id);
+        setFeedbackSections(defaultIncluded);
+
+        const defaultDepths = itemData.sectionDepthPreferences
+          ?? Object.fromEntries(
+              itemData.sectionMap.sections.map((s) => [
+                s.id,
+                s.classification === 'substantive' ? 'explore' as const : 'skim' as const,
+              ])
+            );
+        setSectionDepthPreferences(defaultDepths);
       }
     }
   }, [itemData]);
@@ -706,6 +739,24 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         disabled={isLocked}
                         placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
                       />
+                      <AssessmentHelper
+                        itemId={savedItemId.current ?? itemId ?? null}
+                        itemType={itemData?.itemType ?? 'document'}
+                        description={description}
+                        hasDocument={Object.values(fileStatuses).some((s) => s.status === 'ready')}
+                        onUseSuggestion={(text) => setDescription(text)}
+                        onEditSuggestion={(text) => {
+                          setDescription(text);
+                          // Focus the textarea after a tick
+                          setTimeout(() => {
+                            const el = document.getElementById('description') as HTMLTextAreaElement | null;
+                            el?.focus();
+                          }, 50);
+                        }}
+                        onAppendExample={(text) => {
+                          setDescription((prev) => prev ? `${prev}\n${text}` : text);
+                        }}
+                      />
                     </div>
 
                     <div className={styles.field}>
@@ -751,7 +802,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                           type="file"
                           id="fileUpload"
                           className={styles.fileInput}
-                          accept=".md,.txt,.pdf,.docx"
+                          accept=".md,.txt,.pdf,.docx,.jpg,.jpeg,.png,.webp,.gif"
                           onChange={handleFileChange}
                           disabled={isUploading || isLocked}
                           aria-label={labels.itemDetail.uploadChooseFile}
@@ -841,6 +892,34 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         )}
                       </div>
                     </div>
+
+                    {/* Section Panel — visible when sectionMap exists */}
+                    {itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0 && (
+                      <SectionPanel
+                        sections={itemData.sectionMap.sections}
+                        feedbackSections={feedbackSections}
+                        sectionDepthPreferences={sectionDepthPreferences}
+                        onToggleSection={(sectionId, included) => {
+                          setFeedbackSections((prev) =>
+                            included ? [...prev, sectionId] : prev.filter((id) => id !== sectionId)
+                          );
+                        }}
+                        onChangeDepth={(sectionId, depth) => {
+                          setSectionDepthPreferences((prev) => ({ ...prev, [sectionId]: depth }));
+                        }}
+                        disabled={isLocked}
+                      />
+                    )}
+
+                    {/* Coverage Indicator — visible when coverageMap exists */}
+                    {itemData?.coverageMap && itemData?.sectionMap?.sections && itemData.sessionCount > 0 && (
+                      <CoverageIndicator
+                        sections={itemData.sectionMap.sections
+                          .filter((s) => feedbackSections.includes(s.id))
+                          .map((s) => ({ id: s.id, title: s.title }))}
+                        coverageMap={itemData.coverageMap}
+                      />
+                    )}
 
                     {formError && (
                       <p className={styles.formError} role="alert" aria-live="polite">

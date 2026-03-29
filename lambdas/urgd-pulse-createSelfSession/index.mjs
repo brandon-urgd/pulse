@@ -26,6 +26,22 @@ function unmarshalFeatures(m) {
   return result
 }
 
+/**
+ * Build initial sectionCoverage map from item's feedbackSections (5.5).
+ */
+function buildInitialSectionCoverage(item) {
+  const feedbackSections = item.feedbackSections?.L
+  if (!feedbackSections || feedbackSections.length === 0) return { M: {} }
+  const m = {}
+  for (const s of feedbackSections) {
+    const sId = s.S || s
+    if (sId) {
+      m[sId] = { M: { touched: { BOOL: false }, depth: { NULL: true } } }
+    }
+  }
+  return { M: m }
+}
+
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
@@ -189,6 +205,17 @@ export const handler = async (event) => {
         createdAt: { S: now },
         updatedAt: { S: now },
         ...(closeDate ? { expiresAt: { S: closeDate } } : {}),
+        // 5.5: Frozen snapshot
+        ...(itemResult.Item.sectionMap?.M ? {
+          frozenSnapshot: {
+            M: {
+              sectionMap: itemResult.Item.sectionMap,
+              feedbackSections: itemResult.Item.feedbackSections || { L: [] },
+              sectionDepthPreferences: itemResult.Item.sectionDepthPreferences || { M: {} },
+            },
+          },
+          sectionCoverage: buildInitialSectionCoverage(itemResult.Item),
+        } : {}),
       },
     }))
 
