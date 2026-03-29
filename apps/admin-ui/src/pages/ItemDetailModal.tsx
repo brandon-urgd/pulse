@@ -1165,8 +1165,27 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           onClose={() => { setShowInviteModal(false); onClose(); }}
           skipLabel="Skip for now"
           onSelfReview={async () => {
+            // Open window synchronously in the click gesture BEFORE any state updates
+            // — browsers block popups that aren't in the direct user gesture context
+            const newTab = window.open('', '_blank');
             setShowInviteModal(false);
-            await handleSelfReview();
+            const targetItemId = savedItemId.current ?? itemId;
+            if (!targetItemId || !newTab) {
+              if (newTab) newTab.close();
+              onClose();
+              return;
+            }
+            try {
+              const resp = await authedMutate(
+                `/api/manage/items/${targetItemId}/self-review`,
+                'POST',
+                { ...(timeLimitMinutes != null ? { timeLimitMinutes } : {}) },
+                navigate
+              ) as { data: { sessionId: string; sessionUrl: string } };
+              newTab.location.href = resp.data.sessionUrl;
+            } catch {
+              newTab.close();
+            }
             onClose();
           }}
         />
