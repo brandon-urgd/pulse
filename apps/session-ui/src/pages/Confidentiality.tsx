@@ -10,7 +10,7 @@ const SAGE_SUBTLE = 'rgba(74, 124, 89, 0.12)'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100dvh',
+    height: '100dvh',
     backgroundColor: '#0f0f0f',
     display: 'flex',
     flexDirection: 'column',
@@ -19,6 +19,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '2rem 1.5rem 1.5rem',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     color: '#e5e5e5',
+    overflowY: 'auto' as const,
   },
   card: {
     width: '100%',

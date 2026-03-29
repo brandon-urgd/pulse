@@ -14,14 +14,13 @@ interface SummaryData {
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100dvh',
+    height: '100dvh',
     background: '#0f0f0f',
     color: '#e5e5e5',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: '0 1rem 3rem',
     overflowY: 'auto' as const,
   },
   topBar: {
@@ -60,6 +59,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
+    padding: '0 1rem 3rem',
   },
   pulseLineWrapper: {
     padding: '0.5rem 0',
