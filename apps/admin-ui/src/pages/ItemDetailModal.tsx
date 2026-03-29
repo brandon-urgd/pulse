@@ -724,42 +724,6 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     </div>
 
                     <div className={styles.field}>
-                      <label htmlFor="description" className={styles.label}>
-                        {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
-                      </label>
-                      <p className={styles.subLabel}>{labels.itemDetail.fieldDescriptionHint}</p>
-                      <textarea
-                        id="description"
-                        className={styles.textarea}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        maxLength={2000}
-                        rows={3}
-                        required
-                        disabled={isLocked}
-                        placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
-                      />
-                      <AssessmentHelper
-                        itemId={savedItemId.current ?? itemId ?? null}
-                        itemType={itemData?.itemType ?? 'document'}
-                        description={description}
-                        hasDocument={Object.values(fileStatuses).some((s) => s.status === 'ready')}
-                        onUseSuggestion={(text) => setDescription(text)}
-                        onEditSuggestion={(text) => {
-                          setDescription(text);
-                          // Focus the textarea after a tick
-                          setTimeout(() => {
-                            const el = document.getElementById('description') as HTMLTextAreaElement | null;
-                            el?.focus();
-                          }, 50);
-                        }}
-                        onAppendExample={(text) => {
-                          setDescription((prev) => prev ? `${prev}\n${text}` : text);
-                        }}
-                      />
-                    </div>
-
-                    <div className={styles.field}>
                       <label htmlFor="closeDate" className={styles.label}>
                         {labels.itemDetail.fieldCloseDate} <span className={styles.required} aria-hidden="true">*</span>
                       </label>
@@ -920,6 +884,41 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         coverageMap={itemData.coverageMap}
                       />
                     )}
+
+                    <div className={styles.field}>
+                      <label htmlFor="description" className={styles.label}>
+                        {labels.itemDetail.fieldDescription} <span className={styles.required} aria-hidden="true">*</span>
+                      </label>
+                      <p className={styles.subLabel}>{labels.itemDetail.fieldDescriptionHint}</p>
+                      <textarea
+                        id="description"
+                        className={styles.textarea}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={2000}
+                        rows={8}
+                        required
+                        disabled={isLocked}
+                        placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
+                      />
+                      <AssessmentHelper
+                        itemId={savedItemId.current ?? itemId ?? null}
+                        itemType={itemData?.itemType ?? 'document'}
+                        description={description}
+                        hasDocument={Object.values(fileStatuses).some((s) => s.status === 'ready')}
+                        onUseSuggestion={(text) => setDescription(text)}
+                        onEditSuggestion={(text) => {
+                          setDescription(text);
+                          setTimeout(() => {
+                            const el = document.getElementById('description') as HTMLTextAreaElement | null;
+                            el?.focus();
+                          }, 50);
+                        }}
+                        onAppendExample={(text) => {
+                          setDescription((prev) => prev ? `${prev}\n${text}` : text);
+                        }}
+                      />
+                    </div>
 
                     {formError && (
                       <p className={styles.formError} role="alert" aria-live="polite">

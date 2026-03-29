@@ -517,6 +517,9 @@ export const labels = {
     useThis: 'Use This',
     editFirst: 'Edit First',
     noInputMessage: 'Add some text or upload a document first so Pulse can generate a suggestion.',
+    hintNoDocNoInput: 'Upload your document above, then describe what kind of feedback you\u2019re looking for. Pulse will use both to craft a focused request.',
+    hintDocNoInput: 'What aspect of your work do you want feedback on? Even a rough note helps Pulse tailor the suggestion.',
+    hintInputNoDoc: 'For the best results, upload your document too \u2014 Pulse reads it to ground the suggestion in your actual content.',
     errorMessage: 'Couldn\u2019t generate a suggestion. Try writing it yourself, or try again.',
     staticExamplesDocument: [
       'I\u2019d like feedback on whether the argument is clear and well-supported.',

@@ -42,6 +42,16 @@ export default function AssessmentHelper({
 
   const generateDisabled = !itemId || isGenerating;
 
+  // Contextual hint — adapts based on what the user has provided so far
+  const hasInput = description.trim().length > 0;
+  const contextualHint = !hasDocument && !hasInput
+    ? labels.assessmentHelper.hintNoDocNoInput
+    : hasDocument && !hasInput
+    ? labels.assessmentHelper.hintDocNoInput
+    : !hasDocument && hasInput
+    ? labels.assessmentHelper.hintInputNoDoc
+    : null;
+
   async function handleGenerate() {
     if (!itemId) return;
 
@@ -101,6 +111,9 @@ export default function AssessmentHelper({
 
   return (
     <div className={styles.panel}>
+      {contextualHint && (
+        <p className={styles.contextualHint}>{contextualHint}</p>
+      )}
       <p className={styles.examplesHeading}>Examples</p>
       {staticExamples.map((example, i) => (
         <button
