@@ -772,13 +772,14 @@ export default function Chat() {
             minWidth: '320px',
             height: '100%',
             flexShrink: 0,
+            borderRight: '1px solid #2a2a2a',
           }}>
             <ImagePanel imageUrl={imageUrl} onImageError={refreshImageUrl} />
           </div>
         )}
 
         {/* Chat column */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', borderLeft: itemType === 'image' && imageUrl ? '1px solid #2a2a2a' : 'none' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           {/* Chat area */}
           <div
             ref={chatAreaRef}
