@@ -605,7 +605,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
           </h2>
           {(isEditMode || savedItemId.current) && (
             <>
-              {timeLimitMinutes != null && (
+              {timeLimitMinutes != null && (isEditMode || !Object.values(fileStatuses).some(s => s.status === 'ready')) && (
                 <div className={styles.headerTimeLimitWrapper}>
                   <div className={styles.headerTimeLimitRow}>
                     <label htmlFor="headerTimeLimitSelect" className={styles.headerTimeLimitLabel}>

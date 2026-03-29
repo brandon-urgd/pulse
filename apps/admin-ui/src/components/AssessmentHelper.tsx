@@ -111,6 +111,7 @@ export default function AssessmentHelper({
 
   return (
     <div className={styles.panel}>
+      <p className={styles.panelDescription}>{labels.assessmentHelper.panelDescription}</p>
       {contextualHint && (
         <p className={styles.contextualHint}>{contextualHint}</p>
       )}
