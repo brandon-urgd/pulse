@@ -3,6 +3,7 @@ import { useState } from 'react'
 interface Props {
   imageUrl: string
   alt?: string
+  onImageError?: () => void
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -52,7 +53,7 @@ const styles: Record<string, React.CSSProperties> = {
  * Mobile collapsible panel above chat for image sessions.
  * Tap to expand/collapse with slide animation.
  */
-export default function ExpandableImageHeader({ imageUrl, alt = 'Session image' }: Props) {
+export default function ExpandableImageHeader({ imageUrl, alt = 'Session image', onImageError }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -78,6 +79,7 @@ export default function ExpandableImageHeader({ imageUrl, alt = 'Session image' 
             alt={alt}
             style={styles.image}
             draggable={false}
+            onError={onImageError}
           />
         )}
       </div>

@@ -794,7 +794,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                       <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
                       <div className={styles.uploadArea}>
                         <p className={styles.uploadHint}>
-                          {`Accepts .md, .txt, .pdf, .docx — max ${maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
+                          {`Accepts .md, .txt, .pdf, .docx, or images (.jpg, .png, .webp, .gif) — max ${maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
                         </p>
                         <input
                           ref={fileInputRef}

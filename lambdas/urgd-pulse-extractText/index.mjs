@@ -171,6 +171,7 @@ export const handler = async (event) => {
     await updateDocumentStatus(tenantId, itemId, 'ready', {
       extractedKey: { S: extractedKey },
       recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
+      itemType: { S: 'document' },
     })
 
     log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })

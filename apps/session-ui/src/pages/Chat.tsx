@@ -458,6 +458,16 @@ export default function Chat() {
   }, [messages, isThinking])
 
   // ── Send message ────────────────────────────────────────────────────────────
+
+  // Refresh presigned image URL when it expires (1-hour TTL)
+  async function refreshImageUrl() {
+    if (!sessionToken || !sessionId) return
+    try {
+      const state = await getSessionState(sessionId, sessionToken)
+      if (state.imageUrl) setImageUrl(state.imageUrl)
+    } catch { /* best-effort */ }
+  }
+
   function handleSendError(status: number | undefined, currentMessages: Message[]) {
     if (status === 401) {
       navigate(`/s/${sessionId}`)
@@ -726,7 +736,7 @@ export default function Chat() {
       {/* Expandable image header — mobile image sessions */}
       {itemType === 'image' && imageUrl && (
         <div className="image-header-mobile">
-          <ExpandableImageHeader imageUrl={imageUrl} />
+          <ExpandableImageHeader imageUrl={imageUrl} onImageError={refreshImageUrl} />
         </div>
       )}
 
@@ -753,7 +763,7 @@ export default function Chat() {
             height: '100%',
             flexShrink: 0,
           }}>
-            <ImagePanel imageUrl={imageUrl} />
+            <ImagePanel imageUrl={imageUrl} onImageError={refreshImageUrl} />
           </div>
         )}
 

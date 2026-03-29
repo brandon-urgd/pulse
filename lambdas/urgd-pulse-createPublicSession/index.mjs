@@ -202,6 +202,9 @@ export const handler = async (event) => {
         },
       }
       sessionItem.sectionCoverage = buildInitialSectionCoverage(itemResult.Item)
+    } else {
+      // No sectionMap — set totalSections explicitly (image items = 1, fallback = 5)
+      sessionItem.totalSections = { N: String(itemResult.Item.totalSections?.N || '5') }
     }
     await dynamo.send(new PutItemCommand({
       TableName: process.env.SESSIONS_TABLE,

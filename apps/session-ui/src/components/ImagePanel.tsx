@@ -1,6 +1,7 @@
 interface Props {
   imageUrl: string
   alt?: string
+  onImageError?: () => void
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -28,7 +29,7 @@ const styles: Record<string, React.CSSProperties> = {
  * Desktop split-pane image viewer (40% width, left side).
  * Loads image via presigned URL from getSessionState.
  */
-export default function ImagePanel({ imageUrl, alt = 'Session image' }: Props) {
+export default function ImagePanel({ imageUrl, alt = 'Session image', onImageError }: Props) {
   return (
     <div style={styles.panel}>
       <img
@@ -36,6 +37,7 @@ export default function ImagePanel({ imageUrl, alt = 'Session image' }: Props) {
         alt={alt}
         style={styles.image}
         draggable={false}
+        onError={onImageError}
       />
     </div>
   )

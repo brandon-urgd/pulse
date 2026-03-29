@@ -170,6 +170,7 @@ export const handler = async (event) => {
         await updateDocumentStatus(tenantId, itemId, 'ready', {
           extractedKey: { S: extractedKey },
           recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
+          itemType: { S: 'document' },
         })
         log('info', 'ShieldCallback: text file — extracted.md written, documentStatus set to ready', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })
 

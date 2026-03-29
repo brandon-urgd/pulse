@@ -267,7 +267,10 @@ export const handler = async (event) => {
               },
             },
             sectionCoverage: buildInitialSectionCoverage(item),
-          } : {}),
+          } : {
+            // No sectionMap — set totalSections explicitly (image items = 1, fallback = 5)
+            totalSections: { N: String(item.totalSections?.N || '5') },
+          }),
         },
       }))
 

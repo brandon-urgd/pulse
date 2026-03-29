@@ -215,7 +215,10 @@ export const handler = async (event) => {
             },
           },
           sectionCoverage: buildInitialSectionCoverage(itemResult.Item),
-        } : {}),
+        } : {
+          // No sectionMap — set totalSections explicitly (image items = 1, fallback = 5)
+          totalSections: { N: String(itemResult.Item.totalSections?.N || '5') },
+        }),
       },
     }))
 
