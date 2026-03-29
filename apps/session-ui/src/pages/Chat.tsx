@@ -100,6 +100,7 @@ const styles: Record<string, React.CSSProperties> = {
   chatArea: {
     flex: 1,
     overflowY: 'auto' as const,
+    overflowX: 'hidden' as const,
     padding: '1rem',
     display: 'flex',
     flexDirection: 'column',
@@ -122,9 +123,12 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-end',
     background: '#0f0f0f',
     flexShrink: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   input: {
     flex: 1,
+    minWidth: 0,
     minHeight: '48px',
     borderRadius: '24px',
     background: '#0f0f0f',
@@ -136,6 +140,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'inherit',
     outline: 'none',
     lineHeight: 1.5,
+    boxSizing: 'border-box' as const,
   },
   inputFocused: {
     border: '1px solid #4a7c59',
@@ -779,7 +784,7 @@ export default function Chat() {
         )}
 
         {/* Chat column */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 0 }}>
           {/* Chat area */}
           <div
             ref={chatAreaRef}
