@@ -782,6 +782,7 @@ export default function Chat() {
             height: '100%',
             flexShrink: 0,
             borderRight: '1px solid #2a2a2a',
+            borderBottom: '1px solid #2a2a2a',
             overflow: 'hidden',
           }}>
             <ImagePanel imageUrl={imageUrl} onImageError={refreshImageUrl} />

@@ -14,7 +14,6 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     overflow: 'hidden',
     padding: '1rem',
-    borderBottom: '1px solid #2a2a2a',
   },
   image: {
     maxWidth: '100%',
