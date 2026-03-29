@@ -5513,6 +5513,8 @@ Resources:
         AllowHeaders:
           - Content-Type
           - Authorization
+        ExposeHeaders:
+          - Content-Type
         MaxAge: 86400
 
   PulseChatFunctionUrlPermission:
@@ -5522,6 +5524,15 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
       FunctionUrlAuthType: NONE
+
+  # Oct 2025 authorization model change: Function URLs now require lambda:InvokeFunction
+  # in addition to lambda:InvokeFunctionUrl. Without this, AWS returns 403 before the Lambda runs.
+  PulseChatFunctionUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseChatFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
 
   PulseGetSessionStateFunction:
     Type: AWS::Lambda::Function

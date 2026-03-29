@@ -473,7 +473,7 @@ export default function Chat() {
       navigate(`/s/${sessionId}`)
       return
     }
-    if (status === 403) {
+    if (status === 403 && !isPreview) {
       navigate(`/s/${sessionId}/confidentiality`)
       return
     }

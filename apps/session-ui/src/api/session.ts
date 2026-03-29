@@ -133,16 +133,21 @@ export async function sendChatMessageStreaming(
   windingDown?: 'true' | 'final'
 ): Promise<Response> {
   // Use Function URL if available, fall back to API Gateway
-  const chatUrl = CHAT_FUNCTION_URL
+  const isFunctionUrl = !!CHAT_FUNCTION_URL
+  const chatUrl = isFunctionUrl
     ? CHAT_FUNCTION_URL
     : `${API_BASE}/api/session/${sessionId}/chat`
 
+  // Function URL: auth is in the body, no Authorization header needed.
+  // API Gateway: auth is via Authorization header (Lambda authorizer).
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (!isFunctionUrl) {
+    headers.Authorization = `Bearer ${sessionToken}`
+  }
+
   const res = await fetch(chatUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${sessionToken}`,
-    },
+    headers,
     body: JSON.stringify({
       message,
       sessionId,
