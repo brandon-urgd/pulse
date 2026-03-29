@@ -532,8 +532,6 @@ export const labels = {
       'As someone seeing this for the first time, does the composition draw you in?',
       'From a buyer\u2019s point of view, is there anything that feels off or out of place?',
     ],
-      'Is there anything that feels off or out of place?',
-    ],
   },
 
   // Streaming

@@ -167,9 +167,6 @@ export const handler = async (event) => {
       ? BRACKETS.reduce((best, b) => Math.abs(b - rawItemMinutes) < Math.abs(best - rawItemMinutes) ? b : best, BRACKETS[0])
       : 17
 
-    // Cap time limit by tier limit
-    const cappedTimeLimitMinutes = Math.min(sessionTimeLimitMinutes, maxTimeLimit)
-
     // Item must be draft or active to invite
     if (itemStatus !== 'draft' && itemStatus !== 'active') {
       return errorResponse(409, 'Item is not accepting new invitations', {}, origin)
@@ -228,6 +225,9 @@ export const handler = async (event) => {
     // Check sessionTimeLimitMinutes
     const timeLimitResult = resolveFeature(tenantRecord, 'sessionTimeLimitMinutes', systemRecord)
     const maxTimeLimit = timeLimitResult.limit ?? 120
+
+    // Cap time limit by tier limit
+    const cappedTimeLimitMinutes = Math.min(sessionTimeLimitMinutes, maxTimeLimit)
 
     if (existingCount + emails.length > maxSessions) {
       log('warn', 'InviteReviewer: session limit exceeded', { requestId, tenantId, itemId, existingCount, requested: emails.length, maxSessions })
