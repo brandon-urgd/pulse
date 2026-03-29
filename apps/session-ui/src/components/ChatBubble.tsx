@@ -22,6 +22,8 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: '80px',
     padding: '0.75rem 1rem',
     width: 'fit-content',
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
   },
   reviewer: {
     background: '#4a7c59',

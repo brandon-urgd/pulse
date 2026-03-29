@@ -6,8 +6,7 @@ interface Props {
 
 const styles: Record<string, React.CSSProperties> = {
   panel: {
-    width: '40%',
-    minWidth: '280px',
+    width: '100%',
     height: '100%',
     background: '#0a0a0a',
     borderRight: '1px solid #2a2a2a',
@@ -15,7 +14,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    flexShrink: 0,
+    padding: '1rem',
   },
   image: {
     maxWidth: '100%',

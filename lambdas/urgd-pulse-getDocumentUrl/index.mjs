@@ -17,6 +17,11 @@ const CONTENT_TYPES = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   md: 'text/markdown',
   txt: 'text/plain',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
 }
 
 export const handler = async (event) => {

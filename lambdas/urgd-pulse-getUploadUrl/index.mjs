@@ -30,6 +30,18 @@ const ALLOWED_EXTENSIONS = new Set(['.md', '.txt', '.pdf', '.docx', '.jpg', '.jp
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 const MAX_FILE_SIZE_DEFAULT = 10 * 1024 * 1024 // 10MB fallback
 
+const MIME_TYPES = {
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+}
+
 /**
  * Extract file extension (lowercase, including dot) from filename.
  */
@@ -161,6 +173,7 @@ export const handler = async (event) => {
     const command = new PutObjectCommand({
       Bucket: process.env.QUARANTINE_BUCKET_NAME,
       Key: key,
+      ContentType: MIME_TYPES[ext] || 'application/octet-stream',
       Metadata: {
         'app-name': 'pulse',
         'tenant-id': tenantId,

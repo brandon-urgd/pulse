@@ -666,6 +666,16 @@ export default function Chat() {
         @media (min-width: 769px) {
           .image-header-mobile { display: none !important; }
         }
+        @media (min-width: 769px) and (max-width: 1024px) and (orientation: portrait) {
+          .image-panel-desktop {
+            width: 100% !important;
+            max-height: 45vh !important;
+            flex-shrink: 0 !important;
+          }
+          .split-pane-wrapper {
+            flex-direction: column !important;
+          }
+        }
       `}</style>
       {/* Top bar */}
       <div style={styles.topBar}>
@@ -750,7 +760,7 @@ export default function Chat() {
       )}
 
       {/* Split-pane wrapper for image sessions (desktop) */}
-      <div style={{
+      <div className="split-pane-wrapper" style={{
         display: 'flex',
         flex: 1,
         overflow: 'hidden',
@@ -758,8 +768,8 @@ export default function Chat() {
         {/* Desktop image panel — hidden on mobile via media query inline */}
         {itemType === 'image' && imageUrl && (
           <div className="image-panel-desktop" style={{
-            width: '40%',
-            minWidth: '280px',
+            width: '60%',
+            minWidth: '320px',
             height: '100%',
             flexShrink: 0,
           }}>

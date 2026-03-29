@@ -93,6 +93,40 @@ describe('urgd-pulse-getDocumentUrl', () => {
       const body = JSON.parse(res.body)
       expect(body.data.contentType).toBe('text/markdown')
     })
+
+    it('returns correct contentType for JPEG images', async () => {
+      sendSpy.mockResolvedValueOnce({
+        Item: makeItem({ documentKey: { S: 'pulse/tenant-1/items/item-1/photo.jpg' } }),
+      })
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.data.contentType).toBe('image/jpeg')
+      expect(body.data.filename).toBe('photo.jpg')
+    })
+
+    it('returns correct contentType for PNG images', async () => {
+      sendSpy.mockResolvedValueOnce({
+        Item: makeItem({ documentKey: { S: 'pulse/tenant-1/items/item-1/screenshot.png' } }),
+      })
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.data.contentType).toBe('image/png')
+    })
+
+    it('returns correct contentType for WebP images', async () => {
+      sendSpy.mockResolvedValueOnce({
+        Item: makeItem({ documentKey: { S: 'pulse/tenant-1/items/item-1/image.webp' } }),
+      })
+
+      const res = await handler(makeEvent())
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.body)
+      expect(body.data.contentType).toBe('image/webp')
+    })
   })
 
   describe('error cases', () => {

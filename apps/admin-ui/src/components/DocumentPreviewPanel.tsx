@@ -13,12 +13,19 @@ interface Props {
 
 type LoadState = 'loading' | 'loaded' | 'error';
 
-function getTypeBadge(contentType: string): string {
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp']);
+
+function isImageByExtension(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+function getTypeBadge(contentType: string, filename: string): string {
   if (contentType === 'application/pdf') return 'PDF';
   if (contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX';
   if (contentType === 'text/markdown') return 'MD';
   if (contentType === 'text/plain') return 'TXT';
-  if (contentType.startsWith('image/')) return 'IMG';
+  if (contentType.startsWith('image/') || isImageByExtension(filename)) return 'IMG';
   return contentType.split('/')[1]?.toUpperCase() ?? 'FILE';
 }
 
@@ -32,7 +39,7 @@ export default function DocumentPreviewPanel({ url, contentType, filename, origi
   const isText = contentType === 'text/plain' || contentType === 'text/markdown';
   const isPdf = contentType === 'application/pdf';
   const isDocx = contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  const isImage = contentType.startsWith('image/');
+  const isImage = contentType.startsWith('image/') || isImageByExtension(filename);
 
   const loadContent = useCallback(async () => {
     setLoadState('loading');
@@ -192,7 +199,7 @@ export default function DocumentPreviewPanel({ url, contentType, filename, origi
       <div className={styles.previewHeader}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden', flex: 1 }}>
           <span className={styles.previewFilename}>{filename}</span>
-          <span className={styles.previewTypeBadge}>{getTypeBadge(contentType)}</span>
+          <span className={styles.previewTypeBadge}>{getTypeBadge(contentType, filename)}</span>
         </div>
         <button
           ref={closeButtonRef}
