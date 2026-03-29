@@ -451,6 +451,11 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             // Also update the query cache so edit mode picks it up immediately
             queryClient.setQueryData(['item', targetItemId], { data: refreshed });
             resolve();
+
+            // analyzeDocument runs async after documentStatus=ready — poll for sectionMap
+            if (status === 'ready' && !refreshed?.sectionMap) {
+              pollForSectionMap(targetItemId);
+            }
             return;
           }
           if (status === 'extracting') {
@@ -462,6 +467,26 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       }
       setTimeout(poll, 2000);
     });
+  }
+
+  // Poll for sectionMap after analyzeDocument completes (runs async after document is ready)
+  function pollForSectionMap(targetItemId: string) {
+    let attempts = 0
+    const maxAttempts = 15 // ~30 seconds at 2s intervals
+    async function poll() {
+      if (!mountedRef.current || attempts >= maxAttempts) return
+      attempts++
+      try {
+        const resp = await authedMutate(`/api/manage/items/${targetItemId}`, 'GET', undefined, navigate) as { data: Item }
+        if (resp?.data?.sectionMap?.sections) {
+          queryClient.setQueryData(['item', targetItemId], { data: resp.data })
+          queryClient.invalidateQueries({ queryKey: ['item', targetItemId] })
+          return
+        }
+      } catch { /* keep polling */ }
+      if (mountedRef.current) setTimeout(poll, 2000)
+    }
+    setTimeout(poll, 3000) // initial delay — give analyzeDocument a head start
   }
 
   // ── Remove document handler ─────────────────────────────────────────────────
