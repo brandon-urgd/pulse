@@ -141,9 +141,13 @@ function marshalCoverageMap(coverageMap) {
 
 /**
  * Core chat handler logic — shared between streaming and non-streaming paths.
+ * Streaming is determined by the invocation source, not the responseStream parameter.
+ * Function URL invocations have requestContext.http; API Gateway proxy has requestContext.authorizer.
  */
 async function handleChat(event, responseStream) {
-  const isStreaming = !!responseStream
+  // Detect if this is a Function URL invocation (streaming) vs API Gateway proxy (non-streaming)
+  // Function URL events have requestContext.http; API Gateway proxy events have requestContext.resourceId
+  const isStreaming = !!responseStream && !!event?.requestContext?.http
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
   const sessionId = event?.requestContext?.authorizer?.sessionId

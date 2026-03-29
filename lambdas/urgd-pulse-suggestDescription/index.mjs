@@ -113,8 +113,10 @@ Rules:
 - Write in first person from the perspective of the person requesting feedback ("I'd like feedback on...")
 - Be specific about what aspects to focus on
 - Keep it to 2-3 sentences
-- If they provided rough notes, expand and clarify them
-- If they provided a document or image, identify the most important aspects worth getting feedback on
+- If they provided rough notes AND a document, read the actual document content carefully and ground your suggestion in what the document actually says. Do not invent or assume content that isn't in the document.
+- If they mention a specific section by name, read that section in the document and reference its actual content in your suggestion — not generic assumptions about what a section with that name might contain.
+- If they provided a document without rough notes, identify the most consequential claims, decisions, or open questions in the document and suggest feedback on those.
+- If they provided rough notes without a document, expand and clarify their intent.
 - Return ONLY the suggestion text, no other commentary`
 
     const userParts = []
