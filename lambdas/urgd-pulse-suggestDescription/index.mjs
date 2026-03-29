@@ -98,6 +98,16 @@ export const handler = async (event) => {
           // Fall back to the actual documentKey (for .md/.txt files stored under original name)
           documentContext = await getS3Text(process.env.DATA_BUCKET, documentKey)
         }
+        if (!documentContext) {
+          log('warn', 'SuggestDescription: all S3 read attempts returned null — document not found', {
+            requestId, tenantId, itemId, documentKey,
+            triedPaths: [
+              `pulse/${tenantId}/items/${itemId}/extracted.md`,
+              `pulse/${tenantId}/items/${itemId}/document.md`,
+              documentKey,
+            ],
+          })
+        }
         log('info', 'SuggestDescription: document context loaded', {
           requestId, tenantId, itemId,
           hasContext: !!documentContext,
@@ -126,7 +136,7 @@ Rules:
 - If they provided rough notes AND a document, read the actual document content carefully and ground your suggestion in what the document actually says. Do not invent or assume content that isn't in the document.
 - If they mention a specific section by name, read that section in the document and reference its actual content in your suggestion — not generic assumptions about what a section with that name might contain.
 - If they provided a document without rough notes, identify the most consequential claims, decisions, or open questions in the document and suggest feedback on those.
-- If they provided rough notes without a document, expand and clarify their intent.
+- If they provided rough notes without a document, expand and clarify their intent. Do NOT invent, fabricate, or assume any document content. If the user's notes reference a document or specific sections but no document was provided to you, base your suggestion only on what they wrote — do not generate fictional document content.
 - Return ONLY the suggestion text, no other commentary`
 
     const userParts = []

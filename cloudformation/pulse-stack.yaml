@@ -2978,6 +2978,7 @@ Resources:
                 Resource: !Sub 'arn:aws:s3:::${QuarantineBucketName}/*'
               - Effect: Allow
                 Action:
+                  - s3:GetObject
                   - s3:PutObject
                   - s3:PutObjectTagging
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
@@ -2985,6 +2986,10 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt PulseExtractTextFunction.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
 
   PulseExtractTextFunctionRole:
     Type: AWS::IAM::Role
@@ -3311,6 +3316,7 @@ Resources:
           QUARANTINE_BUCKET_NAME: !Ref QuarantineBucketName
           DATA_BUCKET_NAME: !Ref PulseDataBucket
           EXTRACT_TEXT_FUNCTION_NAME: !Ref PulseExtractTextFunction
+          ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project

@@ -2,12 +2,12 @@
 // Triggered by EventBridge on S3 object tag change (GuardDuty scan result)
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
-requireEnv(['ITEMS_TABLE', 'QUARANTINE_BUCKET_NAME', 'DATA_BUCKET_NAME', 'EXTRACT_TEXT_FUNCTION_NAME', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['ITEMS_TABLE', 'QUARANTINE_BUCKET_NAME', 'DATA_BUCKET_NAME', 'EXTRACT_TEXT_FUNCTION_NAME', 'ANALYZE_DOCUMENT_FUNCTION_ARN', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
@@ -129,8 +129,11 @@ export const handler = async (event) => {
         })
         log('info', 'ShieldCallback: image file — documentStatus set to ready, itemType set to image', { tenantId, itemId, ext })
       } else if (TEXT_EXTENSIONS.has(ext)) {
-        // .md or .txt — read content, compute time recommendation, mark as ready
+        // .md or .txt — already plain text, no binary extraction needed.
+        // Write as extracted.md (normalized path), compute time recommendation,
+        // store extractedKey, invoke analyzeDocument — same pipeline as PDF/DOCX.
         let recommendedTimeLimitMinutes = 12 // default floor (10–15 min bracket)
+        let text = ''
         try {
           const obj = await s3.send(new GetObjectCommand({
             Bucket: process.env.DATA_BUCKET_NAME,
@@ -138,7 +141,7 @@ export const handler = async (event) => {
           }))
           const chunks = []
           for await (const chunk of obj.Body) chunks.push(chunk)
-          const text = Buffer.concat(chunks).toString('utf-8')
+          text = Buffer.concat(chunks).toString('utf-8')
           const wordCount = text.trim().split(/\s+/).filter(Boolean).length
           const rawMinutes = Math.round(wordCount / 130)
           const BRACKETS = [12, 17, 25, 37]
@@ -148,10 +151,40 @@ export const handler = async (event) => {
         } catch (readErr) {
           log('warn', 'ShieldCallback: could not read text file for word count', { tenantId, itemId, errorName: readErr.name })
         }
+
+        // Write normalized extracted.md so all downstream Lambdas find it at the standard path
+        const extractedKey = `pulse/${tenantId}/items/${itemId}/extracted.md`
+        if (text) {
+          try {
+            await s3.send(new PutObjectCommand({
+              Bucket: process.env.DATA_BUCKET_NAME,
+              Key: extractedKey,
+              Body: text,
+              ContentType: 'text/markdown',
+            }))
+          } catch (writeErr) {
+            log('warn', 'ShieldCallback: could not write extracted.md for text file', { tenantId, itemId, errorName: writeErr.name })
+          }
+        }
+
         await updateDocumentStatus(tenantId, itemId, 'ready', {
+          extractedKey: { S: extractedKey },
           recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
         })
-        log('info', 'ShieldCallback: documentStatus set to ready', { tenantId, itemId, recommendedTimeLimitMinutes })
+        log('info', 'ShieldCallback: text file — extracted.md written, documentStatus set to ready', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })
+
+        // Invoke analyzeDocument async — same as PDF/DOCX path
+        try {
+          const payload = JSON.stringify({ tenantId, itemId })
+          await lambda.send(new InvokeCommand({
+            FunctionName: process.env.ANALYZE_DOCUMENT_FUNCTION_ARN,
+            InvocationType: 'Event',
+            Payload: Buffer.from(payload),
+          }))
+          log('info', 'ShieldCallback: analyzeDocument invoked async for text file', { tenantId, itemId })
+        } catch (invokeErr) {
+          log('warn', 'ShieldCallback: failed to invoke analyzeDocument for text file', { tenantId, itemId, errorName: invokeErr.name })
+        }
       } else if (EXTRACT_EXTENSIONS.has(ext)) {
         // .pdf or .docx — mark as extracting, invoke extractText async
         await updateDocumentStatus(tenantId, itemId, 'extracting')
