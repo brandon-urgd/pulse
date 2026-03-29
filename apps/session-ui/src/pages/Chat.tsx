@@ -508,6 +508,14 @@ export default function Chat() {
           sessionComplete = true
         },
         onError: (err) => {
+          // Check for status-based errors that need redirects (from in-stream error JSON)
+          const status = (err as Error & { status?: number }).status
+          if (status === 401 || status === 403 || status === 410) {
+            setIsStreaming(false)
+            setStreamingText('')
+            handleSendError(status, nextMessages)
+            return
+          }
           // Preserve partial text as an agent message, then show error
           const partialText = fullText || ''
           const partialMessages = partialText

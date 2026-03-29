@@ -141,13 +141,20 @@ function marshalCoverageMap(coverageMap) {
 
 /**
  * Core chat handler logic — shared between streaming and non-streaming paths.
- * Streaming is determined by the invocation source, not the responseStream parameter.
- * Function URL invocations have requestContext.http; API Gateway proxy has requestContext.authorizer.
+ * When invoked via streamifyResponse wrapper, responseStream is always present
+ * and return values are ignored — all responses must go through responseStream.
+ * isStreaming controls whether Bedrock tokens are streamed to the client.
+ * hasResponseStream controls whether errors use responseStream or return values.
  */
 async function handleChat(event, responseStream) {
-  // Detect if this is a Function URL invocation (streaming) vs API Gateway proxy (non-streaming)
-  // Function URL events have requestContext.http; API Gateway proxy events have requestContext.resourceId
-  const isStreaming = !!responseStream && !!event?.requestContext?.http
+  // responseStream is present whenever the handler is wrapped with streamifyResponse,
+  // regardless of whether the caller is Function URL or API Gateway.
+  // We must always write to it and end() it when present — return values are ignored.
+  const hasResponseStream = !!responseStream
+  // isStreaming = true only for Function URL calls where we want token-by-token streaming.
+  // API Gateway calls through the streaming wrapper still use responseStream for the final response,
+  // but collect the full Bedrock response before writing it.
+  const isStreaming = hasResponseStream && !!event?.requestContext?.http
   const origin = event?.headers?.origin ?? event?.headers?.Origin
   const requestId = event?.requestContext?.requestId
 
@@ -178,7 +185,7 @@ async function handleChat(event, responseStream) {
   }
 
   if (!sessionId || !tenantId) {
-    if (isStreaming) {
+    if (hasResponseStream) {
       responseStream.write(JSON.stringify({ error: true, statusCode: 401, message: 'Unauthorized' }))
       responseStream.end()
       return
@@ -190,7 +197,7 @@ async function handleChat(event, responseStream) {
   try {
     body = JSON.parse(event.body || '{}')
   } catch {
-    if (isStreaming) {
+    if (hasResponseStream) {
       responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'Invalid request body' }))
       responseStream.end()
       return
@@ -201,7 +208,7 @@ async function handleChat(event, responseStream) {
   const { message, windingDown } = body
 
   if (!message || typeof message !== 'string') {
-    if (isStreaming) {
+    if (hasResponseStream) {
       responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'message is required' }))
       responseStream.end()
       return
@@ -217,7 +224,7 @@ async function handleChat(event, responseStream) {
     }))
 
     if (!sessionResult.Item) {
-      if (isStreaming) {
+      if (hasResponseStream) {
         responseStream.write(JSON.stringify({ error: true, statusCode: 404, message: 'Session not found' }))
         responseStream.end()
         return
@@ -227,10 +234,11 @@ async function handleChat(event, responseStream) {
 
     const session = sessionResult.Item
 
-    // 2. Validate confidentialityAcceptedAt
-    if (!session.confidentialityAcceptedAt?.S) {
+    // 2. Validate confidentialityAcceptedAt (skip for preview sessions — tenant is previewing their own item)
+    const sessionIsPreview = isPreview || session.preview?.BOOL === true
+    if (!sessionIsPreview && !session.confidentialityAcceptedAt?.S) {
       log('warn', 'Chat: confidentiality not accepted', { requestId, sessionId, tenantId })
-      if (isStreaming) {
+      if (hasResponseStream) {
         responseStream.write(JSON.stringify({ error: true, statusCode: 403, message: 'Confidentiality agreement not accepted' }))
         responseStream.end()
         return
@@ -242,7 +250,7 @@ async function handleChat(event, responseStream) {
     const status = session.status?.S
     if (status === 'expired' || status === 'completed') {
       log('info', 'Chat: session not active', { requestId, sessionId, tenantId, status })
-      if (isStreaming) {
+      if (hasResponseStream) {
         responseStream.write(JSON.stringify({ error: true, statusCode: 410, message: 'Session is no longer active' }))
         responseStream.end()
         return
@@ -256,7 +264,7 @@ async function handleChat(event, responseStream) {
       const lockAge = Date.now() - new Date(streamingLock).getTime()
       if (lockAge < 60000) {
         log('warn', 'Chat: concurrent request rejected (streamingLock active)', { requestId, sessionId, tenantId, lockAge })
-        if (isStreaming) {
+        if (hasResponseStream) {
           responseStream.write(JSON.stringify({ error: true, statusCode: 409, message: 'Please wait for the current response' }))
           responseStream.end()
           return
@@ -393,7 +401,7 @@ async function handleChat(event, responseStream) {
 
     if (coalescedMessages.length === 0) {
       log('error', 'Chat: no valid messages after coalescing', { requestId, sessionId, tenantId })
-      if (isStreaming) {
+      if (hasResponseStream) {
         responseStream.write(JSON.stringify({ error: true, statusCode: 400, message: 'No valid messages to process' }))
         responseStream.end()
         return
@@ -704,7 +712,7 @@ async function handleChat(event, responseStream) {
 
     // For non-streaming path, return JSON response
     if (!isStreaming) {
-      return createResponse(200, {
+      const jsonResp = createResponse(200, {
         data: {
           message: agentText,
           section: currentSection,
@@ -712,12 +720,19 @@ async function handleChat(event, responseStream) {
           closingState: newClosingState,
         },
       }, {}, origin)
+      if (hasResponseStream) {
+        // API Gateway call through streaming wrapper — write response to stream
+        responseStream.write(JSON.stringify(jsonResp))
+        responseStream.end()
+        return
+      }
+      return jsonResp
     }
   } catch (err) {
     log('error', 'Chat: unexpected error', { requestId, sessionId, tenantId, errorName: err.name, errorMessage: err.message, stack: err.stack })
     await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
 
-    if (isStreaming) {
+    if (hasResponseStream) {
       try { responseStream.end() } catch { /* ignore */ }
       return
     }

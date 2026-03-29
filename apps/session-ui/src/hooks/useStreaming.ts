@@ -65,6 +65,8 @@ export async function consumeStream(
   resetTimeout()
 
   try {
+    let firstChunk = true
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -73,6 +75,26 @@ export async function consumeStream(
 
       const chunk = decoder.decode(value, { stream: true })
       buffer += chunk
+
+      // Detect error JSON on first chunk — Lambda writes error as a single JSON object
+      // and ends the stream. The HTTP status is 200 (streaming wrapper), so we must
+      // detect the error in-band.
+      if (firstChunk) {
+        firstChunk = false
+        try {
+          const parsed = JSON.parse(buffer)
+          if (parsed.error === true && parsed.statusCode) {
+            completed = true
+            if (timeoutId) clearTimeout(timeoutId)
+            const err = new Error(parsed.message ?? 'Request failed') as Error & { status: number }
+            err.status = parsed.statusCode
+            onError(err)
+            return
+          }
+        } catch {
+          // Not valid JSON — continue normal streaming
+        }
+      }
 
       // Flush all but trailing BUFFER_SIZE chars
       if (buffer.length > BUFFER_SIZE) {
