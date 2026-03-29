@@ -296,6 +296,16 @@ Parameters:
     Default: lambda-packages/urgd-pulse-submitReport/latest.zip
     Description: S3 key for urgd-pulse-submitReport Lambda ZIP
 
+  AdminTenantsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-adminTenants/latest.zip
+    Description: S3 key for urgd-pulse-adminTenants Lambda ZIP
+
+  PublicConfigCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-publicConfig/latest.zip
+    Description: S3 key for urgd-pulse-publicConfig Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
@@ -426,6 +436,30 @@ Mappings:
       SavePCDecisions: 3
       UsageReport: 3
       RemoveDocument: 3
+      # Spec 2 — S1 fixes
+      GenerateRevision: 3
+      GetRevisions: 3
+      SendPulseCheckReady: 3
+      PreviewSession: 3
+      CreateSelfSession: 3
+      SubmitReport: 3
+      # Spec 2 — S1 new
+      AdminTenants: 3
+      PublicConfig: 3
+      # Spec 2 — future slices (mapping added now, Lambdas added in S2-S5)
+      CloseExpiredItems: 3
+      StripeWebhook: 3
+      CreateCheckoutSession: 3
+      PurgeTranscripts: 3
+      AnalyzeDocument: 3
+      CreateOrg: 3
+      InviteOrgMember: 3
+      JoinOrg: 3
+      GetOrg: 3
+      UpdateOrg: 3
+      DeleteOrg: 3
+      SuggestDescription: 3
+      EmailSessionSummary: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -472,6 +506,30 @@ Mappings:
       SavePCDecisions: 5
       UsageReport: 5
       RemoveDocument: 5
+      # Spec 2 — S1 fixes
+      GenerateRevision: 5
+      GetRevisions: 5
+      SendPulseCheckReady: 5
+      PreviewSession: 5
+      CreateSelfSession: 5
+      SubmitReport: 5
+      # Spec 2 — S1 new
+      AdminTenants: 5
+      PublicConfig: 5
+      # Spec 2 — future slices
+      CloseExpiredItems: 5
+      StripeWebhook: 5
+      CreateCheckoutSession: 5
+      PurgeTranscripts: 5
+      AnalyzeDocument: 5
+      CreateOrg: 5
+      InviteOrgMember: 5
+      JoinOrg: 5
+      GetOrg: 5
+      UpdateOrg: 5
+      DeleteOrg: 5
+      SuggestDescription: 5
+      EmailSessionSummary: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -518,6 +576,30 @@ Mappings:
       SavePCDecisions: 10
       UsageReport: 5
       RemoveDocument: 5
+      # Spec 2 — S1 fixes
+      GenerateRevision: 25
+      GetRevisions: 10
+      SendPulseCheckReady: 5
+      PreviewSession: 10
+      CreateSelfSession: 10
+      SubmitReport: 5
+      # Spec 2 — S1 new
+      AdminTenants: 5
+      PublicConfig: 5
+      # Spec 2 — future slices
+      CloseExpiredItems: 5
+      StripeWebhook: 5
+      CreateCheckoutSession: 5
+      PurgeTranscripts: 5
+      AnalyzeDocument: 5
+      CreateOrg: 5
+      InviteOrgMember: 5
+      JoinOrg: 5
+      GetOrg: 10
+      UpdateOrg: 5
+      DeleteOrg: 5
+      SuggestDescription: 5
+      EmailSessionSummary: 5
 Resources:
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -1899,6 +1981,7 @@ Resources:
                 Resource: !GetAtt PulseUserPool.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
                   - dynamodb:PutItem
                 Resource: !GetAtt PulseTenantsTable.Arn
 
@@ -2131,7 +2214,6 @@ Resources:
         Variables:
           USER_POOL_ID: !Ref PulseUserPool
           USER_POOL_CLIENT_ID: !Ref PulseUserPoolClient
-          PUBLIC_SIGNUP: !Ref PublicSignup
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
@@ -2800,6 +2882,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseItemsTable.Arn
               - Effect: Allow
@@ -2881,6 +2967,10 @@ Resources:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:UpdateItem
@@ -3090,6 +3180,7 @@ Resources:
       Environment:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           QUARANTINE_BUCKET_NAME: !Ref QuarantineBucketName
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
@@ -3133,6 +3224,7 @@ Resources:
       Environment:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
       Tags:
         - Key: project
@@ -3737,6 +3829,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseItemsTable.Arn
               - Effect: Allow
@@ -4190,6 +4286,7 @@ Resources:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET: !Ref PulseDataBucket
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           APP_URL: !Sub 'https://${FrontendDomainName}'
@@ -5108,6 +5205,10 @@ Resources:
                 Resource: '*'
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
                   - dynamodb:Query
                 Resource: !GetAtt PulseTranscriptsTable.Arn
               - Effect: Allow
@@ -5270,6 +5371,7 @@ Resources:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
       Tags:
         - Key: project
@@ -6004,7 +6106,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                Resource: !GetAtt PulseSessionsTable.Arn
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:Query
@@ -6094,6 +6198,10 @@ Resources:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:Query
@@ -6284,6 +6392,7 @@ Resources:
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           REPORTS_TABLE: !Ref PulseReportsTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
@@ -6349,6 +6458,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           PROCESS_FUNCTION_NAME: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
@@ -6864,6 +6974,99 @@ Resources:
                   - kms:Decrypt
                 Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
 
+  # ── Spec 2 S1: IAM Execution Roles (adminTenants, publicConfig) ─────────────
+
+  PulseAdminTenantsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-adminTenants-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AdminTenantsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulsePublicConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-publicConfig-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PublicConfigPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
   # ── S6 Lambda Functions ──────────────────────────────────────────────────────
 
   PulseGenerateRevisionFunction:
@@ -6879,7 +7082,7 @@ Resources:
         S3Key: !Ref GenerateRevisionCodeKey
       Timeout: 120
       MemorySize: 1024
-      ReservedConcurrentExecutions: 25
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateRevision]
       TracingConfig:
         Mode: Active
       Environment:
@@ -6925,7 +7128,7 @@ Resources:
         S3Key: !Ref GetRevisionsCodeKey
       Timeout: 30
       MemorySize: 512
-      ReservedConcurrentExecutions: 10
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GetRevisions]
       TracingConfig:
         Mode: Active
       Environment:
@@ -6967,7 +7170,7 @@ Resources:
         S3Key: !Ref SendPulseCheckReadyCodeKey
       Timeout: 30
       MemorySize: 512
-      ReservedConcurrentExecutions: 5
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SendPulseCheckReady]
       TracingConfig:
         Mode: Active
       Environment:
@@ -7081,6 +7284,11 @@ Resources:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
                 Resource: '*'
+              # Read tenant record for feature flag enforcement
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
               # Read item to verify ownership before creating preview session
               - Effect: Allow
                 Action:
@@ -7105,13 +7313,14 @@ Resources:
         S3Key: !Ref PreviewSessionCodeKey
       Timeout: 30
       MemorySize: 512
-      ReservedConcurrentExecutions: 3
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PreviewSession]
       TracingConfig:
         Mode: Active
       Environment:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           ITEMS_TABLE: !Ref PulseItemsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           APP_URL: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
@@ -7235,7 +7444,7 @@ Resources:
         S3Key: !Ref CreateSelfSessionCodeKey
       Timeout: 30
       MemorySize: 512
-      ReservedConcurrentExecutions: 3
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CreateSelfSession]
       TracingConfig:
         Mode: Active
       Environment:
@@ -7346,7 +7555,7 @@ Resources:
         S3Key: !Ref SubmitReportCodeKey
       Timeout: 15
       MemorySize: 256
-      ReservedConcurrentExecutions: 3
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SubmitReport]
       TracingConfig:
         Mode: Active
       Environment:
@@ -7417,6 +7626,188 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSubmitReportFunction.Arn}/invocations'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # [S2-S1 Batch 2] Uncomment when Lambda code is ready
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── adminTenants Log Group ──
+  # PulseAdminTenantsLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub '/aws/lambda/urgd-pulse-adminTenants-${Environment}'
+  #     RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: environment
+  #         Value: !Ref Environment
+
+  # ── adminTenants Lambda Function ──
+  # PulseAdminTenantsFunction:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: PulseAdminTenantsLogGroup
+  #   Properties:
+  #     FunctionName: !Sub 'urgd-pulse-adminTenants-${Environment}'
+  #     Runtime: nodejs22.x
+  #     Handler: index.handler
+  #     Role: !GetAtt PulseAdminTenantsRole.Arn
+  #     Code:
+  #       S3Bucket: urgd-applicationdata
+  #       S3Key: !Ref AdminTenantsCodeKey
+  #     Timeout: 30
+  #     MemorySize: 512
+  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, AdminTenants]
+  #     TracingConfig:
+  #       Mode: Active
+  #     Environment:
+  #       Variables:
+  #         TENANTS_TABLE: !Ref PulseTenantsTable
+  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+  #         ENVIRONMENT: !Ref Environment
+  #         VERSION: !Ref DeploymentVersion
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: brand
+  #         Value: urgd
+  #       - Key: studio
+  #         Value: urgd-studios
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: cfn-stack-name
+  #         Value: !Ref AWS::StackName
+  #       - Key: license
+  #         Value: proprietary
+
+  # PulseAdminTenantsFunctionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !Ref PulseAdminTenantsFunction
+  #     Action: lambda:InvokeFunction
+  #     Principal: apigateway.amazonaws.com
+  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ── adminTenants API Gateway Resources ──
+  # PATCH /api/admin/tenants/{tenantId}
+  # PulseAdminResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulseApiResource
+  #     PathPart: admin
+
+  # PulseAdminTenantsResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulseAdminResource
+  #     PathPart: tenants
+
+  # PulseAdminTenantIdResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulseAdminTenantsResource
+  #     PathPart: '{tenantId}'
+
+  # PulseAdminTenantsMethod:
+  #   Type: AWS::ApiGateway::Method
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ResourceId: !Ref PulseAdminTenantIdResource
+  #     HttpMethod: PATCH
+  #     AuthorizationType: CUSTOM
+  #     AuthorizerId: !Ref PulseCognitoAuthorizer
+  #     Integration:
+  #       Type: AWS_PROXY
+  #       IntegrationHttpMethod: POST
+  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseAdminTenantsFunction.Arn}/invocations'
+
+  # ── publicConfig Log Group ──
+  # PulsePublicConfigLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub '/aws/lambda/urgd-pulse-publicConfig-${Environment}'
+  #     RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: environment
+  #         Value: !Ref Environment
+
+  # ── publicConfig Lambda Function ──
+  # PulsePublicConfigFunction:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: PulsePublicConfigLogGroup
+  #   Properties:
+  #     FunctionName: !Sub 'urgd-pulse-publicConfig-${Environment}'
+  #     Runtime: nodejs22.x
+  #     Handler: index.handler
+  #     Role: !GetAtt PulsePublicConfigRole.Arn
+  #     Code:
+  #       S3Bucket: urgd-applicationdata
+  #       S3Key: !Ref PublicConfigCodeKey
+  #     Timeout: 10
+  #     MemorySize: 256
+  #     ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PublicConfig]
+  #     TracingConfig:
+  #       Mode: Active
+  #     Environment:
+  #       Variables:
+  #         TENANTS_TABLE: !Ref PulseTenantsTable
+  #         CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+  #         ENVIRONMENT: !Ref Environment
+  #         VERSION: !Ref DeploymentVersion
+  #     Tags:
+  #       - Key: project
+  #         Value: pulse
+  #       - Key: brand
+  #         Value: urgd
+  #       - Key: studio
+  #         Value: urgd-studios
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: cfn-stack-name
+  #         Value: !Ref AWS::StackName
+  #       - Key: license
+  #         Value: proprietary
+
+  # PulsePublicConfigFunctionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !Ref PulsePublicConfigFunction
+  #     Action: lambda:InvokeFunction
+  #     Principal: apigateway.amazonaws.com
+  #     SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ── publicConfig API Gateway Resources ──
+  # GET /api/public/config
+  # PulsePublicResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulseApiResource
+  #     PathPart: public
+
+  # PulsePublicConfigResource:
+  #   Type: AWS::ApiGateway::Resource
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ParentId: !Ref PulsePublicResource
+  #     PathPart: config
+
+  # PulsePublicConfigMethod:
+  #   Type: AWS::ApiGateway::Method
+  #   Properties:
+  #     RestApiId: !Ref PulseApiGateway
+  #     ResourceId: !Ref PulsePublicConfigResource
+  #     HttpMethod: GET
+  #     AuthorizationType: NONE
+  #     Integration:
+  #       Type: AWS_PROXY
+  #       IntegrationHttpMethod: POST
+  #       Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulsePublicConfigFunction.Arn}/invocations'
 
 
 Outputs:
