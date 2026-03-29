@@ -105,11 +105,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
+    boxSizing: 'border-box' as const,
+    minWidth: 0,
   },
   messageRow: {
     display: 'flex',
     alignItems: 'flex-end',
     gap: '0.5rem',
+    minWidth: 0,
+    maxWidth: '100%',
   },
   messageRowReviewer: {
     display: 'flex',
@@ -123,8 +127,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-end',
     background: '#0f0f0f',
     flexShrink: 0,
-    width: '100%',
     boxSizing: 'border-box' as const,
+    minWidth: 0,
   },
   input: {
     flex: 1,
@@ -784,7 +788,7 @@ export default function Chat() {
         )}
 
         {/* Chat column */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0%', overflow: 'hidden', minWidth: 0, maxWidth: '100%', contain: 'inline-size' as const }}>
           {/* Chat area */}
           <div
             ref={chatAreaRef}
@@ -873,7 +877,7 @@ export default function Chat() {
               )}
               <div style={styles.messageRow}>
                 {isFirstInCluster ? (
-                  <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
                     <PulseDot state="idle" />
                   </div>
                 ) : (

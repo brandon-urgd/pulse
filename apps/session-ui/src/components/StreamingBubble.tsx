@@ -10,6 +10,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'flex-end',
     gap: '0.5rem',
+    minWidth: 0,
+    maxWidth: '100%',
   },
   bubble: {
     background: '#1a1a1a',
@@ -23,6 +25,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: 'fit-content',
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
+    overflow: 'hidden' as const,
+    boxSizing: 'border-box' as const,
   },
 }
 

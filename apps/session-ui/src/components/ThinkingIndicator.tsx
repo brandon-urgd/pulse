@@ -23,6 +23,8 @@ export default function ThinkingIndicator() {
     display: 'flex',
     alignItems: 'flex-end',
     gap: '0.5rem',
+    minWidth: 0,
+    maxWidth: '100%',
   }
 
   const bubbleStyle: React.CSSProperties = {

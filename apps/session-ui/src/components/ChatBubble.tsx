@@ -24,6 +24,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: 'fit-content',
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
+    overflow: 'hidden' as const,
+    boxSizing: 'border-box' as const,
   },
   reviewer: {
     background: '#4a7c59',
