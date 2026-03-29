@@ -325,6 +325,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
       ...(content.trim() ? { content: content.trim() } : {}),
       ...(feedbackSections.length > 0 ? { feedbackSections } : {}),
       ...(Object.keys(sectionDepthPreferences).length > 0 ? { sectionDepthPreferences } : {}),
+      ...(timeLimitMinutes != null ? { recommendedTimeLimitMinutes: timeLimitMinutes } : {}),
     };
 
     if (isEditMode) {

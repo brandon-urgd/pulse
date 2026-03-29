@@ -36,6 +36,8 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '85%',
     padding: '0.625rem 0.875rem',
     width: 'fit-content',
+    wordBreak: 'break-word' as const,
+    overflow: 'hidden' as const,
   },
   content: {
     background: 'rgba(74,124,89,0.12)',

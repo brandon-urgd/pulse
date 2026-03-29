@@ -1,5 +1,10 @@
 /* Session UI — global styles */
 
+/* Universal box-sizing reset — prevents padding/border from overflowing containers */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* Mobile viewport lock — fills screen like a native app */
 html,
 body {

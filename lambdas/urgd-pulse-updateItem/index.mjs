@@ -190,6 +190,15 @@ export const handler = async (event) => {
       expressionValues[':sdp'] = { M: m }
     }
 
+    // Store recommendedTimeLimitMinutes if provided (user-adjusted from section selection)
+    if (body.recommendedTimeLimitMinutes != null) {
+      const rtlm = Number(body.recommendedTimeLimitMinutes)
+      if (Number.isFinite(rtlm) && rtlm >= 1 && rtlm <= 120) {
+        updateParts.push('recommendedTimeLimitMinutes = :rtlmUser')
+        expressionValues[':rtlmUser'] = { N: String(rtlm) }
+      }
+    }
+
     // Set itemType if provided (5.4)
     const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
     if (requestedItemType) {
