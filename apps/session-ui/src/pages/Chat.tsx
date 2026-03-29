@@ -791,6 +791,22 @@ export default function Chat() {
           >
         {messages.map((msg, i) => {
           if (msg.content === '__completion__') {
+            if (isPreview) {
+              // Preview sessions: simple end message, no summary link
+              return (
+                <div key={i} style={styles.completionCard}>
+                  <h2 style={styles.completionHeading}>Preview complete.</h2>
+                  <p style={styles.completionBody}>This is how the session would end for a reviewer.</p>
+                  <button
+                    type="button"
+                    onClick={() => { window.close(); if (!window.closed) history.back(); }}
+                    style={{ background: 'transparent', border: '1px solid #3a3a3a', color: '#888', fontSize: '0.875rem', borderRadius: '8px', padding: '0.25rem 0.75rem', cursor: 'pointer' }}
+                  >
+                    Close preview
+                  </button>
+                </div>
+              )
+            }
             return (
               <CompletionCard
                 key={i}

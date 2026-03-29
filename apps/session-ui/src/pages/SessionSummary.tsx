@@ -22,6 +22,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     padding: '0 1rem 3rem',
+    overflowY: 'auto' as const,
   },
   topBar: {
     width: '100%',
