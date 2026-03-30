@@ -5,7 +5,7 @@
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
-requireEnv(['SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
@@ -64,6 +64,22 @@ export const handler = async (event) => {
     }))
 
     log('info', 'CancelSession: session cancelled', { requestId, tenantId, itemId, sessionId })
+
+    // Decrement sessionCount on the item so the display reflects active sessions
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET updatedAt = :now ADD sessionCount :neg',
+        ExpressionAttributeValues: {
+          ':now': { S: new Date().toISOString() },
+          ':neg': { N: '-1' },
+        },
+      }))
+    } catch (decErr) {
+      log('warn', 'CancelSession: failed to decrement sessionCount', { tenantId, itemId, errorName: decErr.name })
+    }
+
     return createResponse(200, { message: 'Session cancelled' }, {}, origin)
   } catch (err) {
     log('error', 'CancelSession: unexpected error', { requestId, tenantId, sessionId, errorName: err.name })

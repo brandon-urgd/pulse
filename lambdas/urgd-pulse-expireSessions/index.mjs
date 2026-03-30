@@ -140,20 +140,25 @@ export const handler = async (event) => {
   log('info', 'ExpireSessions: job completed', { totalScanned, totalExpired, totalSkipped })
 
   // After expiring sessions, check each affected item to see if all sessions are now terminal.
-  // If so, invoke runPulseCheck and sendPulseCheckReady async (fire-and-forget).
+  // NOTE: We do NOT auto-close items here. Items close on their closeDate (via closeExpiredItems
+  // in Slice 3) or when the tenant manually closes them. An item with all sessions terminal
+  // may still accept new invitations until its close date.
+  // We DO trigger pulse check + notification if all real sessions are terminal, so the tenant
+  // gets their results without waiting for the close date.
   if (expiredByItem.size > 0) {
-    await triggerPulseChecksForClosedItems(expiredByItem)
+    await triggerPulseChecksForTerminalItems(expiredByItem)
   }
 
   return { totalScanned, totalExpired, totalSkipped }
 }
 
 /**
- * For each item that had sessions expire this run, check if ALL sessions for that item
- * are now in a terminal state (completed or expired). If so, fire runPulseCheck and
- * sendPulseCheckReady async.
+ * For each item that had sessions expire this run, check if ALL real (non-preview) sessions
+ * are now in a terminal state. If so, fire runPulseCheck and sendPulseCheckReady async
+ * so the tenant gets results. Does NOT close the item — that's the tenant's decision
+ * or the closeDate's job.
  */
-async function triggerPulseChecksForClosedItems(expiredByItem) {
+async function triggerPulseChecksForTerminalItems(expiredByItem) {
   const runPulseCheckFnName = process.env.RUN_PULSE_CHECK_FUNCTION_NAME
   const sendReadyFnName = process.env.SEND_PULSE_CHECK_READY_FUNCTION_NAME
   const itemsTable = process.env.ITEMS_TABLE
@@ -174,38 +179,56 @@ async function triggerPulseChecksForClosedItems(expiredByItem) {
         IndexName: 'item-index',
         KeyConditionExpression: 'itemId = :itemId',
         ExpressionAttributeValues: { ':itemId': { S: itemId } },
-        ProjectionExpression: 'sessionId, #status',
+        ProjectionExpression: 'sessionId, #status, preview',
         ExpressionAttributeNames: { '#status': 'status' },
       }))
 
       const sessions = sessionsResult.Items ?? []
       if (sessions.length === 0) continue
 
-      // Check if every session is now terminal
-      const allTerminal = sessions.every(s => TERMINAL_STATUSES.has(s.status?.S))
+      // Exclude preview sessions — they're test runs, not real feedback.
+      // An expired preview session should never trigger item auto-close.
+      const realSessions = sessions.filter(s => s.preview?.BOOL !== true)
+      if (realSessions.length === 0) continue
+
+      // Check if every real session is now terminal
+      const allTerminal = realSessions.every(s => TERMINAL_STATUSES.has(s.status?.S))
       if (!allTerminal) {
         log('info', 'ExpireSessions: item still has open sessions, skipping auto-trigger', { tenantId, itemId })
         continue
       }
 
-      // Close the item if it's still active — same as the manual close button
+      // Only auto-close the item if the closeDate has passed.
+      // The tenant may want to invite more reviewers — don't close just because
+      // existing sessions are terminal.
       if (itemsTable) {
         try {
-          await dynamo.send(new UpdateItemCommand({
+          const itemResult = await dynamo.send(new GetItemCommand({
             TableName: itemsTable,
             Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-            UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
-            ConditionExpression: '#status <> :closed',
+            ProjectionExpression: 'closeDate, #status, itemName',
             ExpressionAttributeNames: { '#status': 'status' },
-            ExpressionAttributeValues: {
-              ':closed': { S: 'closed' },
-              ':now': { S: now },
-            },
           }))
-          log('info', 'ExpireSessions: item auto-closed', { tenantId, itemId })
+          const itemCloseDate = itemResult.Item?.closeDate?.S
+          const itemStatus = itemResult.Item?.status?.S
+
+          if (itemCloseDate && new Date(itemCloseDate).getTime() < Date.now() && itemStatus === 'active') {
+            await dynamo.send(new UpdateItemCommand({
+              TableName: itemsTable,
+              Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+              UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
+              ConditionExpression: '#status <> :closed',
+              ExpressionAttributeNames: { '#status': 'status' },
+              ExpressionAttributeValues: {
+                ':closed': { S: 'closed' },
+                ':now': { S: now },
+              },
+            }))
+            log('info', 'ExpireSessions: item auto-closed (closeDate passed)', { tenantId, itemId, closeDate: itemCloseDate })
+          }
         } catch (closeErr) {
           if (closeErr.name !== 'ConditionalCheckFailedException') {
-            log('warn', 'ExpireSessions: failed to auto-close item', { tenantId, itemId, errorName: closeErr.name })
+            log('warn', 'ExpireSessions: failed to check/close item', { tenantId, itemId, errorName: closeErr.name })
           }
         }
       }
