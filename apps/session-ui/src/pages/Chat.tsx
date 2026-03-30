@@ -710,7 +710,7 @@ export default function Chat() {
             <button
               type="button"
               style={styles.endSessionButton}
-              onClick={() => { window.close(); if (!window.closed) history.back(); }}
+              onClick={() => { window.close(); if (!window.closed) navigate('/') }}
             >
               End preview
             </button>
@@ -726,7 +726,7 @@ export default function Chat() {
             <button
               type="button"
               style={styles.endSessionButton}
-              onClick={() => { window.close(); if (!window.closed) history.back(); }}
+              onClick={() => navigate(`/s/${sessionId}/summary`)}
             >
               Close
             </button>
@@ -809,7 +809,7 @@ export default function Chat() {
                   <p style={styles.completionBody}>This is how the session would end for a reviewer.</p>
                   <button
                     type="button"
-                    onClick={() => { window.close(); if (!window.closed) history.back(); }}
+                    onClick={() => { window.close(); if (!window.closed) navigate('/') }}
                     style={{ background: 'transparent', border: '1px solid #3a3a3a', color: '#888', fontSize: '0.875rem', borderRadius: '8px', padding: '0.25rem 0.75rem', cursor: 'pointer' }}
                   >
                     Close preview

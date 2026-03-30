@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom'
+
 interface Props {
   sessionId: string
   /** Key observation from the agent's closing message */
@@ -54,6 +56,7 @@ const styles: Record<string, React.CSSProperties> = {
  * Uses direct strings (no labels registry) per session-ui convention.
  */
 export default function CompletionCard({ sessionId, observation }: Props) {
+  const navigate = useNavigate()
   return (
     <div style={styles.card}>
       <h2 style={styles.heading}>Thanks — your feedback has been captured.</h2>
@@ -69,7 +72,7 @@ export default function CompletionCard({ sessionId, observation }: Props) {
         </a>
         <button
           type="button"
-          onClick={() => { window.close(); if (!window.closed) history.back(); }}
+          onClick={() => navigate(`/s/${sessionId}/summary`)}
           style={styles.closeButton}
         >
           Close
