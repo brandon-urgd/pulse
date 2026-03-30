@@ -82,17 +82,22 @@ export const handler = async (event) => {
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :itemId',
       ExpressionAttributeValues: { ':itemId': { S: itemId } },
-      ProjectionExpression: 'sessionId, #status',
+      ProjectionExpression: 'sessionId, #status, preview',
       ExpressionAttributeNames: { '#status': 'status' },
     }))
 
     const sessions = sessionsResult.Items || []
     if (sessions.length === 0) return errorResponse(404, 'No sessions found for this item', {}, origin)
 
-    // 2. Filter out not_started sessions — they haven't begun and contribute nothing.
+    // 2. Filter out not_started, cancelled, and preview sessions.
+    //    Preview sessions are tenant-only test runs — not real feedback.
     //    in_progress sessions are underway and will complete naturally; the re-run
     //    banner handles including them after they finish.
-    const activeSessions = sessions.filter(s => s.status?.S !== 'not_started' && s.status?.S !== 'cancelled')
+    const activeSessions = sessions.filter(s =>
+      s.status?.S !== 'not_started' &&
+      s.status?.S !== 'cancelled' &&
+      s.preview?.BOOL !== true
+    )
     if (activeSessions.length === 0) return errorResponse(404, 'No completed sessions to analyze', {}, origin)
 
     const inProgressCount = activeSessions.filter(s => s.status?.S === 'in_progress').length
