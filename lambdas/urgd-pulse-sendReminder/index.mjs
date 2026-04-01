@@ -2,7 +2,7 @@
 // Triggered by EventBridge on hourly schedule
 // Scans sessions approaching deadline and sends reminder emails via SES
 
-import { DynamoDBClient, ScanCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, ScanCommand, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { log, requireEnv } from './shared/utils.mjs'
@@ -16,7 +16,7 @@ const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
-const REMINDER_WINDOW_HOURS = 48
+const REMINDER_WINDOW_HOURS = 24
 
 function unmarshalFeatures(m) {
   if (!m) return {}
@@ -245,10 +245,23 @@ export const handler = async (event) => {
 
       const closeDateObj = new Date(closeDate)
 
-      // Only send reminder if closeDate is within the next 48 hours (and not already past)
+      // Only send reminder if closeDate is within the next 24 hours (and not already past)
       if (closeDateObj <= now || closeDateObj > windowEnd) {
         totalSkipped++
         continue
+      }
+
+      // Check if we've already sent a reminder for this session
+      const lastReminderSent = session.lastReminderSent?.S
+      if (lastReminderSent) {
+        const lastSentDate = new Date(lastReminderSent)
+        const hoursSinceLastReminder = (now - lastSentDate) / (1000 * 60 * 60)
+        
+        // Skip if we sent a reminder less than 23 hours ago (prevents duplicate reminders)
+        if (hoursSinceLastReminder < 23) {
+          totalSkipped++
+          continue
+        }
       }
 
       // Check emailReminders feature flag (cached per tenant)
@@ -278,8 +291,28 @@ export const handler = async (event) => {
         inviterEmail: tenantInfo.inviterEmail,
       })
 
-      if (sent) totalSent++
-      else totalSkipped++
+      if (sent) {
+        // Update session with lastReminderSent timestamp
+        try {
+          await dynamo.send(new UpdateItemCommand({
+            TableName: process.env.SESSIONS_TABLE,
+            Key: {
+              tenantId: { S: tenantId },
+              sessionId: { S: sessionId },
+            },
+            UpdateExpression: 'SET lastReminderSent = :timestamp',
+            ExpressionAttributeValues: {
+              ':timestamp': { S: now.toISOString() },
+            },
+          }))
+          log('info', 'SendReminder: updated lastReminderSent', { tenantId, sessionId })
+        } catch (updateErr) {
+          log('warn', 'SendReminder: failed to update lastReminderSent', { tenantId, sessionId, errorName: updateErr.name })
+        }
+        totalSent++
+      } else {
+        totalSkipped++
+      }
     }
   } while (lastEvaluatedKey)
 
