@@ -1,0 +1,9 @@
+{
+  "name": "urgd-pulse-register",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ulid": "^2.3.0"
+  }
+}
