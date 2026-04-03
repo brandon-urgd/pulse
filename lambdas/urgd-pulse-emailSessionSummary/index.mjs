@@ -74,7 +74,7 @@ export const handler = async (event) => {
 
     // 4. Send email via SES — email is NOT logged, NOT stored
     await ses.send(new SendEmailCommand({
-      Source: process.env.SES_FROM_EMAIL,
+      Source: `"Pulse" <${process.env.SES_FROM_EMAIL}>`,
       Destination: { ToAddresses: [email] },
       Message: {
         Subject: { Data: 'Your Pulse Session Summary', Charset: 'UTF-8' },

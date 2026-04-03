@@ -179,7 +179,7 @@ Respond in valid JSON format:
             </div>`
 
           await ses.send(new SendEmailCommand({
-            Source: process.env.SES_FROM_EMAIL,
+            Source: `"Pulse" <${process.env.SES_FROM_EMAIL}>`,
             Destination: { ToAddresses: [reviewerEmail] },
             Message: {
               Subject: { Data: 'Your Pulse Session Summary', Charset: 'UTF-8' },
