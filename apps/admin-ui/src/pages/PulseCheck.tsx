@@ -5,7 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useNavigate } from 'react-router-dom';
 import { labels } from '../config/labels-registry';
-import { downloadPdf } from '../utils/downloadPdf';
+import { downloadPulseCheckPdf } from '../utils/downloadPdf';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import SignalMatrix, { type ThemeRow, type ReviewerColumn } from '../components/SignalMatrix';
 import FeedbackActionPills, { type FeedbackAction } from '../components/FeedbackActionPills';
@@ -130,7 +130,6 @@ export default function PulseCheck() {
   const [overlayDone, setOverlayDone] = useState(false);
   const [overlayError, setOverlayError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
-  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -211,12 +210,11 @@ export default function PulseCheck() {
     setOverlayError('');
   }
 
-  async function handleDownloadPdf() {
-    if (!pdfContentRef.current || pdfGenerating) return;
+  function handleDownloadPdf() {
+    if (!pc || pdfGenerating) return;
     setPdfGenerating(true);
     try {
-      const filename = itemName ? `Pulse Check — ${itemName}` : 'Pulse Check';
-      await downloadPdf(pdfContentRef.current, filename);
+      downloadPulseCheckPdf(pc, itemName);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }
@@ -422,7 +420,7 @@ export default function PulseCheck() {
     return (
       <>
         {Overlay}
-        <div className={styles.container} ref={pdfContentRef}>
+        <div className={styles.container}>
           <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
@@ -582,7 +580,7 @@ export default function PulseCheck() {
   return (
     <>
       {Overlay}
-      <div className={styles.container} ref={pdfContentRef}>
+      <div className={styles.container}>
         <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
           ← {labels.pulseCheck.backToItem}
         </Link>

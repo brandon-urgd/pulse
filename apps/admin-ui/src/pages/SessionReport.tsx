@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { labels } from '../config/labels-registry';
-import { downloadPdf } from '../utils/downloadPdf';
+import { downloadSessionReportPdf } from '../utils/downloadPdf';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import styles from './SessionReport.module.css';
 
@@ -37,7 +37,6 @@ interface ReportResponse {
 export default function SessionReport() {
   const { itemId, sessionId } = useParams<{ itemId: string; sessionId: string }>();
   const [pdfGenerating, setPdfGenerating] = useState(false);
-  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isError } = useAuthedQuery<ReportResponse>(
     ['report', itemId, sessionId],
@@ -85,17 +84,17 @@ export default function SessionReport() {
   const tensions = report.tension;
   const uncertainties = report.uncertainty;
 
-  async function handleDownloadPdf() {
-    if (!pdfContentRef.current || pdfGenerating) return;
+  function handleDownloadPdf() {
+    if (!report || pdfGenerating) return;
     setPdfGenerating(true);
     try {
-      await downloadPdf(pdfContentRef.current, 'Session Report');
+      downloadSessionReportPdf(report);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }
 
   return (
-    <div className={styles.container} ref={pdfContentRef}>
+    <div className={styles.container}>
       {/* Back link */}
       <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
         ← {labels.sessionReport.backToItem}

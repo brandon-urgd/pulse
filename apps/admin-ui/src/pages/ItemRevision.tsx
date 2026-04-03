@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
-import { downloadPdf } from '../utils/downloadPdf';
+import { downloadRevisionPdf } from '../utils/downloadPdf';
 import styles from './ItemRevision.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -117,7 +117,6 @@ export default function ItemRevision() {
   const [showHistory, setShowHistory] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -223,12 +222,11 @@ export default function ItemRevision() {
       : 'Revision — Pulse';
   }, [itemName]);
 
-  async function handleDownloadPdf() {
-    if (!pdfContentRef.current || pdfGenerating) return;
+  function handleDownloadPdf() {
+    if (!selectedRevision || pdfGenerating || !originalContent || !revisionContent) return;
     setPdfGenerating(true);
     try {
-      const filename = itemName ? `Revision — ${itemName}` : 'Revision';
-      await downloadPdf(pdfContentRef.current, filename);
+      downloadRevisionPdf(originalContent, revisionContent, itemName, selectedRevision.revisionNumber);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }
@@ -258,7 +256,7 @@ export default function ItemRevision() {
   const hasRevisions = revisions.length > 0;
 
   return (
-    <div className={styles.container} role="main" aria-label={`Revision for ${itemName}`} ref={pdfContentRef}>
+    <div className={styles.container} role="main" aria-label={`Revision for ${itemName}`}>
       {/* Breadcrumb */}
       <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
         {labels.revision.backLink.replace('{itemName}', itemName || 'item')}
