@@ -11,6 +11,7 @@ import {
 export type AuthUser = {
   username: string;
   email: string;
+  name?: string;
 };
 
 export type UseAuthReturn = {
@@ -54,6 +55,7 @@ export function useAuth(): UseAuthReturn {
         setUser({
           username: currentUser.username,
           email: (payload?.email as string) ?? currentUser.username,
+          name: (payload?.name as string) ?? undefined,
         });
         setTenantId(extractTenantId(session));
       } catch {
@@ -81,6 +83,7 @@ export function useAuth(): UseAuthReturn {
         setUser({
           username: currentUser.username,
           email: (payload?.email as string) ?? currentUser.username,
+          name: (payload?.name as string) ?? undefined,
         });
         setTenantId(extractTenantId(session));
       }
@@ -100,6 +103,7 @@ export function useAuth(): UseAuthReturn {
       setUser({
         username: currentUser.username,
         email: (payload?.email as string) ?? currentUser.username,
+        name: (payload?.name as string) ?? undefined,
       });
       setTenantId(extractTenantId(session));
     }

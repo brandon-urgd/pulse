@@ -179,7 +179,7 @@ export default function AdminLayout() {
             flexShrink: 0,
           }}
         >
-          {user?.email?.charAt(0).toUpperCase() ?? '?'}
+          {(user?.name ?? user?.email)?.charAt(0).toUpperCase() ?? '?'}
         </Link>
 
         {/* Hamburger — mobile only */}
