@@ -17,7 +17,33 @@
     "sessionCount": 1,
     "totalSections": 5,
     "recommendedTimeLimitMinutes": 17,
-    "lockedAt": "{closedAt}"
+    "lockedAt": "{closedAt}",
+    "sectionMap": {
+      "sections": [
+        { "id": "s1", "title": "Vision", "classification": "substantive" },
+        { "id": "s2", "title": "Target Audience", "classification": "substantive" },
+        { "id": "s3", "title": "Key Features", "classification": "substantive" },
+        { "id": "s4", "title": "Competitive Landscape", "classification": "substantive" },
+        { "id": "s5", "title": "Monetization", "classification": "substantive" }
+      ],
+      "totalSubstantiveSections": 5,
+      "analyzedAt": "{createdAt}"
+    },
+    "feedbackSections": ["s1", "s2", "s3", "s4", "s5"],
+    "sectionDepthPreferences": {
+      "s1": "explore",
+      "s2": "explore",
+      "s3": "deep",
+      "s4": "explore",
+      "s5": "explore"
+    },
+    "coverageMap": {
+      "s1": { "sessionCount": 1, "avgDepth": "explore", "reviewerIds": ["{sessionId}"] },
+      "s2": { "sessionCount": 1, "avgDepth": "explore", "reviewerIds": ["{sessionId}"] },
+      "s3": { "sessionCount": 1, "avgDepth": "deep", "reviewerIds": ["{sessionId}"] },
+      "s4": { "sessionCount": 1, "avgDepth": "explore", "reviewerIds": ["{sessionId}"] },
+      "s5": { "sessionCount": 1, "avgDepth": "explore", "reviewerIds": ["{sessionId}"] }
+    }
   },
   "session": {
     "tenantId": "{tenantId}",

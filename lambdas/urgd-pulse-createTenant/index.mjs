@@ -80,6 +80,24 @@ async function seedExampleData(tenantId) {
     totalSections: { N: String(fix.item.totalSections) },
     recommendedTimeLimitMinutes: { N: String(fix.item.recommendedTimeLimitMinutes) },
     lockedAt: { S: closedAt },
+    sectionMap: { M: {
+      sections: { L: fix.item.sectionMap.sections.map(s => ({ M: {
+        id: { S: s.id }, title: { S: s.title }, classification: { S: s.classification }
+      }}))},
+      totalSubstantiveSections: { N: String(fix.item.sectionMap.totalSubstantiveSections) },
+      analyzedAt: { S: createdAt },
+    }},
+    feedbackSections: { L: fix.item.feedbackSections.map(s => ({ S: s })) },
+    sectionDepthPreferences: { M: Object.fromEntries(
+      Object.entries(fix.item.sectionDepthPreferences).map(([k, v]) => [k, { S: v }])
+    )},
+    coverageMap: { M: Object.fromEntries(
+      Object.entries(fix.item.coverageMap).map(([k, v]) => [k, { M: {
+        sessionCount: { N: String(v.sessionCount) },
+        avgDepth: { S: v.avgDepth },
+        reviewerIds: { L: [{ S: sessionId }] },
+      }}])
+    )},
   }
   await dynamo.send(new PutItemCommand({ TableName: process.env.ITEMS_TABLE, Item: itemRecord }))
   log('info', 'CreateTenant: seeded example item', { tenantId, itemId })
