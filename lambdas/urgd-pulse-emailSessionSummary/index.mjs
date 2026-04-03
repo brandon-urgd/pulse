@@ -127,7 +127,7 @@ function buildSummaryEmailHtml(summary, itemName) {
   ${themesHtml}
   ${closingHtml}
   <hr style="border: none; border-top: 1px solid #eee; margin-top: 32px;">
-  <p style="font-size: 12px; color: #999;">This email was sent by Pulse by ur/gd Studios.</p>
+  <p style="font-size: 12px; color: #999;">© 2026 ur/gd Studios LLC. All rights reserved. | Pulse</p>
 </body>
 </html>`
 }
@@ -154,7 +154,7 @@ function buildSummaryEmailText(summary, itemName) {
     text += `\n${closingMessage}\n`
   }
 
-  text += '\n---\nThis email was sent by Pulse by ur/gd Studios.'
+  text += '\n---\n© 2026 ur/gd Studios LLC. All rights reserved. | Pulse'
   return text
 }
 

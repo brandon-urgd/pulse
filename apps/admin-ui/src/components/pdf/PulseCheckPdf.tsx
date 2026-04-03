@@ -37,7 +37,7 @@ const BLUE = '#5b8db8';
 const SIGNAL_STYLES = {
   conviction: { border: SAGE, bg: '#f0f7f2', heading: '#5a7e67', icon: '✓', label: 'What Landed' },
   tension:    { border: AMBER, bg: '#fdf8ed', heading: '#8a6d2b', icon: '⚠', label: 'Where It Struggled' },
-  uncertainty:{ border: BLUE,  bg: '#edf4fa', heading: '#3d6d94', icon: '?', label: 'Open Questions' },
+  uncertainty:{ border: BLUE,  bg: '#edf4fa', heading: '#3d6d94', icon: '', label: 'Open Questions' },
 } as const;
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
@@ -45,6 +45,7 @@ const SIGNAL_TYPE_COLORS: Record<string, string> = {
   tension: '#8a6d2b',
   uncertainty: '#3d6d94',
 };
+
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -58,32 +59,37 @@ const s = StyleSheet.create({
   },
   // Header
   title: { fontSize: 24, fontFamily: 'Helvetica-Bold', color: '#1a1a1a' },
-  dateLine: { fontSize: 9, color: '#adb5bd', marginTop: 4 },
-  accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 16 },
+  dateLine: { fontSize: 9, color: '#868e96', marginTop: 4 },
+  accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 24 },
   // Verdict
-  verdictLabel: { fontSize: 9, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: 1 },
+  verdictLabel: { fontSize: 9, color: '#868e96', textTransform: 'uppercase', letterSpacing: 1 },
   verdictText: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#1a1a1a', marginTop: 4 },
   narrative: { fontSize: 11, color: '#212529', marginTop: 8 },
-  metaLine: { fontSize: 9, color: '#adb5bd', marginTop: 8, marginBottom: 16 },
+  metaLine: { fontSize: 9, color: '#868e96', marginTop: 8, marginBottom: 28 },
   // Signal section
-  signalBlock: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 10, paddingRight: 10, marginBottom: 12 },
+  signalBlock: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 10, paddingRight: 10, marginBottom: 20 },
   signalHeading: { fontSize: 13, fontFamily: 'Helvetica-Bold', marginBottom: 6 },
   bullet: { fontSize: 10, color: '#212529', marginBottom: 3, paddingLeft: 8 },
   // Themes
   sectionHeader: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: SAGE, marginTop: 16, marginBottom: 8 },
-  themeLabel: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#1a1a1a', marginBottom: 4 },
-  signalQuote: { fontSize: 10, fontStyle: 'italic', color: '#212529', paddingLeft: 12, marginBottom: 4 },
+  themeLabel: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#1a1a1a', marginBottom: 6 },
+  themeGroup: { marginBottom: 12 },
+  // Theme table
+  tableRow: { flexDirection: 'row', marginBottom: 4 },
+  tableColLeft: { width: 80 },
+  tableColRight: { flex: 1 },
   signalTypeLabel: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
-  themeGroup: { marginBottom: 8 },
+  signalQuote: { fontSize: 10, fontStyle: 'italic', color: '#212529' },
   // Revisions
-  revisionRow: { marginBottom: 8 },
+  revisionBlock: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e9ecef' },
+  revisionBlockLast: { marginBottom: 12, paddingBottom: 0, borderBottomWidth: 0 },
+  revisionTypeBadge: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5, color: '#868e96', marginBottom: 4 },
   revisionProposal: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#1a1a1a' },
-  revisionRationale: { fontSize: 10, color: '#6c757d', paddingLeft: 12, marginTop: 2 },
-  typeBadge: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5, color: '#6c757d' },
+  revisionRationale: { fontSize: 10, color: '#868e96', paddingLeft: 12, marginTop: 4 },
   // Footer
   footer: { position: 'absolute', bottom: 20, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between' },
-  footerBrand: { fontSize: 8, color: '#adb5bd' },
-  footerPage: { fontSize: 8, color: '#adb5bd' },
+  footerBrand: { fontSize: 8, color: '#868e96' },
+  footerPage: { fontSize: 8, color: '#868e96' },
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,7 +117,7 @@ function SignalSection({ type, items }: { type: keyof typeof SIGNAL_STYLES; item
       wrap={false}
     >
       <Text style={[s.signalHeading, { color: cfg.heading }]}>
-        {cfg.icon} {cfg.label}
+        {cfg.icon ? `${cfg.icon} ` : ''}{cfg.label}
       </Text>
       {items.map((item, i) => (
         <Text key={i} style={s.bullet}>• {item}</Text>
@@ -125,7 +131,7 @@ function SignalSection({ type, items }: { type: keyof typeof SIGNAL_STYLES; item
 function Footer() {
   return (
     <View style={s.footer} fixed>
-      <Text style={s.footerBrand}>Pulse by ur/gd Studios</Text>
+      <Text style={s.footerBrand}>© 2026 ur/gd Studios LLC. All rights reserved. | Pulse</Text>
       <Text style={s.footerPage} render={({ pageNumber }) => `${pageNumber}`} />
     </View>
   );
@@ -165,11 +171,15 @@ export function PulseCheckPdf({ data, itemName }: Props) {
               <View key={theme.themeId} style={s.themeGroup} wrap={false}>
                 <Text style={s.themeLabel}>{theme.label}</Text>
                 {theme.reviewerSignals.map((sig, i) => (
-                  <View key={i} style={{ flexDirection: 'row', paddingLeft: 12, marginBottom: 4 }}>
-                    <Text style={[s.signalTypeLabel, { color: SIGNAL_TYPE_COLORS[sig.signalType] ?? '#6c757d' }]}>
-                      [{capitalize(sig.signalType)}]{' '}
-                    </Text>
-                    <Text style={s.signalQuote}>"{sig.quote}"</Text>
+                  <View key={i} style={s.tableRow}>
+                    <View style={s.tableColLeft}>
+                      <Text style={[s.signalTypeLabel, { color: SIGNAL_TYPE_COLORS[sig.signalType] ?? '#6c757d' }]}>
+                        [{capitalize(sig.signalType)}]
+                      </Text>
+                    </View>
+                    <View style={s.tableColRight}>
+                      <Text style={s.signalQuote}>"{sig.quote}"</Text>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -182,11 +192,13 @@ export function PulseCheckPdf({ data, itemName }: Props) {
           <View>
             <Text style={s.sectionHeader}>Proposed Revisions</Text>
             {data.proposedRevisions.map((rev, i) => (
-              <View key={i} style={s.revisionRow} wrap={false}>
-                <Text style={s.revisionProposal}>
-                  <Text style={s.typeBadge}>[{capitalize(rev.revisionType)}] </Text>
-                  {rev.proposal}
-                </Text>
+              <View
+                key={i}
+                style={i < data.proposedRevisions.length - 1 ? s.revisionBlock : s.revisionBlockLast}
+                wrap={false}
+              >
+                <Text style={s.revisionTypeBadge}>{capitalize(rev.revisionType)}</Text>
+                <Text style={s.revisionProposal}>{rev.proposal}</Text>
                 <Text style={s.revisionRationale}>{rev.rationale}</Text>
               </View>
             ))}

@@ -175,7 +175,7 @@ Respond in valid JSON format:
               ${themesHtml ? `<p><strong>Key themes:</strong></p>${themesHtml}` : ''}
               ${summary.closingMessage ? `<p style="margin-top: 16px; color: #555;">${escapeHtml(summary.closingMessage)}</p>` : ''}
               <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;" />
-              <p style="font-size: 12px; color: #888;">This email was sent by Pulse by ur/gd Studios.</p>
+              <p style="font-size: 12px; color: #888;">© 2026 ur/gd Studios LLC. All rights reserved. | Pulse</p>
             </div>`
 
           await ses.send(new SendEmailCommand({

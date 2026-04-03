@@ -1,6 +1,6 @@
 .container {
   padding: var(--space-8);
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
@@ -21,7 +21,7 @@
 .heading {
   font-size: var(--font-size-2xl);
   font-weight: 600;
-  margin: 0 0 var(--space-2);
+  margin: 2rem 0 var(--space-2);
 }
 
 .headingRow {
@@ -64,12 +64,12 @@
 .subheading {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin: 0 0 var(--space-8);
+  margin: 0 0 1.5rem;
 }
 
 .incompleteNotice {
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -166,7 +166,7 @@
 
 /* ── Verdict block (single session) ── */
 .verdictBlock {
-  margin-bottom: var(--space-8);
+  margin-bottom: 2rem;
   padding: var(--space-6) var(--space-7);
   border-left: 4px solid var(--color-accent-pulse);
   background: var(--color-accent-pulse-subtle);
@@ -205,7 +205,7 @@
 
 .verdictNarrative {
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   margin: var(--space-3) 0 0;
   line-height: 1.65;
 }
@@ -262,7 +262,7 @@
 
 /* ── Signal sections ── */
 .section {
-  margin-bottom: var(--space-8);
+  margin-bottom: 1.5rem;
 }
 
 .sectionHeading {
@@ -334,6 +334,7 @@
 }
 
 .synthesisSection {
+  margin-top: 2rem;
   margin-bottom: var(--space-8);
   padding-top: var(--space-6);
   border-top: 1px solid var(--color-border);
@@ -347,7 +348,7 @@
 
 /* Proposed Revisions section — visual break from open questions above */
 .decisionsSection {
-  margin-top: var(--space-10);
+  margin-top: 2rem;
   padding-top: var(--space-8);
   border-top: 1px solid var(--color-border);
 }
@@ -506,7 +507,7 @@
 
 .meta {
   font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   margin-top: var(--space-10);
   padding-top: var(--space-4);
   border-top: 1px solid var(--color-border-subtle);

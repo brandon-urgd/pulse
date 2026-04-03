@@ -105,7 +105,7 @@ export function SessionReportPdf({ data }: Props) {
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerBrand}>Pulse by ur/gd Studios</Text>
+          <Text style={s.footerBrand}>© 2026 ur/gd Studios LLC. All rights reserved. | Pulse</Text>
           <Text style={s.footerPage} render={({ pageNumber }) => `${pageNumber}`} />
         </View>
       </Page>
