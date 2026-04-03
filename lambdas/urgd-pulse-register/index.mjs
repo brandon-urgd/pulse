@@ -2,15 +2,31 @@
 // POST /api/auth/register → creates Cognito user + triggers createTenant
 
 import { CognitoIdentityProviderClient, AdminCreateUserCommand } from '@aws-sdk/client-cognito-identity-provider'
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, PutItemCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
 import { getTierDefaults } from './shared/tiers.mjs'
+import { ulid } from 'ulid'
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
 // Fail-fast env var validation
 requireEnv(['USER_POOL_ID', 'USER_POOL_CLIENT_ID', 'CORS_ALLOWED_ORIGINS', 'TENANTS_TABLE'])
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+
+// Load example session fixtures at module init (bundled with Lambda)
+let exampleFixtures = null
+try {
+  const __dirname = dirname(fileURLToPath(import.meta.url))
+  const raw = readFileSync(join(__dirname, 'example-session-fixtures.json'), 'utf-8')
+  exampleFixtures = JSON.parse(raw)
+} catch (err) {
+  console.warn('Register: failed to load example fixtures', err.message)
+}
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -102,6 +118,14 @@ export const handler = async (event) => {
         },
       }))
       log('info', 'Register: tenant record created', { requestId, tenantId })
+
+      // Seed example data — wrapped in try/catch so seeding failure never blocks registration
+      try {
+        await seedExampleData(tenantId)
+        log('info', 'Register: example data seeded', { requestId, tenantId })
+      } catch (seedErr) {
+        log('error', 'Register: example seeding failed, continuing', { requestId, tenantId, errorName: seedErr.name, message: seedErr.message })
+      }
     }
 
     log('info', 'Register: user created, verification email sent', { requestId })
@@ -115,4 +139,87 @@ export const handler = async (event) => {
     log('error', 'Register: unexpected error', { requestId, errorName: err.name })
     return errorResponse(500, 'Registration failed', {}, origin)
   }
+}
+
+/**
+ * Seeds example data (item, session, transcript, report, pulse check) for a new tenant.
+ * All records carry isExample: true. Failures are logged but do not block registration.
+ */
+async function seedExampleData(tenantId) {
+  if (!exampleFixtures) {
+    log('warn', 'Register: example fixtures not loaded, skipping seeding', { tenantId })
+    return
+  }
+
+  if (!process.env.ITEMS_TABLE || !process.env.SESSIONS_TABLE || !process.env.TRANSCRIPTS_TABLE || !process.env.REPORTS_TABLE || !process.env.PULSE_CHECKS_TABLE) {
+    log('warn', 'Register: missing table env vars for seeding, skipping', { tenantId })
+    return
+  }
+
+  const itemId = ulid()
+  const sessionId = ulid()
+  const now = new Date()
+  const createdAt = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const closedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const closeDate = closedAt
+  const completedAt = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString()
+  const reportGeneratedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000 + 60000).toISOString()
+  const pulseCheckGeneratedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000 + 120000).toISOString()
+
+  const fix = exampleFixtures
+
+  await dynamo.send(new PutItemCommand({ TableName: process.env.ITEMS_TABLE, Item: {
+    tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: fix.item.itemName },
+    description: { S: fix.item.description }, status: { S: fix.item.status }, itemType: { S: fix.item.itemType },
+    documentStatus: { S: fix.item.documentStatus }, documentKey: { S: `pulse/${tenantId}/items/${itemId}/extracted.md` },
+    closeDate: { S: closeDate }, closedAt: { S: closedAt }, createdAt: { S: createdAt }, updatedAt: { S: closedAt },
+    hasPulseCheck: { BOOL: true }, isExample: { BOOL: true },
+  }}))
+
+  await dynamo.send(new PutItemCommand({ TableName: process.env.SESSIONS_TABLE, Item: {
+    tenantId: { S: tenantId }, sessionId: { S: sessionId }, itemId: { S: itemId },
+    reviewerName: { S: fix.session.reviewerName }, status: { S: fix.session.status },
+    completedAt: { S: completedAt }, createdAt: { S: createdAt }, updatedAt: { S: completedAt },
+    timeLimitMinutes: { N: String(fix.session.timeLimitMinutes) }, totalSections: { N: String(fix.session.totalSections) },
+    isExample: { BOOL: true },
+  }}))
+
+  const baseTs = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000 - 20 * 60 * 1000)
+  const transcriptPuts = fix.transcript.map((msg, idx) => ({
+    PutRequest: { Item: {
+      sessionId: { S: sessionId }, messageId: { S: ulid() }, role: { S: msg.role },
+      content: { S: msg.content }, timestamp: { S: new Date(baseTs.getTime() + idx * 60000).toISOString() },
+      isExample: { BOOL: true },
+    }},
+  }))
+  for (let i = 0; i < transcriptPuts.length; i += 25) {
+    await dynamo.send(new BatchWriteItemCommand({ RequestItems: { [process.env.TRANSCRIPTS_TABLE]: transcriptPuts.slice(i, i + 25) } }))
+  }
+
+  await dynamo.send(new PutItemCommand({ TableName: process.env.REPORTS_TABLE, Item: {
+    tenantId: { S: tenantId }, sessionId: { S: sessionId }, itemId: { S: itemId },
+    verdict: { S: fix.report.verdict }, conviction: { L: fix.report.conviction.map(c => ({ S: c })) },
+    tension: { L: fix.report.tension.map(t => ({ S: t })) }, uncertainty: { L: fix.report.uncertainty.map(u => ({ S: u })) },
+    energy: { S: fix.report.energy }, conversationShape: { S: fix.report.conversationShape },
+    themes: { L: fix.report.themes.map(t => ({ S: t })) }, isSelfReview: { BOOL: fix.report.isSelfReview },
+    incomplete: { BOOL: fix.report.incomplete }, generatedAt: { S: reportGeneratedAt }, isExample: { BOOL: true },
+  }}))
+
+  const pc = fix.pulseCheck
+  await dynamo.send(new PutItemCommand({ TableName: process.env.PULSE_CHECKS_TABLE, Item: {
+    tenantId: { S: tenantId }, itemId: { S: itemId }, verdict: { S: pc.verdict }, narrative: { S: pc.narrative },
+    themes: { L: pc.themes.map(t => ({ M: { name: { S: t.name }, summary: { S: t.summary }, sentiment: { S: t.sentiment }, quotes: { L: t.quotes.map(q => ({ S: q })) } } })) },
+    sharedConviction: { L: pc.sharedConviction.map(s => ({ S: s })) }, repeatedTension: { L: pc.repeatedTension.map(s => ({ S: s })) },
+    openQuestions: { L: pc.openQuestions.map(s => ({ S: s })) },
+    reviewerVerdicts: { L: pc.reviewerVerdicts.map(rv => ({ M: { sessionId: { S: sessionId }, reviewerName: { S: rv.reviewerName }, verdict: { S: rv.verdict }, energy: { S: rv.energy }, conversationShape: { S: rv.conversationShape } } })) },
+    proposedRevisions: { L: pc.proposedRevisions.map(pr => ({ M: { title: { S: pr.title }, description: { S: pr.description }, sourceThemeIds: { L: pr.sourceThemeIds.map(id => ({ S: id })) } } })) },
+    sessionCount: { N: String(pc.sessionCount) }, incompleteCount: { N: String(pc.incompleteCount) },
+    generatedAt: { S: pulseCheckGeneratedAt }, status: { S: pc.status }, isExample: { BOOL: true },
+  }}))
+
+  if (process.env.DATA_BUCKET && fix.documentContent) {
+    await s3.send(new PutObjectCommand({ Bucket: process.env.DATA_BUCKET, Key: `pulse/${tenantId}/items/${itemId}/extracted.md`, Body: fix.documentContent, ContentType: 'text/markdown' }))
+  }
+
+  log('info', 'Register: example data seeded', { tenantId, itemId })
 }

@@ -2037,6 +2037,24 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+              # Spec 2 — S3: Example session seeding during registration
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseReportsTable.Arn
+                  - !GetAtt PulsePulseChecksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/*'
 
   PulseCreateTenantFunctionRole:
     Type: AWS::IAM::Role
@@ -2290,6 +2308,12 @@ Resources:
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
           TENANTS_TABLE: !Ref PulseTenantsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          REPORTS_TABLE: !Ref PulseReportsTable
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          DATA_BUCKET: !Ref PulseDataBucket
       Tags:
         - Key: project
           Value: pulse
