@@ -222,11 +222,11 @@ export default function ItemRevision() {
       : 'Revision — Pulse';
   }, [itemName]);
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     if (!selectedRevision || pdfGenerating || !originalContent || !revisionContent) return;
     setPdfGenerating(true);
     try {
-      downloadRevisionPdf(originalContent, revisionContent, itemName, selectedRevision.revisionNumber);
+      await downloadRevisionPdf(originalContent, revisionContent, itemName, selectedRevision.revisionNumber);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }

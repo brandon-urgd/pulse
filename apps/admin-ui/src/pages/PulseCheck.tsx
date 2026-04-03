@@ -210,11 +210,11 @@ export default function PulseCheck() {
     setOverlayError('');
   }
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     if (!pc || pdfGenerating) return;
     setPdfGenerating(true);
     try {
-      downloadPulseCheckPdf(pc, itemName);
+      await downloadPulseCheckPdf(pc, itemName);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }

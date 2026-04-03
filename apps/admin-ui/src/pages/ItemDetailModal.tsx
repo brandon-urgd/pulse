@@ -83,6 +83,26 @@ function todayIso(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
+/**
+ * Appends the user's local timezone offset to a datetime-local value.
+ * e.g. "2026-04-03T20:30" → "2026-04-03T20:30:00-07:00"
+ */
+function appendTimezoneOffset(dateStr: string): string {
+  if (!dateStr) return dateStr;
+  // If it already has an offset or Z, return as-is
+  if (/[Z+-]\d{2}:\d{2}$/.test(dateStr) || dateStr.endsWith('Z')) return dateStr;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const absOffset = Math.abs(offset);
+  const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+  const minutes = String(absOffset % 60).padStart(2, '0');
+  // Ensure seconds are present
+  const base = dateStr.length === 16 ? `${dateStr}:00` : dateStr;
+  return `${base}${sign}${hours}:${minutes}`;
+}
+
 function fileStatusLabel(status: FileUploadStatus): string {
   switch (status) {
     case 'uploading':         return labels.itemDetail.uploadStatusUploading;
@@ -322,7 +342,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     const payload = {
       itemName: itemName.trim(),
       description: description.trim(),
-      closeDate,
+      closeDate: appendTimezoneOffset(closeDate),
       ...(content.trim() ? { content: content.trim() } : {}),
       ...(feedbackSections.length > 0 ? { feedbackSections } : {}),
       ...(Object.keys(sectionDepthPreferences).length > 0 ? { sectionDepthPreferences } : {}),
@@ -403,7 +423,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
         const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
-          closeDate: closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+          closeDate: appendTimezoneOffset(closeDate) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;

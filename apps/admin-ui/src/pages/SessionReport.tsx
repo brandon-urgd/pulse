@@ -84,11 +84,11 @@ export default function SessionReport() {
   const tensions = report.tension;
   const uncertainties = report.uncertainty;
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     if (!report || pdfGenerating) return;
     setPdfGenerating(true);
     try {
-      downloadSessionReportPdf(report);
+      await downloadSessionReportPdf(report);
     } catch { /* silently fail */ }
     finally { setPdfGenerating(false); }
   }
