@@ -174,6 +174,8 @@ async function seedExampleData(tenantId) {
     documentStatus: { S: fix.item.documentStatus }, documentKey: { S: `pulse/${tenantId}/items/${itemId}/extracted.md` },
     closeDate: { S: closeDate }, closedAt: { S: closedAt }, createdAt: { S: createdAt }, updatedAt: { S: closedAt },
     hasPulseCheck: { BOOL: true }, isExample: { BOOL: true },
+    sessionCount: { N: String(fix.item.sessionCount) }, totalSections: { N: String(fix.item.totalSections) },
+    recommendedTimeLimitMinutes: { N: String(fix.item.recommendedTimeLimitMinutes) }, lockedAt: { S: closedAt },
   }}))
 
   await dynamo.send(new PutItemCommand({ TableName: process.env.SESSIONS_TABLE, Item: {
@@ -208,11 +210,21 @@ async function seedExampleData(tenantId) {
   const pc = fix.pulseCheck
   await dynamo.send(new PutItemCommand({ TableName: process.env.PULSE_CHECKS_TABLE, Item: {
     tenantId: { S: tenantId }, itemId: { S: itemId }, verdict: { S: pc.verdict }, narrative: { S: pc.narrative },
-    themes: { L: pc.themes.map(t => ({ M: { name: { S: t.name }, summary: { S: t.summary }, sentiment: { S: t.sentiment }, quotes: { L: t.quotes.map(q => ({ S: q })) } } })) },
+    themes: { L: pc.themes.map(t => ({ M: {
+      themeId: { S: t.themeId }, label: { S: t.label },
+      reviewerSignals: { L: t.reviewerSignals.map(rs => ({ M: {
+        sessionId: { S: sessionId }, signalType: { S: rs.signalType }, quote: { S: rs.quote },
+      } })) },
+    } })) },
     sharedConviction: { L: pc.sharedConviction.map(s => ({ S: s })) }, repeatedTension: { L: pc.repeatedTension.map(s => ({ S: s })) },
     openQuestions: { L: pc.openQuestions.map(s => ({ S: s })) },
-    reviewerVerdicts: { L: pc.reviewerVerdicts.map(rv => ({ M: { sessionId: { S: sessionId }, reviewerName: { S: rv.reviewerName }, verdict: { S: rv.verdict }, energy: { S: rv.energy }, conversationShape: { S: rv.conversationShape } } })) },
-    proposedRevisions: { L: pc.proposedRevisions.map(pr => ({ M: { title: { S: pr.title }, description: { S: pr.description }, sourceThemeIds: { L: pr.sourceThemeIds.map(id => ({ S: id })) } } })) },
+    reviewerVerdicts: { L: pc.reviewerVerdicts.map(rv => ({ M: {
+      sessionId: { S: sessionId }, verdict: { S: rv.verdict }, energy: { S: rv.energy }, isSelfReview: { BOOL: rv.isSelfReview },
+    } })) },
+    proposedRevisions: { L: pc.proposedRevisions.map(pr => ({ M: {
+      revisionId: { S: pr.revisionId }, proposal: { S: pr.proposal }, rationale: { S: pr.rationale },
+      revisionType: { S: pr.revisionType }, sourceThemeIds: { L: pr.sourceThemeIds.map(id => ({ S: id })) },
+    } })) },
     sessionCount: { N: String(pc.sessionCount) }, incompleteCount: { N: String(pc.incompleteCount) },
     generatedAt: { S: pulseCheckGeneratedAt }, status: { S: pc.status }, isExample: { BOOL: true },
   }}))

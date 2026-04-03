@@ -76,6 +76,10 @@ async function seedExampleData(tenantId) {
     updatedAt: { S: closedAt },
     hasPulseCheck: { BOOL: true },
     isExample: { BOOL: true },
+    sessionCount: { N: String(fix.item.sessionCount) },
+    totalSections: { N: String(fix.item.totalSections) },
+    recommendedTimeLimitMinutes: { N: String(fix.item.recommendedTimeLimitMinutes) },
+    lockedAt: { S: closedAt },
   }
   await dynamo.send(new PutItemCommand({ TableName: process.env.ITEMS_TABLE, Item: itemRecord }))
   log('info', 'CreateTenant: seeded example item', { tenantId, itemId })
@@ -151,10 +155,17 @@ async function seedExampleData(tenantId) {
     themes: {
       L: pc.themes.map(t => ({
         M: {
-          name: { S: t.name },
-          summary: { S: t.summary },
-          sentiment: { S: t.sentiment },
-          quotes: { L: t.quotes.map(q => ({ S: q })) },
+          themeId: { S: t.themeId },
+          label: { S: t.label },
+          reviewerSignals: {
+            L: t.reviewerSignals.map(rs => ({
+              M: {
+                sessionId: { S: sessionId },
+                signalType: { S: rs.signalType },
+                quote: { S: rs.quote },
+              },
+            })),
+          },
         },
       })),
     },
@@ -165,18 +176,19 @@ async function seedExampleData(tenantId) {
       L: pc.reviewerVerdicts.map(rv => ({
         M: {
           sessionId: { S: sessionId },
-          reviewerName: { S: rv.reviewerName },
           verdict: { S: rv.verdict },
           energy: { S: rv.energy },
-          conversationShape: { S: rv.conversationShape },
+          isSelfReview: { BOOL: rv.isSelfReview },
         },
       })),
     },
     proposedRevisions: {
       L: pc.proposedRevisions.map(pr => ({
         M: {
-          title: { S: pr.title },
-          description: { S: pr.description },
+          revisionId: { S: pr.revisionId },
+          proposal: { S: pr.proposal },
+          rationale: { S: pr.rationale },
+          revisionType: { S: pr.revisionType },
           sourceThemeIds: { L: pr.sourceThemeIds.map(id => ({ S: id })) },
         },
       })),
