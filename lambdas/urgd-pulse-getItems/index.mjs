@@ -5,7 +5,7 @@ import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
-requireEnv(['ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
@@ -42,6 +42,8 @@ function normalizeItem(raw) {
     documentStatus: raw.documentStatus ?? 'none',
     sessionCount: typeof raw.sessionCount === 'number' ? raw.sessionCount : 0,
     hasPulseCheck: raw.hasPulseCheck === true,
+    isExample: raw.isExample === true,
+    pulseCheckGeneratedAt: raw.pulseCheckGeneratedAt ?? null,
     createdAt: raw.createdAt ?? '',
     updatedAt: raw.updatedAt ?? '',
     ...(raw.content !== undefined ? { content: raw.content } : {}),
@@ -72,6 +74,29 @@ export const handler = async (event) => {
     }))
 
     const items = (result.Items ?? []).map(i => normalizeItem(unmarshal(i)))
+
+    // For items with a pulse check, fetch session completedAt timestamps for rerun indicator
+    await Promise.all(items.filter(i => i.hasPulseCheck && i.pulseCheckGeneratedAt).map(async (item) => {
+      try {
+        const sessionsResult = await dynamo.send(new QueryCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          IndexName: 'item-index',
+          KeyConditionExpression: 'itemId = :iid',
+          FilterExpression: '#st = :completed',
+          ExpressionAttributeNames: { '#st': 'status' },
+          ExpressionAttributeValues: {
+            ':iid': { S: item.itemId },
+            ':completed': { S: 'completed' },
+          },
+          ProjectionExpression: 'completedAt',
+        }))
+        item.sessions = (sessionsResult.Items ?? []).map(s => ({
+          completedAt: s.completedAt?.S ?? null,
+        }))
+      } catch {
+        item.sessions = []
+      }
+    }))
 
     // Sort by updatedAt descending
     items.sort((a, b) => {

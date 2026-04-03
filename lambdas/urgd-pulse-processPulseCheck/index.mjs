@@ -229,8 +229,8 @@ For revisionType: use "structural" for changes to organization/flow, "line-edit"
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.ITEMS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: 'SET hasPulseCheck = :t, updatedAt = :now',
-      ExpressionAttributeValues: { ':t': { BOOL: true }, ':now': { S: generatedAt } },
+      UpdateExpression: 'SET hasPulseCheck = :t, pulseCheckGeneratedAt = :gen, updatedAt = :now',
+      ExpressionAttributeValues: { ':t': { BOOL: true }, ':gen': { S: generatedAt }, ':now': { S: generatedAt } },
     })).catch(err => {
       log('warn', 'ProcessPulseCheck: failed to stamp hasPulseCheck on item', { tenantId, itemId, errorName: err.name })
     })
