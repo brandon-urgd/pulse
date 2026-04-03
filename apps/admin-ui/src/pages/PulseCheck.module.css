@@ -24,6 +24,43 @@
   margin: 0 0 var(--space-2);
 }
 
+.headingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.headingRow .heading {
+  margin-bottom: 0;
+}
+
+.downloadPdfButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.downloadPdfButton:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.downloadPdfButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .subheading {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);

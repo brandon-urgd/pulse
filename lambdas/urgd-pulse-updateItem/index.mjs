@@ -5,6 +5,7 @@ import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/clie
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
@@ -106,6 +107,9 @@ export const handler = async (event) => {
     }
   }
 
+  // Normalize closeDate to UTC ISO 8601 if provided (Slice 3 — R3.3)
+  const closeDateUTC = closeDate !== undefined ? new Date(closeDate).toISOString() : undefined
+
   try {
     // Fetch existing item
     const existing = await dynamo.send(new GetItemCommand({
@@ -151,7 +155,7 @@ export const handler = async (event) => {
     if (closeDate !== undefined) {
       updateParts.push('#closeDate = :closeDate')
       expressionNames['#closeDate'] = 'closeDate'
-      expressionValues[':closeDate'] = { S: closeDate }
+      expressionValues[':closeDate'] = { S: closeDateUTC }
     }
 
     // Handle content update — store in S3 and DynamoDB
@@ -228,6 +232,16 @@ export const handler = async (event) => {
     }))
 
     const updatedItem = normalizeItem(unmarshal(updateResult.Attributes))
+
+    // If closeDate was changed, update the EventBridge schedule (Slice 3 — R1.2)
+    if (closeDateUTC !== undefined && closeDateUTC !== currentItem.closeDate) {
+      try {
+        await upsertCloseSchedule(itemId, tenantId, closeDateUTC)
+        log('info', 'UpdateItem: close schedule updated', { requestId, tenantId, itemId })
+      } catch (err) {
+        log('warn', 'UpdateItem: failed to update close schedule (non-fatal)', { requestId, tenantId, itemId, errorName: err.name })
+      }
+    }
 
     // Invoke analyzeDocument async if content was updated (5.4)
     if (content !== undefined && typeof content === 'string' && content.length > 0) {

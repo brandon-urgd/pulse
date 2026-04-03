@@ -298,6 +298,40 @@ jobs:
 
           echo "✅ CloudFormation template and parameter files uploaded for version $VERSION"
 
+      - name: Verify S3 uploads are accessible
+        run: |
+          set -euo pipefail
+          S3_PREFIX="${{ env.APP_NAME }}/cloudformation/$VERSION"
+          VERIFY_FILES=(
+            "$S3_PREFIX/pulse-stack.yaml"
+            "$S3_PREFIX/dev.json"
+            "$S3_PREFIX/staging.json"
+            "$S3_PREFIX/prod.json"
+          )
+
+          for KEY in "${VERIFY_FILES[@]}"; do
+            RETRIES=0
+            MAX_RETRIES=6
+            while [ $RETRIES -lt $MAX_RETRIES ]; do
+              if aws s3api head-object \
+                --bucket "${{ env.ARTIFACT_BUCKET }}" \
+                --key "$KEY" \
+                --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+                echo "✅ Verified: s3://${{ env.ARTIFACT_BUCKET }}/$KEY"
+                break
+              fi
+              RETRIES=$((RETRIES + 1))
+              echo "   Attempt $RETRIES/$MAX_RETRIES — $KEY not yet accessible, waiting 5s..."
+              sleep 5
+            done
+            if [ $RETRIES -eq $MAX_RETRIES ]; then
+              echo "❌ Upload verification failed: $KEY not accessible after ${MAX_RETRIES} attempts"
+              exit 1
+            fi
+          done
+
+          echo "✅ All S3 uploads verified"
+
       # Frontend is built in the deploy job after CF outputs are available
       # so VITE env vars (UserPoolId, UserPoolClientId, CognitoDomain) can be injected
 
@@ -385,6 +419,26 @@ jobs:
           done
           if [ $RETRIES -eq $MAX_RETRIES ]; then
             echo "❌ Template not accessible in S3 after ${MAX_RETRIES} attempts"
+            exit 1
+          fi
+
+          # Verify parameter file for target environment is accessible
+          PARAM_KEY="${{ env.APP_NAME }}/cloudformation/$VERSION/${ENVIRONMENT}.json"
+          RETRIES=0
+          while [ $RETRIES -lt $MAX_RETRIES ]; do
+            if aws s3api head-object \
+              --bucket "${{ env.ARTIFACT_BUCKET }}" \
+              --key "$PARAM_KEY" \
+              --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+              echo "✅ Parameter file verified in S3: ${ENVIRONMENT}.json"
+              break
+            fi
+            RETRIES=$((RETRIES + 1))
+            echo "   Attempt $RETRIES/$MAX_RETRIES — ${ENVIRONMENT}.json not yet accessible, waiting 5s..."
+            sleep 5
+          done
+          if [ $RETRIES -eq $MAX_RETRIES ]; then
+            echo "❌ Parameter file ${ENVIRONMENT}.json not accessible in S3 after ${MAX_RETRIES} attempts"
             exit 1
           fi
 

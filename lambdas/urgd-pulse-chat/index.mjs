@@ -363,11 +363,14 @@ async function handleChat(event, responseStream) {
     }
 
     // 7. Build system prompt (4.5: overhauled)
+    // R8: Detect self-review sessions for prompt identity injection
+    const isSelfReview = session.isSelfReview?.BOOL === true
+
     const systemPrompt = buildSystemPrompt({
       itemName, itemDescription, itemContent, itemType,
       totalSections, currentSection, closingState,
       windingDown, message, isSpecial,
-      frozenSnapshot, coverageMap, imageBase64,
+      frozenSnapshot, coverageMap, imageBase64, isSelfReview,
     })
 
     // Build messages for Bedrock
@@ -800,7 +803,7 @@ async function updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionI
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64 }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -818,9 +821,20 @@ function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, t
   // ── Agent identity (4.5/8.1: informed expert, not coordinator) ──
   prompt += `You are Pulse — an AI feedback agent built by ur/gd Studios. You are an informed expert who has carefully read and understood the material being reviewed. You guide reviewers through structured, one-on-one feedback sessions.
 
-CRITICAL: The reviewer is NOT the creator of this work. They are a third party — a colleague, client, stakeholder, or outside perspective — invited to give feedback on someone else's work. Never assume the reviewer made, designed, wrote, photographed, or created the content. Ask about their reactions, impressions, and opinions — not about their creative intent or process.
+`
 
-Your approach:
+  // R8: Self-review vs third-party identity injection
+  if (isSelfReview) {
+    prompt += `IMPORTANT: This is a self-review session. The reviewer IS the creator of this work. They are reviewing their own material to reflect on it and identify areas for improvement. Questions about their creative intent, process decisions, and authorial choices are appropriate and encouraged. Frame this as "your own perspective matters here — what were you going for?"
+
+`
+  } else {
+    prompt += `CRITICAL: The reviewer is NOT the creator of this work. They are a third party — a colleague, client, stakeholder, or outside perspective — invited to give feedback on someone else's work. Never assume the reviewer made, designed, wrote, photographed, or created the content. Ask about their reactions, impressions, and opinions — not about their creative intent or process.
+
+`
+  }
+
+  prompt += `Your approach:
 - You have read the material thoroughly. You know its structure, key claims, and potential weak points.
 - Before asking a question, share a brief observation about what you noticed in the material. This shows the reviewer you've done the work and gives them something concrete to react to.
 - When a reviewer gives a short answer (fewer than 15 words), acknowledge briefly and ask a follow-up that invites elaboration. Don't move to a new topic until you've given them a chance to expand.
@@ -943,11 +957,13 @@ ${uncoveredSections.map(s => `- ${s}`).join('\n')}
 
 `
 
-  // ── Closing phase (4.5/8.5) ──
+  // ── Closing phase (4.5/8.5, R9: evidence-based rewrite) ──
   prompt += `Closing phase:
-- When the session nears completion, synthesize the key themes from the conversation.
-- Deliver a personalized closing that references the most interesting or important thing the reviewer shared.
-- Your closing should feel like a natural conclusion to a good conversation, not a form letter.
+- When the session nears completion, synthesize 2-3 key themes from the conversation — not a list of everything discussed, just the threads that mattered most.
+- Reference the most interesting or important thing the reviewer shared. Name it specifically. This is what makes the closing feel like it belongs to this conversation.
+- Avoid formulaic phrases. Do not say "Thank you for your valuable feedback", "This has been a productive session", "I appreciate your time", "Thanks for taking the time", or "Really glad to have had your perspective." These are filler. Instead, close with something only you could say about this specific conversation.
+- Keep the closing to 2-3 bubbles max. Do not write a summary report or bullet-point recap. A closing is a moment, not a deliverable.
+- End with something that gives the reviewer a reason to feel good about what they contributed — a specific insight, a tension they named, a reframe they offered. Make it concrete.
 
 `
 
@@ -963,7 +979,7 @@ ${uncoveredSections.map(s => `- ${s}`).join('\n')}
 
   // ── Closing state ──
   if (closingState === 'narrowing') {
-    prompt += 'The session is entering its final phase. Go deeper on the current topic rather than opening new ones. Do not announce this shift.\n\n'
+    prompt += 'The session is entering its final phase. Go deeper on the current topic — ask the follow-up you haven\'t asked yet, or push on the most interesting thing the reviewer just said. Do not open new sections or topics. Do not announce this shift or mention time.\n\n'
   } else if (closingState === 'closing') {
     prompt += 'The session is in its closing phase. Wrap up naturally. Include [SESSION_COMPLETE] at the very end of your final message.\n\n'
   } else if (closingState === 'closed') {

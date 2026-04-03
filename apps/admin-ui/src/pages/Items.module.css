@@ -225,6 +225,18 @@
   flex-shrink: 0;
 }
 
+.exampleBadge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-interactive-subtle);
+  color: var(--color-interactive);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
 .statusBadge.statusActive {
   background: var(--color-status-active-bg);
   color: var(--color-status-active-text);
@@ -334,6 +346,27 @@
 .actionPulseCheckReady:hover {
   background: var(--color-interactive-hover);
   border-color: var(--color-interactive-hover);
+}
+
+/* Rerun indicator dot */
+.actionPulseCheckWithDot {
+  position: relative;
+}
+
+.rerunDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-interactive);
+  margin-right: var(--space-1);
+  flex-shrink: 0;
+  animation: rerunPulse 2s ease-in-out infinite;
+}
+
+@keyframes rerunPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 @keyframes pulseGlow {

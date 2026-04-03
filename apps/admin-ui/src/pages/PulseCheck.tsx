@@ -5,6 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useNavigate } from 'react-router-dom';
 import { labels } from '../config/labels-registry';
+import { downloadPdf } from '../utils/downloadPdf';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import SignalMatrix, { type ThemeRow, type ReviewerColumn } from '../components/SignalMatrix';
 import FeedbackActionPills, { type FeedbackAction } from '../components/FeedbackActionPills';
@@ -128,6 +129,8 @@ export default function PulseCheck() {
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayDone, setOverlayDone] = useState(false);
   const [overlayError, setOverlayError] = useState('');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -206,6 +209,16 @@ export default function PulseCheck() {
     setOverlayVisible(true);
     setOverlayDone(false);
     setOverlayError('');
+  }
+
+  async function handleDownloadPdf() {
+    if (!pdfContentRef.current || pdfGenerating) return;
+    setPdfGenerating(true);
+    try {
+      const filename = itemName ? `Pulse Check — ${itemName}` : 'Pulse Check';
+      await downloadPdf(pdfContentRef.current, filename);
+    } catch { /* silently fail */ }
+    finally { setPdfGenerating(false); }
   }
 
   const generateMutation = useAuthedMutation<PulseCheckResponse, undefined>(
@@ -409,15 +422,25 @@ export default function PulseCheck() {
     return (
       <>
         {Overlay}
-        <div className={styles.container}>
+        <div className={styles.container} ref={pdfContentRef}>
           <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
-          <h1 className={styles.heading}>
-            {itemName
-              ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
-              : labels.pulseCheck.heading}
-          </h1>
+          <div className={styles.headingRow}>
+            <h1 className={styles.heading}>
+              {itemName
+                ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
+                : labels.pulseCheck.heading}
+            </h1>
+            <button
+              type="button"
+              className={styles.downloadPdfButton}
+              onClick={handleDownloadPdf}
+              disabled={pdfGenerating}
+            >
+              {pdfGenerating ? labels.pulseCheck.downloadingPdf : labels.pulseCheck.downloadPdf}
+            </button>
+          </div>
           {IncompleteNotice}
           {CoverageGapCallout}
           {NewSessionsBanner}
@@ -559,15 +582,25 @@ export default function PulseCheck() {
   return (
     <>
       {Overlay}
-      <div className={styles.container}>
+      <div className={styles.container} ref={pdfContentRef}>
         <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
           ← {labels.pulseCheck.backToItem}
         </Link>
-        <h1 className={styles.heading}>
-          {itemName
-            ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
-            : labels.pulseCheck.heading}
-        </h1>
+        <div className={styles.headingRow}>
+          <h1 className={styles.heading}>
+            {itemName
+              ? labels.pulseCheck.itemHeading.replace('{itemName}', itemName)
+              : labels.pulseCheck.heading}
+          </h1>
+          <button
+            type="button"
+            className={styles.downloadPdfButton}
+            onClick={handleDownloadPdf}
+            disabled={pdfGenerating}
+          >
+            {pdfGenerating ? labels.pulseCheck.downloadingPdf : labels.pulseCheck.downloadPdf}
+          </button>
+        </div>
         {IncompleteNotice}
         {CoverageGapCallout}
         {NewSessionsBanner}

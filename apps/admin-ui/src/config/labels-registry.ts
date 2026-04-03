@@ -54,6 +54,7 @@ export const labels = {
     description:
       'Pulse helps you collect structured feedback on your work through guided AI-driven conversations. Invite reviewers, gather insights, and generate a consolidated Pulse Check — all in one place.',
     ctaButton: 'Create your first item',
+    secondaryCta: 'Or explore an example first',
     documentTitle: 'Welcome — Pulse',
   },
 
@@ -87,6 +88,8 @@ export const labels = {
     // Session invitation empty state
     inviteEmptyText: 'Get a pulse on your work — invite reviewers',
     inviteEmptySubtext: 'Share a link or pulse code and collect structured feedback.',
+    // Example badge
+    exampleBadge: 'Example',
   },
 
   // Item detail
@@ -128,6 +131,7 @@ export const labels = {
     deleteConfirmDelete: 'Delete',
     deleteError: 'Failed to delete item. Please try again.',
     readOnlyNotice: 'Items with active or completed sessions can\u2019t be edited to preserve the integrity of reviewer feedback. To make changes, create a new item.',
+    exampleCallout: 'This is what a completed pulse check looks like. Create your own item to get started.',
     closeItemButton: 'Close item',
     closeItemConfirmTitle: 'Close item',
     closeItemConfirmMessage: 'Close \u201c{itemName}\u201d? This will block any new reviewers from entering. Reviewers already in a session can finish naturally.',
@@ -336,9 +340,9 @@ export const labels = {
     noTensions: 'No significant tensions recorded.',
     noUncertainties: 'No open questions recorded.',
     generatedAt: 'Generated {date}',
+    downloadPdf: 'Download PDF',
+    downloadingPdf: 'Generating PDF…',
   },
-
-  // Revision
   revision: {
     documentTitle: 'Revision — {itemName} — Pulse',
     backLink: '← Back to {itemName}',
@@ -365,6 +369,8 @@ export const labels = {
     noPulseCheckError: 'Run a Pulse Check and save decisions before generating a revision.',
     loadError: 'Something went wrong loading revisions.',
     retryButton: 'Try again',
+    downloadPdf: 'Download PDF',
+    downloadingPdf: 'Generating PDF…',
   },
 
   // Forgot password
@@ -445,6 +451,8 @@ export const labels = {
     rerunError: 'Failed to re-run pulse check. Please try again.',
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
     basedOnSessions: 'Based on {count} session{plural}',
+    downloadPdf: 'Download PDF',
+    downloadingPdf: 'Generating PDF…',
   },
 
   // Support / Report Modal (Task 37)

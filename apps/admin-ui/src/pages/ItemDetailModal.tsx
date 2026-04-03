@@ -36,6 +36,7 @@ interface Item {
   updatedAt: string;
   recommendedTimeLimitMinutes?: number;
   itemType?: 'document' | 'image';
+  isExample?: boolean;
   sectionMap?: {
     sections: Section[];
     totalSubstantiveSections: number;
@@ -660,6 +661,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // ── Render ──────────────────────────────────────────────────────────────────
   const isSaving  = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
+  const isExampleItem = Boolean(itemData?.isExample);
 
   // Show the right-side sections pane when sectionMap exists or item has been saved with content
   const hasSections = !!(itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0);
@@ -705,7 +707,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                   <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                 </div>
               )}
-              {(itemData?.status === 'draft' || itemData?.status === 'active') && (
+              {(itemData?.status === 'draft' || itemData?.status === 'active') && !isExampleItem && (
                 <button
                   type="button"
                   className={styles.headerActionSelfReview}
@@ -716,14 +718,16 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                   {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
                 </button>
               )}
-              <button
-                type="button"
-                className={styles.headerActionPreview}
-                onClick={handleSessionPreview}
-                disabled={isSessionPreviewLoading}
-              >
-                {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
-              </button>
+              {!isExampleItem && (
+                <button
+                  type="button"
+                  className={styles.headerActionPreview}
+                  onClick={handleSessionPreview}
+                  disabled={isSessionPreviewLoading}
+                >
+                  {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                </button>
+              )}
             </>
           )}
           <button
@@ -781,6 +785,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     <p className={styles.lockedNotice} role="status">
                       🔒 {labels.itemDetail.readOnlyNotice}
                     </p>
+                  )}
+
+                  {isExampleItem && (
+                    <div className={styles.exampleCallout} role="status">
+                      <p className={styles.exampleCalloutText}>
+                        {labels.itemDetail.exampleCallout}
+                      </p>
+                    </div>
                   )}
 
                   <form id="item-detail-form" onSubmit={handleSubmit} noValidate className={styles.form}>
@@ -983,7 +995,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             {/* Actions — pinned footer outside scrollable body */}
             {!(isEditMode && itemLoading) && (
               <div className={styles.actions}>
-                {isEditMode && (
+                {isEditMode && !isExampleItem && (
                   <button
                     type="button"
                     className={styles.deleteButton}
@@ -1002,7 +1014,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                 >
                   {labels.itemDetail.cancelButton}
                 </button>
-                {!isLocked && (
+                {!isLocked && !isExampleItem && (
                   <button
                     type="submit"
                     form="item-detail-form"
@@ -1060,15 +1072,17 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
               {/* Preview + Self-review buttons */}
               <div className={styles.sectionsPaneActions}>
-                <button
-                  type="button"
-                  className={styles.uploadCtaPreview}
-                  onClick={handleSessionPreview}
-                  disabled={isSessionPreviewLoading}
-                >
-                  {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
-                </button>
-                {(itemData?.status === 'draft' || itemData?.status === 'active') && (
+                {!isExampleItem && (
+                  <button
+                    type="button"
+                    className={styles.uploadCtaPreview}
+                    onClick={handleSessionPreview}
+                    disabled={isSessionPreviewLoading}
+                  >
+                    {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                  </button>
+                )}
+                {(itemData?.status === 'draft' || itemData?.status === 'active') && !isExampleItem && (
                   <button
                     type="button"
                     className={styles.headerActionSelfReview}

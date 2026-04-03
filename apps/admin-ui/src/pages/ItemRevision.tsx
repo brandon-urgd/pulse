@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import { downloadPdf } from '../utils/downloadPdf';
 import styles from './ItemRevision.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -114,7 +115,9 @@ export default function ItemRevision() {
   const [contentLoading, setContentLoading] = useState(false);
   const [mobileTab, setMobileTab] = useState<'original' | 'revision'>('revision');
   const [showHistory, setShowHistory] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -220,6 +223,16 @@ export default function ItemRevision() {
       : 'Revision — Pulse';
   }, [itemName]);
 
+  async function handleDownloadPdf() {
+    if (!pdfContentRef.current || pdfGenerating) return;
+    setPdfGenerating(true);
+    try {
+      const filename = itemName ? `Revision — ${itemName}` : 'Revision';
+      await downloadPdf(pdfContentRef.current, filename);
+    } catch { /* silently fail */ }
+    finally { setPdfGenerating(false); }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -245,18 +258,30 @@ export default function ItemRevision() {
   const hasRevisions = revisions.length > 0;
 
   return (
-    <div className={styles.container} role="main" aria-label={`Revision for ${itemName}`}>
+    <div className={styles.container} role="main" aria-label={`Revision for ${itemName}`} ref={pdfContentRef}>
       {/* Breadcrumb */}
       <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
         {labels.revision.backLink.replace('{itemName}', itemName || 'item')}
       </Link>
 
       {/* Heading */}
-      <h1 className={styles.heading}>
-        {selectedRevision
-          ? labels.revision.headingWithNumber.replace('{number}', String(selectedRevision.revisionNumber))
-          : labels.revision.heading}
-      </h1>
+      <div className={styles.headingRow}>
+        <h1 className={styles.heading}>
+          {selectedRevision
+            ? labels.revision.headingWithNumber.replace('{number}', String(selectedRevision.revisionNumber))
+            : labels.revision.heading}
+        </h1>
+        {selectedRevision?.status === 'complete' && (
+          <button
+            type="button"
+            className={styles.downloadPdfButton}
+            onClick={handleDownloadPdf}
+            disabled={pdfGenerating}
+          >
+            {pdfGenerating ? labels.revision.downloadingPdf : labels.revision.downloadPdf}
+          </button>
+        )}
+      </div>
 
       {/* Generating overlay */}
       {generating && <GeneratingOverlay itemName={itemName} />}

@@ -4,6 +4,7 @@ import { useSession } from '../context/SessionContext'
 import { getSessionSummary } from '../api/session'
 import PulseLine from '../components/PulseLine'
 import SessionFooter from '../components/SessionFooter'
+import EmailOptIn from '../components/EmailOptIn'
 
 interface SummaryData {
   sections: string[]
@@ -307,6 +308,13 @@ export default function SessionSummary() {
               <p style={styles.footer}>
                 Your responses have been shared with {summary.tenantName}.
               </p>
+            )}
+
+            {sessionToken && (
+              <>
+                <hr style={styles.divider} />
+                <EmailOptIn sessionId={sessionId} sessionToken={sessionToken} />
+              </>
             )}
           </div>
         ) : null}

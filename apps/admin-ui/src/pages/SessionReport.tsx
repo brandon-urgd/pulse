@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { labels } from '../config/labels-registry';
+import { downloadPdf } from '../utils/downloadPdf';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import styles from './SessionReport.module.css';
 
@@ -35,6 +36,8 @@ interface ReportResponse {
  */
 export default function SessionReport() {
   const { itemId, sessionId } = useParams<{ itemId: string; sessionId: string }>();
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isError } = useAuthedQuery<ReportResponse>(
     ['report', itemId, sessionId],
@@ -82,20 +85,39 @@ export default function SessionReport() {
   const tensions = report.tension;
   const uncertainties = report.uncertainty;
 
+  async function handleDownloadPdf() {
+    if (!pdfContentRef.current || pdfGenerating) return;
+    setPdfGenerating(true);
+    try {
+      await downloadPdf(pdfContentRef.current, 'Session Report');
+    } catch { /* silently fail */ }
+    finally { setPdfGenerating(false); }
+  }
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={pdfContentRef}>
       {/* Back link */}
       <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
         ← {labels.sessionReport.backToItem}
       </Link>
 
-      {/* ── Pulse eyebrow ── */}
-      <p className={styles.pulseEyebrow}>
-        {labels.sessionReport.pulseFromReviewer.replace(
-          '{reviewerLabel}',
-          report.isSelfReview ? 'Self-review' : 'Reviewer'
-        )}
-      </p>
+      {/* ── Pulse eyebrow + PDF button ── */}
+      <div className={styles.headingRow}>
+        <p className={styles.pulseEyebrow}>
+          {labels.sessionReport.pulseFromReviewer.replace(
+            '{reviewerLabel}',
+            report.isSelfReview ? 'Self-review' : 'Reviewer'
+          )}
+        </p>
+        <button
+          type="button"
+          className={styles.downloadPdfButton}
+          onClick={handleDownloadPdf}
+          disabled={pdfGenerating}
+        >
+          {pdfGenerating ? labels.sessionReport.downloadingPdf : labels.sessionReport.downloadPdf}
+        </button>
+      </div>
 
       {/* ── Verdict ── */}
       <div className={styles.verdictBlock}>

@@ -5,6 +5,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { deleteCloseSchedule } from './shared/scheduleClose.mjs'
 
 requireEnv(['ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
@@ -90,6 +91,14 @@ export const handler = async (event) => {
 
       lastKey = sessionsResult.LastEvaluatedKey
     } while (lastKey)
+
+    // Remove the EventBridge close schedule since item was manually closed (Slice 3 — R1.4)
+    try {
+      await deleteCloseSchedule(itemId)
+      log('info', 'CloseItem: close schedule deleted', { requestId, tenantId, itemId })
+    } catch (err) {
+      log('warn', 'CloseItem: failed to delete close schedule (non-fatal)', { requestId, tenantId, itemId, errorName: err.name })
+    }
 
     log('info', 'CloseItem: item closed', { requestId, tenantId, itemId, expiredCount })
 

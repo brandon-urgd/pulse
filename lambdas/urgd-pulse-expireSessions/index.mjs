@@ -8,6 +8,8 @@
 // After expiring sessions, groups expired sessions by itemId.
 // For each affected item, checks if ALL sessions are now terminal (completed/expired).
 // If so, invokes runPulseCheck and sendPulseCheckReady async (fire-and-forget).
+// NOTE: Item closing is NOT performed here — that is the sole responsibility of
+// closeExpiredItems Lambda (Slice 3 — R1.8).
 
 import { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
@@ -199,39 +201,10 @@ async function triggerPulseChecksForTerminalItems(expiredByItem) {
       }
 
       // Only auto-close the item if the closeDate has passed.
-      // The tenant may want to invite more reviewers — don't close just because
-      // existing sessions are terminal.
-      if (itemsTable) {
-        try {
-          const itemResult = await dynamo.send(new GetItemCommand({
-            TableName: itemsTable,
-            Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-            ProjectionExpression: 'closeDate, #status, itemName',
-            ExpressionAttributeNames: { '#status': 'status' },
-          }))
-          const itemCloseDate = itemResult.Item?.closeDate?.S
-          const itemStatus = itemResult.Item?.status?.S
-
-          if (itemCloseDate && new Date(itemCloseDate).getTime() < Date.now() && itemStatus === 'active') {
-            await dynamo.send(new UpdateItemCommand({
-              TableName: itemsTable,
-              Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-              UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
-              ConditionExpression: '#status <> :closed',
-              ExpressionAttributeNames: { '#status': 'status' },
-              ExpressionAttributeValues: {
-                ':closed': { S: 'closed' },
-                ':now': { S: now },
-              },
-            }))
-            log('info', 'ExpireSessions: item auto-closed (closeDate passed)', { tenantId, itemId, closeDate: itemCloseDate })
-          }
-        } catch (closeErr) {
-          if (closeErr.name !== 'ConditionalCheckFailedException') {
-            log('warn', 'ExpireSessions: failed to check/close item', { tenantId, itemId, errorName: closeErr.name })
-          }
-        }
-      }
+      // NOTE (Slice 3 — R1.8): Item closing is now the sole responsibility of
+      // closeExpiredItems Lambda. We no longer auto-close items here.
+      // We DO trigger pulse check + notification if all real sessions are terminal,
+      // so the tenant gets their results without waiting for the close date.
 
       // Get item name for the notification email
       let itemName = 'your item'

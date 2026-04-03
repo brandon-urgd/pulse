@@ -1,8 +1,10 @@
 // Root vitest config — covers Lambda unit tests and property tests
 import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: [
       // Map ./shared/utils.mjs (relative import inside any lambda) to the shared utils
@@ -28,6 +30,7 @@ export default defineConfig({
       'lambdas/**/*.test.ts',
       'tests/**/*.test.mjs',
       'tests/**/*.test.ts',
+      'tests/**/*.test.tsx',
       'apps/landing/__tests__/**/*.test.mjs',
       'apps/landing/__tests__/**/*.test.ts',
     ],

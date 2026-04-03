@@ -18,6 +18,9 @@ interface Item {
   updatedAt: string;
   createdAt?: string;
   hasPulseCheck?: boolean;
+  isExample?: boolean;
+  pulseCheckGeneratedAt?: string;
+  sessions?: Array<{ completedAt?: string }>;
 }
 
 type SortField = 'name' | 'created' | 'dueDate';
@@ -95,6 +98,15 @@ function pulseCheckAriaLabel(item: Item): string {
   return `${pulseCheckButtonLabel(item)} — ${item.itemName}`;
 }
 
+/** Show rerun indicator when any session completed after the last pulse check */
+function shouldShowRerunDot(item: Item): boolean {
+  if (!item.hasPulseCheck || !item.pulseCheckGeneratedAt) return false;
+  const generatedAt = item.pulseCheckGeneratedAt;
+  return (item.sessions ?? []).some(
+    (s) => s.completedAt && s.completedAt > generatedAt
+  );
+}
+
 // ─── Item card ────────────────────────────────────────────────────────────────
 
 interface ItemCardProps {
@@ -103,9 +115,10 @@ interface ItemCardProps {
   onInvite: () => void;
   onPulseCheck: () => void;
   onDeleted: () => void;
+  canDeleteExample: boolean;
 }
 
-function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardProps) {
+function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteExample }: ItemCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -136,6 +149,11 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
       >
         <div className={styles.cardTop}>
           <span className={styles.itemName}>{item.itemName}</span>
+          {item.isExample && (
+            <span className={styles.exampleBadge}>
+              {labels.items.exampleBadge}
+            </span>
+          )}
           <span className={`${styles.statusBadge} ${STATUS_CLASS[item.status]}`}>
             {STATUS_LABEL[item.status]}
           </span>
@@ -166,10 +184,11 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
         {item.status !== 'draft' && (
           <button
             type="button"
-            className={pulseCheckButtonClass(item)}
+            className={`${pulseCheckButtonClass(item)} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''}`}
             onClick={onPulseCheck}
             aria-label={pulseCheckAriaLabel(item)}
           >
+            {shouldShowRerunDot(item) && <span className={styles.rerunDot} aria-hidden="true" />}
             {pulseCheckButtonLabel(item)}
           </button>
         )}
@@ -194,14 +213,16 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted }: ItemCardP
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            className={styles.actionDelete}
-            onClick={() => setConfirming(true)}
-            aria-label={`Delete ${item.itemName}`}
-          >
-            Delete
-          </button>
+          !(item.isExample && !canDeleteExample) && (
+            <button
+              type="button"
+              className={styles.actionDelete}
+              onClick={() => setConfirming(true)}
+              aria-label={`Delete ${item.itemName}`}
+            >
+              Delete
+            </button>
+          )
         )}
       </div>
     </li>
@@ -236,6 +257,9 @@ export default function Items() {
 
   const rawItems = data?.data ?? [];
   const items = useMemo(() => sortItems(rawItems, sortField, sortDir), [rawItems, sortField, sortDir]);
+
+  // Example item delete protection: allow deletion only when ≥1 real item exists
+  const hasRealItems = rawItems.some((item) => !item.isExample);
 
   if (isLoading) return <div className={styles.container} aria-busy="true" />;
 
@@ -315,6 +339,7 @@ export default function Items() {
               onInvite={() => setInviteTarget(item)}
               onPulseCheck={() => navigate(`/admin/pulse-check/${item.itemId}`)}
               onDeleted={() => {}}
+              canDeleteExample={hasRealItems}
             />
           ))}
         </ul>

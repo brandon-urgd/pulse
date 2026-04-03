@@ -4,6 +4,7 @@
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
@@ -11,6 +12,7 @@ requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'BEDROCK_MODEL_ID'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 function unmarshalFeatures(m) {
   if (!m) return {}
@@ -145,7 +147,61 @@ Respond in valid JSON format:
     }))
 
     log('info', 'GenerateSessionSummary: summary stored', { sessionId, tenantId })
+
+    // 4. Auto-send email to invited reviewers (those with reviewerEmail on session record)
+    if (process.env.SES_FROM_EMAIL) {
+      try {
+        const sessionResult = await dynamo.send(new GetItemCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+          ProjectionExpression: 'reviewerEmail, reviewerName',
+        }))
+        const reviewerEmail = sessionResult.Item?.reviewerEmail?.S
+        if (reviewerEmail && reviewerEmail.length > 0) {
+          const reviewerName = sessionResult.Item?.reviewerName?.S || 'there'
+          const themesHtml = summary.themes.length > 0
+            ? `<ul>${summary.themes.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`
+            : ''
+          const sectionsHtml = summary.sections.length > 0
+            ? `<p><strong>Sections covered:</strong> ${summary.sections.map(s => escapeHtml(s)).join(', ')}</p>`
+            : ''
+
+          const htmlBody = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+              <h2 style="color: #1a1a1a;">Your Session Summary</h2>
+              <p>Hi ${escapeHtml(reviewerName)},</p>
+              <p>Thanks for sharing your feedback. Here's a summary of your session.</p>
+              ${sectionsHtml}
+              ${themesHtml ? `<p><strong>Key themes:</strong></p>${themesHtml}` : ''}
+              ${summary.closingMessage ? `<p style="margin-top: 16px; color: #555;">${escapeHtml(summary.closingMessage)}</p>` : ''}
+              <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;" />
+              <p style="font-size: 12px; color: #888;">This email was sent by Pulse by ur/gd Studios.</p>
+            </div>`
+
+          await ses.send(new SendEmailCommand({
+            Source: process.env.SES_FROM_EMAIL,
+            Destination: { ToAddresses: [reviewerEmail] },
+            Message: {
+              Subject: { Data: 'Your Pulse Session Summary', Charset: 'UTF-8' },
+              Body: { Html: { Data: htmlBody, Charset: 'UTF-8' } },
+            },
+          }))
+          log('info', 'GenerateSessionSummary: summary email sent to invited reviewer', { sessionId, tenantId })
+        }
+      } catch (emailErr) {
+        // Email failure should not fail the summary generation
+        log('warn', 'GenerateSessionSummary: failed to send summary email', { sessionId, tenantId, errorName: emailErr.name })
+      }
+    }
   } catch (err) {
     log('error', 'GenerateSessionSummary: unexpected error', { sessionId, tenantId, errorName: err.name })
   }
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }

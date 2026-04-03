@@ -3,6 +3,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
@@ -64,6 +65,9 @@ export const handler = async (event) => {
     return errorResponse(400, 'Close date must be in the future', {}, origin)
   }
 
+  // Normalize closeDate to UTC ISO 8601 (Slice 3 — R3.4)
+  const closeDateUTC = newCloseDate.toISOString()
+
   try {
     const existing = await dynamo.send(new GetItemCommand({
       TableName: process.env.ITEMS_TABLE,
@@ -102,7 +106,7 @@ export const handler = async (event) => {
         '#updatedAt': 'updatedAt',
       },
       ExpressionAttributeValues: {
-        ':closeDate': { S: closeDate },
+        ':closeDate': { S: closeDateUTC },
         ':updatedAt': { S: nowIso },
       },
       ReturnValues: 'ALL_NEW',
@@ -134,12 +138,20 @@ export const handler = async (event) => {
           },
           UpdateExpression: 'SET #expiresAt = :expiresAt',
           ExpressionAttributeNames: { '#expiresAt': 'expiresAt' },
-          ExpressionAttributeValues: { ':expiresAt': { S: closeDate } },
+          ExpressionAttributeValues: { ':expiresAt': { S: closeDateUTC } },
         }))
       })
       .filter(Boolean)
 
     await Promise.all(updatePromises)
+
+    // Update the EventBridge close schedule with the new deadline (Slice 3 — R1.3)
+    try {
+      await upsertCloseSchedule(itemId, tenantId, closeDateUTC)
+      log('info', 'ExtendDeadline: close schedule updated', { requestId, tenantId, itemId })
+    } catch (err) {
+      log('warn', 'ExtendDeadline: failed to update close schedule (non-fatal)', { requestId, tenantId, itemId, errorName: err.name })
+    }
 
     log('info', 'ExtendDeadline: deadline extended', {
       requestId,

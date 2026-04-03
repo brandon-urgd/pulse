@@ -6,6 +6,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
@@ -70,6 +71,10 @@ export const handler = async (event) => {
   if (!isValidFutureDate(closeDate)) {
     return errorResponse(400, 'closeDate must be a valid future date', {}, origin)
   }
+
+  // Normalize closeDate to UTC ISO 8601 (Slice 3 — R3.2)
+  // e.g. "2026-04-15T23:59:00-07:00" → "2026-04-16T06:59:00.000Z"
+  const closeDateUTC = new Date(closeDate).toISOString()
 
   try {
     // Fetch tenant record to get feature flags
@@ -161,7 +166,7 @@ export const handler = async (event) => {
       itemId: { S: itemId },
       itemName: { S: itemName.trim() },
       description: { S: description.trim() },
-      closeDate: { S: closeDate },
+      closeDate: { S: closeDateUTC },
       status: { S: 'draft' },
       createdAt: { S: now },
       updatedAt: { S: now },
@@ -211,6 +216,16 @@ export const handler = async (event) => {
       Item: dynamoItem,
     }))
 
+    // Schedule auto-close if closeDate is set (Slice 3 — R1.1)
+    if (closeDateUTC) {
+      try {
+        await upsertCloseSchedule(itemId, tenantId, closeDateUTC)
+        log('info', 'CreateItem: close schedule created', { requestId, tenantId, itemId })
+      } catch (err) {
+        log('warn', 'CreateItem: failed to create close schedule (non-fatal)', { requestId, tenantId, itemId, errorName: err.name })
+      }
+    }
+
     // Invoke analyzeDocument async if document content was stored (5.4)
     if (documentStatus === 'ready' && resolvedItemType !== 'image' && process.env.ANALYZE_DOCUMENT_FUNCTION_ARN) {
       try {
@@ -233,7 +248,7 @@ export const handler = async (event) => {
         itemId,
         itemName: itemName.trim(),
         description: description.trim(),
-        closeDate,
+        closeDate: closeDateUTC,
         status: 'draft',
         documentStatus,
         createdAt: now,

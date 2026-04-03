@@ -317,6 +317,22 @@ Parameters:
     Default: lambda-packages/urgd-pulse-suggestDescription/latest.zip
     Description: S3 key for urgd-pulse-suggestDescription Lambda ZIP
 
+  # Spec 2 — S3 CodeKey parameters
+  CloseExpiredItemsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-closeExpiredItems/latest.zip
+    Description: S3 key for urgd-pulse-closeExpiredItems Lambda ZIP
+
+  PurgeTranscriptsCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-purgeTranscripts/latest.zip
+    Description: S3 key for urgd-pulse-purgeTranscripts Lambda ZIP
+
+  EmailSessionSummaryCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-emailSessionSummary/latest.zip
+    Description: S3 key for urgd-pulse-emailSessionSummary Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
@@ -2053,6 +2069,24 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+              # Spec 2 — S3: Example session seeding permissions
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseTranscriptsTable.Arn
+                  - !GetAtt PulseReportsTable.Arn
+                  - !GetAtt PulsePulseChecksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
 
   PulseGetSettingsFunctionRole:
     Type: AWS::IAM::Role
@@ -2297,6 +2331,12 @@ Resources:
       Environment:
         Variables:
           TENANTS_TABLE: !Ref PulseTenantsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          REPORTS_TABLE: !Ref PulseReportsTable
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          DATA_BUCKET: !Ref PulseDataBucket
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
@@ -2760,6 +2800,17 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+              # Spec 2 — S3: EventBridge Scheduler permissions for scheduled close
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:UpdateSchedule
+                  - scheduler:GetSchedule
+                Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/pulse-item-close-${Environment}/*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt PulseSchedulerExecutionRole.Arn
 
   PulseGetItemFunctionRole:
     Type: AWS::IAM::Role
@@ -2833,6 +2884,17 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+              # Spec 2 — S3: EventBridge Scheduler permissions for scheduled close
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:UpdateSchedule
+                  - scheduler:GetSchedule
+                Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/pulse-item-close-${Environment}/*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt PulseSchedulerExecutionRole.Arn
 
   PulseDeleteItemFunctionRole:
     Type: AWS::IAM::Role
@@ -3058,6 +3120,8 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
           ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+          SCHEDULER_ROLE_ARN: !GetAtt PulseSchedulerExecutionRole.Arn
+          CLOSE_EXPIRED_ITEMS_FUNCTION_ARN: !GetAtt PulseCloseExpiredItemsFunction.Arn
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -3144,6 +3208,8 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
           ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+          SCHEDULER_ROLE_ARN: !GetAtt PulseSchedulerExecutionRole.Arn
+          CLOSE_EXPIRED_ITEMS_FUNCTION_ARN: !GetAtt PulseCloseExpiredItemsFunction.Arn
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -3782,6 +3848,17 @@ Resources:
                   - !GetAtt PulseItemsTable.Arn
                   - !GetAtt PulseSessionsTable.Arn
                   - !Sub '${PulseSessionsTable.Arn}/index/*'
+              # Spec 2 — S3: EventBridge Scheduler permissions for scheduled close
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:UpdateSchedule
+                  - scheduler:GetSchedule
+                Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/pulse-item-close-${Environment}/*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt PulseSchedulerExecutionRole.Arn
 
   PulseValidateSessionFunctionRole:
     Type: AWS::IAM::Role
@@ -4015,6 +4092,11 @@ Resources:
                 Action:
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
+              # Spec 2 — S3: EventBridge Scheduler delete permission for manual close
+              - Effect: Allow
+                Action:
+                  - scheduler:DeleteSchedule
+                Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/pulse-item-close-${Environment}/*'
 
   # ══════════════════════════════════════════════════════════════════════════════
 
@@ -4217,6 +4299,8 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          SCHEDULER_ROLE_ARN: !GetAtt PulseSchedulerExecutionRole.Arn
+          CLOSE_EXPIRED_ITEMS_FUNCTION_ARN: !GetAtt PulseCloseExpiredItemsFunction.Arn
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -5296,6 +5380,12 @@ Resources:
                 Condition:
                   StringEquals:
                     bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              # Spec 2 — S3: SES permission for emailing session summaries to invited reviewers
+              # checkov:skip=CKV_AWS_111: SES SendEmail does not support resource-level ARN constraints
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: '*'
 
   PulseDeleteSessionTranscriptFunctionRole:
     Type: AWS::IAM::Role
@@ -5439,6 +5529,7 @@ Resources:
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
           BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          SES_FROM_EMAIL: !Sub 'noreply@${FrontendDomainName}'
       Tags:
         - Key: project
           Value: pulse
@@ -8180,6 +8271,437 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseSuggestDescriptionFunction.Arn}/invocations'
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # S3 Slice 3: Infrastructure & Scheduling
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── Task 1.1: EventBridge Schedule Group ────────────────────────────────────
+
+  PulseItemCloseScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub 'pulse-item-close-${Environment}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ── Task 1.4: Scheduler Execution Role ──────────────────────────────────────
+
+  PulseSchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-scheduler-execution-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeCloseExpiredItems
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulseCloseExpiredItemsFunction.Arn
+
+  # ── Task 1.5: closeExpiredItems Lambda ──────────────────────────────────────
+
+  PulseCloseExpiredItemsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-closeExpiredItems-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseCloseExpiredItemsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-closeExpiredItems-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt PulseGenerateReportFunction.Arn
+                  - !GetAtt PulseRunPulseCheckFunction.Arn
+                  - !GetAtt PulseSendPulseCheckReadyFunction.Arn
+
+  PulseCloseExpiredItemsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCloseExpiredItemsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-closeExpiredItems-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCloseExpiredItemsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CloseExpiredItemsCodeKey
+      Timeout: 300
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CloseExpiredItems]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          GENERATE_REPORT_FUNCTION_ARN: !GetAtt PulseGenerateReportFunction.Arn
+          RUN_PULSE_CHECK_FUNCTION_ARN: !GetAtt PulseRunPulseCheckFunction.Arn
+          SEND_PULSE_CHECK_READY_FUNCTION_ARN: !GetAtt PulseSendPulseCheckReadyFunction.Arn
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCloseExpiredItemsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCloseExpiredItemsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PulseCloseExpiredItemsRule.Arn
+
+  # ── Task 1.2: EventBridge rate rule (12h safety sweep) ─────────────────────
+
+  PulseCloseExpiredItemsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'urgd-pulse-closeExpiredItems-${Environment}'
+      Description: Safety sweep — scans for items past close date every 12 hours
+      ScheduleExpression: rate(12 hours)
+      State: ENABLED
+      Targets:
+        - Id: PulseCloseExpiredItemsTarget
+          Arn: !GetAtt PulseCloseExpiredItemsFunction.Arn
+
+  # ── Task 1.6: purgeTranscripts Lambda ───────────────────────────────────────
+
+  PulsePurgeTranscriptsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-purgeTranscripts-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulsePurgeTranscriptsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-purgeTranscripts-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource: !GetAtt PulsePulseChecksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !Sub '${PulseSessionsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt PulseTranscriptsTable.Arn
+
+  PulsePurgeTranscriptsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulsePurgeTranscriptsLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-purgeTranscripts-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulsePurgeTranscriptsFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PurgeTranscriptsCodeKey
+      Timeout: 900
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PurgeTranscripts]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulsePurgeTranscriptsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulsePurgeTranscriptsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PulsePurgeTranscriptsRule.Arn
+
+  # ── Task 1.3: EventBridge daily rule (transcript purge) ────────────────────
+
+  PulsePurgeTranscriptsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'urgd-pulse-purgeTranscripts-${Environment}'
+      Description: Daily transcript purge — deletes transcripts for pulse checks older than 30 days
+      ScheduleExpression: cron(0 3 * * ? *)
+      State: ENABLED
+      Targets:
+        - Id: PulsePurgeTranscriptsTarget
+          Arn: !GetAtt PulsePurgeTranscriptsFunction.Arn
+
+  # ── Task 1.7: emailSessionSummary Lambda + API Gateway ─────────────────────
+
+  PulseEmailSessionSummaryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-emailSessionSummary-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseEmailSessionSummaryFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-emailSessionSummary-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAndResources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              # checkov:skip=CKV_AWS_111: SES SendEmail does not support resource-level ARN constraints
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                Resource: '*'
+
+  PulseEmailSessionSummaryFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseEmailSessionSummaryLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-emailSessionSummary-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseEmailSessionSummaryFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref EmailSessionSummaryCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, EmailSessionSummary]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          SES_FROM_EMAIL: !Sub 'noreply@${FrontendDomainName}'
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseEmailSessionSummaryFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseEmailSessionSummaryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # POST /api/session/{sessionId}/email-summary
+  PulseSessionEmailSummaryResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseSessionIdResource
+      PathPart: email-summary
+
+  PulsePostEmailSessionSummaryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionEmailSummaryResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseEmailSessionSummaryFunction.Arn}/invocations'
+
+  # ── Task 1.13: CloudWatch Alarms ───────────────────────────────────────────
+
+  PulseCloseExpiredItemsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-closeExpiredItems-errors'
+      AlarmDescription: closeExpiredItems Lambda error rate exceeded threshold
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'urgd-pulse-closeExpiredItems-${Environment}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  PulsePurgeTranscriptsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-purgeTranscripts-errors'
+      AlarmDescription: purgeTranscripts Lambda error rate exceeded threshold
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'urgd-pulse-purgeTranscripts-${Environment}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref PulseAlertsTopic
+      OKActions:
+        - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
 
 
 Outputs:

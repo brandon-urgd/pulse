@@ -11,6 +11,11 @@ interface EnrichedFeature {
   limit: number | null;
 }
 
+interface UsageCounter {
+  count: number;
+  periodStart?: string;
+}
+
 interface SettingsData {
   tenantId: string;
   displayName: string | null;
@@ -21,6 +26,7 @@ interface SettingsData {
   usage: { itemCount: number; sessionCount: number };
   onboardingComplete: boolean;
   preferences: Record<string, unknown>;
+  usageCounters?: Record<string, UsageCounter>;
 }
 
 interface SettingsResponse {
@@ -115,7 +121,9 @@ export default function Plan() {
   // Map flags to known usage counts (expand as more tracking is added)
   const usageCounts: Record<string, number> = {
     maxActiveItems: itemCount,
-    monthlySessionsTotal: sessionCount,
+    monthlyItemsCreated: s?.usageCounters?.monthlyItemsCreated?.count ?? 0,
+    monthlySessionsTotal: s?.usageCounters?.monthlySessionsTotal?.count ?? 0,
+    monthlyPublicSessionsTotal: s?.usageCounters?.monthlyPublicSessionsTotal?.count ?? 0,
   };
 
   // Per-action caps — just display the value with units, no bar

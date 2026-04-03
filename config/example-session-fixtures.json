@@ -1,0 +1,304 @@
+{
+  "item": {
+    "tenantId": "{tenantId}",
+    "itemId": "{itemId}",
+    "itemName": "Product Launch Brief — Horizon App",
+    "description": "A short product concept document outlining the vision, target audience, and key differentiators for Horizon — a personal planning app that adapts to how people actually think about their time.",
+    "status": "closed",
+    "itemType": "document",
+    "documentStatus": "ready",
+    "documentKey": "pulse/{tenantId}/items/{itemId}/extracted.md",
+    "closedAt": "{closedAt}",
+    "closeDate": "{closeDate}",
+    "createdAt": "{createdAt}",
+    "updatedAt": "{closedAt}",
+    "hasPulseCheck": true,
+    "isExample": true
+  },
+  "session": {
+    "tenantId": "{tenantId}",
+    "sessionId": "{sessionId}",
+    "itemId": "{itemId}",
+    "reviewerName": "Alex Chen",
+    "status": "completed",
+    "completedAt": "{completedAt}",
+    "createdAt": "{createdAt}",
+    "updatedAt": "{completedAt}",
+    "timeLimitMinutes": 15,
+    "totalSections": 5,
+    "isExample": true
+  },
+  "transcript": [
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_0}",
+      "role": "agent",
+      "content": "Hi Alex — thanks for taking the time to look at this. I've read through the Horizon product brief, and I'm curious to hear what stood out to you. Before we dive in, what was your first honest reaction when you finished reading it?",
+      "timestamp": "{timestamp_0}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_1}",
+      "role": "reviewer",
+      "content": "Honestly, I liked the core idea. The notion that planning apps fail because they treat time as a grid rather than how people actually experience it — that resonated. But I wasn't sure the brief made a strong enough case for why Horizon specifically is the one to solve it.",
+      "timestamp": "{timestamp_1}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_2}",
+      "role": "agent",
+      "content": "That's a really useful distinction — liking the insight but questioning whether the brief earns the connection to Horizon. When you say it didn't make a strong enough case, was it more about missing evidence, or did the argument itself feel incomplete?",
+      "timestamp": "{timestamp_2}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_3}",
+      "role": "reviewer",
+      "content": "More the argument. The brief says people think in terms of energy and momentum, not hours and minutes. I buy that. But then it jumps straight to features — the adaptive calendar, the momentum tracker — without explaining the mechanism. How does Horizon actually detect someone's energy patterns? That leap felt hand-wavy.",
+      "timestamp": "{timestamp_3}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_4}",
+      "role": "agent",
+      "content": "So there's a gap between the insight and the product logic — the 'how' is missing. That's a significant observation. Let me ask about the target audience section. The brief describes the user as someone who's 'productive but overwhelmed.' Did that feel specific enough to you, or did it read as too broad?",
+      "timestamp": "{timestamp_4}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_5}",
+      "role": "reviewer",
+      "content": "Too broad. 'Productive but overwhelmed' could describe half the working population. I think the brief needs a sharper persona. Like, is this for freelancers juggling multiple clients? Parents managing family logistics alongside work? The use cases are really different, and the product decisions would change depending on which one you're designing for.",
+      "timestamp": "{timestamp_5}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_6}",
+      "role": "agent",
+      "content": "That's a strong point — the persona is doing too much work without enough specificity. You mentioned freelancers and parents as examples. If you had to pick one audience that this brief seems most naturally suited for, which would it be?",
+      "timestamp": "{timestamp_6}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_7}",
+      "role": "reviewer",
+      "content": "Probably freelancers or independent knowledge workers. The language about 'momentum' and 'energy-aware scheduling' feels like it's speaking to someone who has autonomy over their day but struggles to structure it. A parent's scheduling problem is more about coordination with other people — that's a different product.",
+      "timestamp": "{timestamp_7}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_8}",
+      "role": "agent",
+      "content": "That's a really clear read. The autonomy angle narrows it well. Let's shift to the competitive landscape section. The brief mentions Notion, Todoist, and Google Calendar as indirect competitors. Did you find that framing convincing?",
+      "timestamp": "{timestamp_8}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_9}",
+      "role": "reviewer",
+      "content": "Partially. I think naming those three is fine, but the brief dismisses them too quickly. It says they're 'built on the grid paradigm' and leaves it there. But Notion is incredibly flexible — people already build energy-tracking dashboards in it. The brief needs to explain why a dedicated app beats what people can already cobble together.",
+      "timestamp": "{timestamp_9}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_10}",
+      "role": "agent",
+      "content": "So the competitive analysis undersells the incumbents. That's a tension worth flagging — if the brief doesn't honestly reckon with what existing tools can do, it weakens the case for building something new. Was there anything in the differentiators section that you felt genuinely stood out?",
+      "timestamp": "{timestamp_10}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_11}",
+      "role": "reviewer",
+      "content": "The 'momentum score' idea. The concept that the app could learn your patterns over time and surface a simple signal — like 'you're in a deep work window, protect it' or 'your energy is dropping, switch to lighter tasks' — that felt novel. Most productivity tools are passive. This would be actively coaching you. That's the real differentiator, and I think the brief buries it.",
+      "timestamp": "{timestamp_11}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_12}",
+      "role": "agent",
+      "content": "Interesting — so the strongest idea in the brief isn't getting the spotlight it deserves. The momentum score is positioned as a feature when it might actually be the core value proposition. If you were rewriting the brief, would you lead with that?",
+      "timestamp": "{timestamp_12}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_13}",
+      "role": "reviewer",
+      "content": "Absolutely. I'd restructure the whole thing around it. Start with the momentum score as the central concept, then explain how the calendar and task management are built to serve it — not the other way around. Right now the brief reads like 'calendar app with a twist.' It should read like 'personal energy coach that happens to manage your schedule.'",
+      "timestamp": "{timestamp_13}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_14}",
+      "role": "agent",
+      "content": "That reframing is really compelling — 'personal energy coach that happens to manage your schedule' is a much stronger positioning statement than what's in the brief. Let me ask about one more thing. The brief mentions a freemium model with premium features behind a paywall. Did the monetization approach feel thought through?",
+      "timestamp": "{timestamp_14}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_15}",
+      "role": "reviewer",
+      "content": "Not really. It lists 'advanced analytics' and 'team features' as premium, but those feel generic. If the momentum score is the core value, you can't put it behind a paywall — that's the hook. The monetization needs to be tied to depth, not access. Like, free users get the basic momentum signal, paid users get historical patterns, predictions, and coaching nudges.",
+      "timestamp": "{timestamp_15}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_16}",
+      "role": "agent",
+      "content": "That's a smart distinction — monetize depth, not access. It keeps the core experience compelling for free users while giving power users a reason to upgrade. We're getting close to wrapping up. Looking back at everything we've discussed, what would you say is the single most important thing the author should address in the next revision?",
+      "timestamp": "{timestamp_16}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_17}",
+      "role": "reviewer",
+      "content": "Restructure around the momentum score. Everything else — the persona sharpening, the competitive honesty, the monetization rethink — flows from that. If the brief leads with 'we're building a personal energy coach,' the rest of the document writes itself differently. The insight is already there. It just needs to be the headline, not a bullet point.",
+      "timestamp": "{timestamp_17}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_18}",
+      "role": "agent",
+      "content": "That's a clear and actionable north star for the revision. Alex, this was a genuinely insightful conversation — your point about the momentum score being buried was the kind of feedback that can reshape how the whole product is framed. Thanks for being so thoughtful with your time.",
+      "timestamp": "{timestamp_18}"
+    },
+    {
+      "sessionId": "{sessionId}",
+      "messageId": "{messageId_19}",
+      "role": "reviewer",
+      "content": "Thanks — this was a great way to think through it. I feel like I clarified my own thinking too, which is a nice bonus.",
+      "timestamp": "{timestamp_19}"
+    }
+  ],
+  "report": {
+    "tenantId": "{tenantId}",
+    "sessionId": "{sessionId}",
+    "itemId": "{itemId}",
+    "verdict": "Worth developing further",
+    "conviction": [
+      "The core insight about energy-based planning vs. time-grid planning is sound and resonant",
+      "The momentum score concept is genuinely novel and could be a real differentiator",
+      "The product has a clear audience in independent knowledge workers and freelancers"
+    ],
+    "tension": [
+      "The brief buries its strongest idea — the momentum score is positioned as a feature rather than the core value proposition",
+      "The competitive analysis dismisses incumbents too quickly without addressing what they already do well",
+      "The monetization model feels generic and disconnected from the product's actual value"
+    ],
+    "uncertainty": [
+      "The mechanism for detecting energy patterns is unexplained — the 'how' is missing between insight and product",
+      "The target persona is too broad to drive specific product decisions"
+    ],
+    "energy": "engaged",
+    "conversationShape": "tactical",
+    "themes": [
+      "Product positioning and value proposition",
+      "Target audience specificity",
+      "Competitive differentiation",
+      "Momentum score as core concept",
+      "Monetization strategy"
+    ],
+    "isSelfReview": false,
+    "incomplete": false,
+    "generatedAt": "{reportGeneratedAt}",
+    "isExample": true
+  },
+  "pulseCheck": {
+    "tenantId": "{tenantId}",
+    "itemId": "{itemId}",
+    "verdict": "Worth developing further",
+    "narrative": "The reviewer found the core insight compelling — that planning tools fail because they model time as a grid rather than how people experience it. However, the brief's strongest idea (the momentum score) is buried as a feature rather than positioned as the central value proposition. The reviewer recommends restructuring the entire brief around the concept of a 'personal energy coach that happens to manage your schedule,' which would naturally resolve several downstream issues: the too-broad persona, the dismissive competitive analysis, and the generic monetization model.",
+    "themes": [
+      {
+        "name": "Product Positioning",
+        "summary": "The brief reads as 'calendar app with a twist' when it should lead with the momentum score as the core value proposition. Restructuring around this concept would strengthen every other section.",
+        "sentiment": "tension",
+        "quotes": [
+          "It should read like 'personal energy coach that happens to manage your schedule.'",
+          "The insight is already there. It just needs to be the headline, not a bullet point."
+        ]
+      },
+      {
+        "name": "Target Audience",
+        "summary": "The 'productive but overwhelmed' persona is too broad. The language and features most naturally fit independent knowledge workers and freelancers who have autonomy over their day but struggle to structure it.",
+        "sentiment": "uncertainty",
+        "quotes": [
+          "A parent's scheduling problem is more about coordination with other people — that's a different product."
+        ]
+      },
+      {
+        "name": "Competitive Landscape",
+        "summary": "The brief dismisses Notion, Todoist, and Google Calendar too quickly. People already build energy-tracking dashboards in Notion. The case for a dedicated app needs to be stronger.",
+        "sentiment": "tension",
+        "quotes": [
+          "The brief needs to explain why a dedicated app beats what people can already cobble together."
+        ]
+      },
+      {
+        "name": "Momentum Score",
+        "summary": "The concept of an app that learns your energy patterns and actively coaches you through your day was identified as genuinely novel and the real differentiator. Most productivity tools are passive — this would be active.",
+        "sentiment": "conviction",
+        "quotes": [
+          "Most productivity tools are passive. This would be actively coaching you. That's the real differentiator."
+        ]
+      },
+      {
+        "name": "Monetization",
+        "summary": "The freemium model needs to monetize depth rather than access. The core momentum signal should be free; premium should offer historical patterns, predictions, and coaching nudges.",
+        "sentiment": "uncertainty",
+        "quotes": [
+          "If the momentum score is the core value, you can't put it behind a paywall — that's the hook."
+        ]
+      }
+    ],
+    "sharedConviction": [
+      "The energy-based planning insight is sound and worth building on",
+      "The momentum score is the product's real differentiator"
+    ],
+    "repeatedTension": [
+      "The brief buries its strongest idea in the features section",
+      "The competitive analysis doesn't honestly reckon with incumbent capabilities"
+    ],
+    "openQuestions": [
+      "How does Horizon actually detect and model a user's energy patterns?",
+      "What specific behaviors differentiate the freelancer persona from other 'productive but overwhelmed' users?"
+    ],
+    "reviewerVerdicts": [
+      {
+        "sessionId": "{sessionId}",
+        "reviewerName": "Alex Chen",
+        "verdict": "Worth developing further",
+        "energy": "engaged",
+        "conversationShape": "tactical"
+      }
+    ],
+    "proposedRevisions": [
+      {
+        "title": "Lead with the momentum score",
+        "description": "Restructure the brief to position the momentum score as the central concept, not a feature bullet point. Frame Horizon as a 'personal energy coach that happens to manage your schedule.'",
+        "sourceThemeIds": ["Product Positioning", "Momentum Score"]
+      },
+      {
+        "title": "Sharpen the target persona",
+        "description": "Narrow from 'productive but overwhelmed' to independent knowledge workers and freelancers who have day-to-day autonomy but struggle with self-structure.",
+        "sourceThemeIds": ["Target Audience"]
+      },
+      {
+        "title": "Strengthen competitive analysis",
+        "description": "Acknowledge what Notion and other tools already do well (e.g., custom energy-tracking dashboards), then explain why a dedicated app with passive learning beats manual configuration.",
+        "sourceThemeIds": ["Competitive Landscape"]
+      },
+      {
+        "title": "Redesign monetization around depth",
+        "description": "Keep the core momentum signal free. Gate historical pattern analysis, predictive scheduling, and coaching nudges behind premium. Monetize depth of insight, not access to the core feature.",
+        "sourceThemeIds": ["Monetization"]
+      }
+    ],
+    "sessionCount": 1,
+    "incompleteCount": 0,
+    "generatedAt": "{pulseCheckGeneratedAt}",
+    "status": "complete",
+    "isExample": true
+  },
+  "documentContent": "# Horizon — Product Launch Brief\n\n## Vision\n\nHorizon is a personal planning app built on a simple observation: people don't think about their time in hours and minutes. They think in terms of energy, momentum, and capacity. Every existing planning tool — from Google Calendar to Todoist to Notion — is built on the grid paradigm: divide the day into slots, fill them with tasks, and hope for the best.\n\nHorizon takes a different approach. Instead of asking 'what fits in this time slot?', it asks 'what are you actually capable of right now?'\n\n## Target Audience\n\nHorizon is for people who are productive but overwhelmed. They don't lack ambition or discipline — they lack a tool that understands how they actually work. They've tried every productivity system, and each one eventually becomes another source of guilt when the perfectly planned day falls apart by 11 AM.\n\n## Key Features\n\n### Adaptive Calendar\nA calendar view that reorganizes itself based on your actual behavior patterns. If you consistently do deep work in the morning and administrative tasks after lunch, Horizon learns that and suggests accordingly.\n\n### Momentum Tracker\nA real-time signal that reflects your current productive state. The momentum score learns from your patterns over time — when you're in a deep work window, it tells you to protect it. When your energy is dropping, it suggests switching to lighter tasks.\n\n### Flexible Time Blocks\nInstead of rigid 30-minute or 1-hour slots, Horizon uses elastic time blocks that expand or contract based on your momentum. A deep work session that's going well doesn't get interrupted by an arbitrary calendar boundary.\n\n## Competitive Landscape\n\nThe primary competitors are Notion, Todoist, and Google Calendar. All three are built on the grid paradigm — they treat time as a container to be filled rather than a resource to be managed dynamically. Horizon's energy-aware approach is fundamentally different from anything currently available.\n\n## Monetization\n\nHorizon will use a freemium model:\n- **Free tier:** Core calendar, basic momentum tracking, up to 3 active projects\n- **Premium ($9.99/mo):** Advanced analytics, historical pattern reports, team features, unlimited projects\n- **Enterprise:** Custom integrations, admin controls, SSO\n\n## Timeline\n\n- **Q3 2026:** Private beta with 500 users\n- **Q4 2026:** Public launch on iOS and web\n- **Q1 2027:** Android launch and team features"
+}

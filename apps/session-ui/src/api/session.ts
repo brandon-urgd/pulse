@@ -230,3 +230,26 @@ export async function deleteSessionTranscript(
     throw makeError(body, 'Failed to delete session transcript', res.status)
   }
 }
+
+export async function emailSessionSummary(
+  sessionId: string,
+  sessionToken: string,
+  email: string
+): Promise<{ sent: boolean }> {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/email-summary`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ email }),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw makeError(body, 'Failed to send email', res.status)
+  }
+
+  const json = await res.json()
+  return json.data ?? json
+}

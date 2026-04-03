@@ -93,6 +93,7 @@ export const handler = async (event) => {
         features: tenant.features ?? {},
         enrichedFeatures,
         usage: { itemCount, sessionCount },
+        usageCounters: tenant.usageCounters ?? {},
         onboardingComplete: tenant.onboardingComplete ?? false,
         preferences: tenant.preferences ?? {},
         termsAcceptedVersion: tenant.termsAcceptedVersion ?? null,

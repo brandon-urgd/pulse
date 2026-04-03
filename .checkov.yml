@@ -21,3 +21,5 @@ skip-check:
   - CKV_AWS_158
   # Lambda env var KMS — AWS-managed encryption applied by default; CMK not required for non-secret config values
   - CKV_AWS_173
+  # SES SendEmail Resource: '*' — SES does not support resource-level ARN constraints for SendEmail; inline skip comments on affected roles
+  - CKV_AWS_111
