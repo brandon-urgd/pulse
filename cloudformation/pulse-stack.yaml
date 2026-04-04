@@ -333,6 +333,17 @@ Parameters:
     Default: lambda-packages/urgd-pulse-emailSessionSummary/latest.zip
     Description: S3 key for urgd-pulse-emailSessionSummary Lambda ZIP
 
+  # Spec 2 — S4 CodeKey parameters
+  StripeWebhookCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-stripeWebhook/latest.zip
+    Description: S3 key for urgd-pulse-stripeWebhook Lambda ZIP
+
+  CreateCheckoutSessionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-createCheckoutSession/latest.zip
+    Description: S3 key for urgd-pulse-createCheckoutSession Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
@@ -1132,6 +1143,8 @@ Resources:
       - PulseAdminTenantsMethod
       - PulsePublicConfigMethod
       - PulseSuggestDescriptionMethod
+      - PulsePostStripeWebhookMethod
+      - PulsePostCheckoutMethod
     Properties:
       RestApiId: !Ref PulseApiGateway
       Description: !Sub 'Deployment ${DeploymentVersion} — ${AWS::StackName}'
@@ -2055,6 +2068,11 @@ Resources:
                 Action:
                   - s3:PutObject
                 Resource: !Sub '${PulseDataBucket.Arn}/*'
+              # Spec 2 — S4: SSM permission for Stripe secret key
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/pulse/${Environment}/stripe/secret-key'
 
   PulseCreateTenantFunctionRole:
     Type: AWS::IAM::Role
@@ -2105,6 +2123,11 @@ Resources:
                 Action:
                   - s3:PutObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              # Spec 2 — S4: SSM permission for Stripe secret key
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/pulse/${Environment}/stripe/secret-key'
 
   PulseGetSettingsFunctionRole:
     Type: AWS::IAM::Role
@@ -2247,6 +2270,11 @@ Resources:
                   - kms:GenerateDataKey*
                   - kms:Decrypt
                 Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+              # Spec 2 — S4: SSM permission for Stripe secret key
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/pulse/${Environment}/stripe/secret-key'
 
   PulseGetItemsFunctionRole:
     Type: AWS::IAM::Role
@@ -2321,6 +2349,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           DATA_BUCKET: !Ref PulseDataBucket
+          STRIPE_SECRET_KEY_PARAM: !Sub '/pulse/${Environment}/stripe/secret-key'
       Tags:
         - Key: project
           Value: pulse
@@ -2371,6 +2400,7 @@ Resources:
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          STRIPE_SECRET_KEY_PARAM: !Sub '/pulse/${Environment}/stripe/secret-key'
       Tags:
         - Key: project
           Value: pulse
@@ -2511,6 +2541,7 @@ Resources:
           USER_POOL_ID: !Ref PulseUserPool
           ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          STRIPE_SECRET_KEY_PARAM: !Sub '/pulse/${Environment}/stripe/secret-key'
       Tags:
         - Key: project
           Value: pulse
@@ -2818,6 +2849,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
@@ -3996,6 +4028,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
@@ -7658,6 +7691,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
 
   PulseCreateSelfSessionFunction:
@@ -8733,6 +8767,366 @@ Resources:
         - !Ref PulseAlertsTopic
       OKActions:
         - !Ref PulseAlertsTopic
+      TreatMissingData: notBreaching
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Spec 2 — S4: Billing & Subscription (stripeWebhook, createCheckoutSession)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── stripeWebhook Log Group ──
+  PulseStripeWebhookLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-stripeWebhook-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ── stripeWebhook IAM Role ──
+  PulseStripeWebhookRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-stripeWebhook-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StripeWebhookPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/pulse/${Environment}/stripe/*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseCriticalTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ── stripeWebhook Lambda Function ──
+  PulseStripeWebhookFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseStripeWebhookLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-stripeWebhook-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseStripeWebhookRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref StripeWebhookCodeKey
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, StripeWebhook]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          ALERTS_TOPIC_ARN: !Ref PulseCriticalTopic
+          STRIPE_WEBHOOK_SECRET_PARAM: !Sub '/pulse/${Environment}/stripe/webhook-secret'
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseStripeWebhookPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseStripeWebhookFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ── createCheckoutSession Log Group ──
+  PulseCreateCheckoutSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-createCheckoutSession-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ── createCheckoutSession IAM Role ──
+  PulseCreateCheckoutSessionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-createCheckoutSession-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CreateCheckoutSessionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/pulse/${Environment}/stripe/*'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ── createCheckoutSession Lambda Function ──
+  PulseCreateCheckoutSessionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseCreateCheckoutSessionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-createCheckoutSession-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseCreateCheckoutSessionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref CreateCheckoutSessionCodeKey
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CreateCheckoutSession]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          STRIPE_SECRET_KEY_PARAM: !Sub '/pulse/${Environment}/stripe/secret-key'
+          STRIPE_PRICE_INDIVIDUAL_PARAM: !Sub '/pulse/${Environment}/stripe/price-individual'
+          STRIPE_PRICE_PRO_PARAM: !Sub '/pulse/${Environment}/stripe/price-pro'
+          STRIPE_PRICE_ENTERPRISE_PARAM: !Sub '/pulse/${Environment}/stripe/price-enterprise'
+          PLAN_PAGE_URL: !Sub 'https://${FrontendDomainName}/admin/plan'
+          CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseCreateCheckoutSessionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PulseCreateCheckoutSessionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  # ── S4 API Gateway Routes ────────────────────────────────────────────────────
+
+  # POST /api/webhooks/stripe (no auth — Stripe signature verification)
+  PulseWebhooksResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseApiResource
+      PathPart: webhooks
+
+  PulseWebhooksStripeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseWebhooksResource
+      PathPart: stripe
+
+  PulsePostStripeWebhookMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseWebhooksStripeResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseStripeWebhookFunction.Arn}/invocations'
+
+  PulseWebhooksStripeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseWebhooksStripeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: !Sub "'https://${FrontendDomainName}'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # POST /api/manage/checkout (Cognito JWT auth)
+  PulseManageCheckoutResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ParentId: !Ref PulseManageResource
+      PathPart: checkout
+
+  PulsePostCheckoutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageCheckoutResource
+      HttpMethod: POST
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseCognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseCreateCheckoutSessionFunction.Arn}/invocations'
+
+  PulseManageCheckoutOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseManageCheckoutResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: !Sub "'https://${FrontendDomainName}'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # ── S4 CloudWatch Alarm ──────────────────────────────────────────────────────
+
+  PulseStripeWebhookAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-stripeWebhook-errors'
+      AlarmDescription: stripeWebhook Lambda error rate exceeded threshold
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'urgd-pulse-stripeWebhook-${Environment}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref PulseCriticalTopic
+      OKActions:
+        - !Ref PulseCriticalTopic
       TreatMissingData: notBreaching
 
 
