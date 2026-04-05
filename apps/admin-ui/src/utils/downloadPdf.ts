@@ -9,24 +9,19 @@ export type { PulseCheckPdfData, SessionReportPdfData };
 
 // ─── Brand Font Registration ──────────────────────────────────────────────────
 // Register Archivo (headings) and Rubik (body) for branded PDF exports.
-// Falls back to Helvetica automatically when TTF files are not present.
 
-try {
-  Font.register({
-    family: 'Archivo',
-    src: '/fonts/Archivo-Bold.ttf',
-    fontWeight: 700,
-  });
-  Font.register({
-    family: 'Rubik',
-    fonts: [
-      { src: '/fonts/Rubik-Regular.ttf', fontWeight: 400 },
-      { src: '/fonts/Rubik-Medium.ttf', fontWeight: 500 },
-    ],
-  });
-} catch {
-  // TTF files not present — Helvetica fallback is automatic
-}
+Font.register({
+  family: 'Archivo',
+  src: '/fonts/Archivo-Bold.ttf',
+  fontWeight: 700,
+});
+Font.register({
+  family: 'Rubik',
+  fonts: [
+    { src: '/fonts/Rubik-Regular.ttf', fontWeight: 400 },
+    { src: '/fonts/Rubik-Medium.ttf', fontWeight: 500 },
+  ],
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

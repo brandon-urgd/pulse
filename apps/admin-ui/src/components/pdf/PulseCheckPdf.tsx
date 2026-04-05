@@ -53,38 +53,38 @@ const s = StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Rubik, Helvetica',
+    fontFamily: 'Rubik',
     fontSize: 10,
     color: '#212529',
   },
   // Header
-  title: { fontSize: 24, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: '#1a1a1a' },
+  title: { fontSize: 24, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a' },
   dateLine: { fontSize: 9, color: '#868e96', marginTop: 4 },
   accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 24 },
   // Verdict
   verdictLabel: { fontSize: 9, color: '#868e96', textTransform: 'uppercase', letterSpacing: 1 },
-  verdictText: { fontSize: 18, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: '#1a1a1a', marginTop: 4 },
+  verdictText: { fontSize: 18, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a', marginTop: 4 },
   narrative: { fontSize: 11, color: '#212529', marginTop: 8 },
   metaLine: { fontSize: 9, color: '#868e96', marginTop: 8, marginBottom: 28 },
   // Signal section
   signalBlock: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 10, paddingRight: 10, marginBottom: 20 },
-  signalHeading: { fontSize: 13, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, marginBottom: 6 },
+  signalHeading: { fontSize: 13, fontFamily: 'Archivo', fontWeight: 700, marginBottom: 6 },
   bullet: { fontSize: 10, color: '#212529', marginBottom: 3, paddingLeft: 8 },
   // Themes
-  sectionHeader: { fontSize: 16, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: SAGE, marginTop: 16, marginBottom: 8 },
-  themeLabel: { fontSize: 12, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: '#1a1a1a', marginBottom: 6 },
+  sectionHeader: { fontSize: 16, fontFamily: 'Archivo', fontWeight: 700, color: SAGE, marginTop: 16, marginBottom: 8 },
+  themeLabel: { fontSize: 12, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a', marginBottom: 6 },
   themeGroup: { marginBottom: 12 },
   // Theme table
   tableRow: { flexDirection: 'row', marginBottom: 4 },
   tableColLeft: { width: 80 },
   tableColRight: { flex: 1 },
-  signalTypeLabel: { fontSize: 10, fontFamily: 'Rubik, Helvetica-Bold', fontWeight: 500 },
+  signalTypeLabel: { fontSize: 10, fontFamily: 'Rubik', fontWeight: 500 },
   signalQuote: { fontSize: 10, fontStyle: 'italic', color: '#212529' },
   // Revisions
   revisionBlock: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e9ecef' },
   revisionBlockLast: { marginBottom: 12, paddingBottom: 0, borderBottomWidth: 0 },
   revisionTypeBadge: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5, color: '#868e96', marginBottom: 4 },
-  revisionProposal: { fontSize: 11, fontFamily: 'Rubik, Helvetica-Bold', fontWeight: 500, color: '#1a1a1a' },
+  revisionProposal: { fontSize: 11, fontFamily: 'Rubik', fontWeight: 500, color: '#1a1a1a' },
   revisionRationale: { fontSize: 10, color: '#868e96', paddingLeft: 12, marginTop: 4 },
   // Footer
   footer: { position: 'absolute', bottom: 20, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between' },
