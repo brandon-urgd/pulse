@@ -354,7 +354,7 @@ export default function PulseCheck() {
     setPdfGenerating(true);
     try {
       await downloadPulseCheckPdf(pc, itemName);
-    } catch (err) { console.error('PDF download failed:', err) }
+    } catch { /* PDF generation error — non-blocking */ }
     finally { setPdfGenerating(false); }
   }
 

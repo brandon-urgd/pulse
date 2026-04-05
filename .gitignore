@@ -12,6 +12,7 @@ apps/*/build/
 artifacts/
 parameter-files/
 lambdas/**/*.zip
+lambdas/**/node_modules/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
