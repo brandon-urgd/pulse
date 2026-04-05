@@ -114,6 +114,10 @@ check_delete "S6 DELETE /api/manage/account reachable"                    "$BASE
 check_post   "S6 POST /api/manage/items/{id}/revise reachable"            "$BASE_URL/api/manage/items/smoke-test/revise"              "401" "{}"
 check        "S6 GET /api/manage/items/{id}/revisions reachable"          "$BASE_URL/api/manage/items/smoke-test/revisions"           "401"
 
+# S4 billing gate: Stripe webhook (no auth — returns 400 without valid signature) and checkout (auth-gated — 401)
+check_post "S4-billing POST /api/webhooks/stripe reachable"    "$BASE_URL/api/webhooks/stripe"    "400" "{}"
+check_post "S4-billing POST /api/manage/checkout reachable"    "$BASE_URL/api/manage/checkout"    "401" "{}"
+
 # Summary
 echo ""
 echo "## 📊 Smoke Test Summary"

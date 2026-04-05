@@ -120,12 +120,10 @@ Reviewer ${idx + 1}${r.isSelfReview ? ' (Self-Review)' : ''}${r.incomplete ? ' (
       ? `\nNote: ${incompleteReports.length} of ${reports.length} sessions were incomplete. Weight their feedback less heavily.`
       : ''
 
-    const prompt = `You are synthesizing feedback from ${reports.length} reviewer session${reports.length > 1 ? 's' : ''} into a consolidated Pulse Check.
+    // System prompt: behavioral instructions and output format
+    const systemPrompt = `You are synthesizing feedback from ${reports.length} reviewer session${reports.length > 1 ? 's' : ''} into a consolidated Pulse Check.
 
-${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review. Separate self-review signals from external reviewer signals where relevant.` : ''}${incompleteNote}
-
-Individual Reports:
-${allReportsText}
+${hasSelfReview ? `Note: ${selfReviewReports.length} of these sessions are self-review. Separate self-review signals from external reviewer signals where relevant.` : ''}
 
 CRITICAL RULES:
 - Detect patterns across reviewers: shared conviction, repeated tension, common uncertainty
@@ -168,6 +166,13 @@ For sharedConviction/repeatedTension: only include if 2+ reviewers showed the sa
 For proposedRevisions: include as many as the signals warrant — no minimum, no maximum. Let signal density drive the count. A technical document may produce many small line-edits; a philosophical one may produce a few conceptual shifts. Return empty array only if no actionable changes are warranted.
 For revisionType: use "structural" for changes to organization/flow, "line-edit" for specific wording/phrasing changes, "conceptual" for changes to ideas/framing/argument, "feature" for additions or removals of discrete capabilities or sections.`
 
+    // User prompt: session data and analysis request
+    const userPrompt = `Individual Reports:
+${allReportsText}
+${incompleteNote}
+
+Synthesize these reports into a consolidated Pulse Check following the JSON format specified in your instructions.`
+
     // 3. Invoke Bedrock
     const bedrockStart = Date.now()
     let bedrockResponse
@@ -178,8 +183,9 @@ For revisionType: use "structural" for changes to organization/flow, "line-edit"
         accept: 'application/json',
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 4096,
-          messages: [{ role: 'user', content: prompt }],
+          max_tokens: reports.length <= 7 ? 4096 : 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
         }),
       }))
     } catch (bedrockErr) {

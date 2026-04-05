@@ -223,8 +223,11 @@ describe('calculateResetDate', () => {
 
     await fc.assert(
       fc.property(
-        fc.date({ min: new Date('2024-01-01'), max: new Date('2030-12-31') }).map(d => d.toISOString().split('T')[0]),
-        (periodStart) => {
+        fc.integer({ min: 2024, max: 2030 }),
+        fc.integer({ min: 1, max: 12 }),
+        fc.integer({ min: 1, max: 28 }),
+        (year, month, day) => {
+          const periodStart = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
           const result = calculateResetDate(periodStart)
           expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/)
 

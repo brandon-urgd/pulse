@@ -18,6 +18,7 @@ import {
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { CognitoIdentityProviderClient, AdminDeleteUserCommand } from '@aws-sdk/client-cognito-identity-provider'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 requireEnv([
@@ -30,6 +31,7 @@ const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 /**
  * Delete all items in a key list using BatchWriteItem (25 items per batch).
@@ -144,6 +146,37 @@ export const handler = async (event) => {
     if (confirmEmail.trim().toLowerCase() !== tenantEmail.trim().toLowerCase()) {
       log('warn', 'DeleteAccount: email confirmation mismatch', { requestId, tenantId })
       return errorResponse(400, 'Email confirmation does not match', {}, origin)
+    }
+
+    // Stripe cleanup — cancel subscriptions and delete customer BEFORE data deletion
+    const stripeCustomerId = tenantResult.Item?.stripeCustomerId?.S
+    if (stripeCustomerId && process.env.STRIPE_SECRET_KEY_PARAM) {
+      try {
+        const ssmResult = await ssm.send(new GetParameterCommand({
+          Name: process.env.STRIPE_SECRET_KEY_PARAM,
+          WithDecryption: true,
+        }))
+        const { default: Stripe } = await import('stripe')
+        const stripe = new Stripe(ssmResult.Parameter.Value)
+
+        // Cancel all active subscriptions
+        const subscriptions = await stripe.subscriptions.list({
+          customer: stripeCustomerId,
+          status: 'active',
+        })
+        for (const sub of subscriptions.data) {
+          await stripe.subscriptions.cancel(sub.id)
+          log('info', 'DeleteAccount: cancelled Stripe subscription', { requestId, tenantId, subscriptionId: sub.id })
+        }
+
+        // Delete the Stripe Customer
+        await stripe.customers.del(stripeCustomerId)
+        log('info', 'DeleteAccount: deleted Stripe Customer', { requestId, tenantId, stripeCustomerId })
+      } catch (stripeErr) {
+        log('warn', 'DeleteAccount: Stripe cleanup failed, proceeding with data deletion', {
+          requestId, tenantId, stripeCustomerId, errorName: stripeErr.name,
+        })
+      }
     }
 
     // 3. Delete all sessions for this tenant

@@ -6,6 +6,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { checkAndIncrement } from './shared/counters.mjs'
 import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
 import { randomUUID } from 'crypto'
 
@@ -105,6 +106,8 @@ export const handler = async (event) => {
       tier: tenantResult.Item.tier?.S ?? 'free',
       features: unmarshalFeatures(tenantResult.Item.features?.M),
       serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+      usageCounters: unmarshalFeatures(tenantResult.Item.usageCounters?.M),
+      orgId: tenantResult.Item.orgId?.S ?? null,
     }
     const systemRecord = systemItem ? {
       serviceFlags: unmarshalFeatures(systemItem.serviceFlags?.M),
@@ -138,6 +141,23 @@ export const handler = async (event) => {
     if (activeCount >= maxActiveItems) {
       log('warn', 'CreateItem: maxActiveItems limit reached', { requestId, tenantId, activeCount, maxActiveItems })
       return errorResponse(403, "You've reached your item limit.", {}, origin)
+    }
+
+    // Monthly counter enforcement — monthlyItemsCreated
+    const counterResult = await checkAndIncrement({
+      tenantId,
+      counterName: 'monthlyItemsCreated',
+      tenantRecord,
+      systemRecord,
+      orgId: tenantRecord.orgId ?? null,
+    })
+    if (!counterResult.allowed) {
+      log('warn', 'CreateItem: monthly item limit reached', { requestId, tenantId, reason: counterResult.reason })
+      return errorResponse(403, 'Monthly item limit reached', {
+        reason: counterResult.reason,
+        counter: counterResult.counter,
+        resetDate: counterResult.resetDate,
+      }, origin)
     }
 
     // Generate item

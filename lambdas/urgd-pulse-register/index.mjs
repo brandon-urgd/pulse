@@ -2,7 +2,8 @@
 // POST /api/auth/register → creates Cognito user + triggers createTenant
 
 import { CognitoIdentityProviderClient, AdminCreateUserCommand } from '@aws-sdk/client-cognito-identity-provider'
-import { DynamoDBClient, GetItemCommand, PutItemCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, PutItemCommand, BatchWriteItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
 import { getTierDefaults } from './shared/tiers.mjs'
@@ -17,6 +18,7 @@ requireEnv(['USER_POOL_ID', 'USER_POOL_CLIENT_ID', 'CORS_ALLOWED_ORIGINS', 'TENA
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+const ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 // Load example session fixtures at module init (bundled with Lambda)
 let exampleFixtures = null
@@ -118,6 +120,40 @@ export const handler = async (event) => {
         },
       }))
       log('info', 'Register: tenant record created', { requestId, tenantId })
+
+      // Stripe Customer creation — fail-safe, never blocks registration
+      if (process.env.STRIPE_SECRET_KEY_PARAM) {
+        try {
+          const ssmResult = await ssm.send(new GetParameterCommand({
+            Name: process.env.STRIPE_SECRET_KEY_PARAM,
+            WithDecryption: true,
+          }))
+          const { default: Stripe } = await import('stripe')
+          const stripe = new Stripe(ssmResult.Parameter.Value)
+          const customer = await stripe.customers.create({
+            email,
+            metadata: { tenantId },
+          })
+          await dynamo.send(new UpdateItemCommand({
+            TableName: process.env.TENANTS_TABLE,
+            Key: { tenantId: { S: tenantId } },
+            UpdateExpression: 'SET stripeCustomerId = :scid',
+            ExpressionAttributeValues: { ':scid': { S: customer.id } },
+          }))
+          log('info', 'Register: Stripe Customer created', { requestId, tenantId, stripeCustomerId: customer.id })
+        } catch (stripeErr) {
+          log('warn', 'Register: Stripe Customer creation failed, continuing', { requestId, tenantId, errorName: stripeErr.name })
+          // Store null so Plan page knows Stripe setup failed
+          try {
+            await dynamo.send(new UpdateItemCommand({
+              TableName: process.env.TENANTS_TABLE,
+              Key: { tenantId: { S: tenantId } },
+              UpdateExpression: 'SET stripeCustomerId = :null',
+              ExpressionAttributeValues: { ':null': { NULL: true } },
+            }))
+          } catch { /* best effort */ }
+        }
+      }
 
       // Seed example data — wrapped in try/catch so seeding failure never blocks registration
       try {

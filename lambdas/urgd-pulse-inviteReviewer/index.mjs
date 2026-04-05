@@ -7,6 +7,7 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { checkAndIncrement } from './shared/counters.mjs'
 import { randomBytes, randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -206,6 +207,8 @@ export const handler = async (event) => {
             tier: tenantFetch.Item.tier?.S ?? 'free',
             features: unmarshalFeatures(tenantFetch.Item.features?.M),
             serviceFlags: unmarshalFeatures(tenantFetch.Item.serviceFlags?.M),
+            usageCounters: unmarshalFeatures(tenantFetch.Item.usageCounters?.M),
+            orgId: tenantFetch.Item.orgId?.S ?? null,
           }
           inviterName = tenantFetch.Item.displayName?.S ?? null
           inviterEmail = tenantFetch.Item.email?.S ?? null
@@ -232,6 +235,23 @@ export const handler = async (event) => {
     if (existingCount + emails.length > maxSessions) {
       log('warn', 'InviteReviewer: session limit exceeded', { requestId, tenantId, itemId, existingCount, requested: emails.length, maxSessions })
       return errorResponse(403, 'Session limit reached for this item.', {}, origin)
+    }
+
+    // Monthly counter enforcement — monthlySessionsTotal (check once for the batch)
+    const counterResult = await checkAndIncrement({
+      tenantId,
+      counterName: 'monthlySessionsTotal',
+      tenantRecord,
+      systemRecord,
+      orgId: tenantRecord.orgId ?? null,
+    })
+    if (!counterResult.allowed) {
+      log('warn', 'InviteReviewer: monthly session limit reached', { requestId, tenantId, reason: counterResult.reason })
+      return errorResponse(403, 'Monthly session limit reached', {
+        reason: counterResult.reason,
+        counter: counterResult.counter,
+        resetDate: counterResult.resetDate,
+      }, origin)
     }
 
     const appUrl = process.env.APP_URL

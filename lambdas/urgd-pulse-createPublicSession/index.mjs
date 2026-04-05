@@ -7,6 +7,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { checkAndIncrement } from './shared/counters.mjs'
 import { randomBytes, randomUUID } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -130,6 +131,8 @@ export const handler = async (event) => {
             tier: tenantResult.Item.tier?.S ?? 'free',
             features: unmarshalFeatures(tenantResult.Item.features?.M),
             serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
+            usageCounters: unmarshalFeatures(tenantResult.Item.usageCounters?.M),
+            orgId: tenantResult.Item.orgId?.S ?? null,
           }
         }
         if (systemResult.Item) {
@@ -171,6 +174,40 @@ export const handler = async (event) => {
 
     // Check session count against maxSessionsPerItem
     const maxSessions = maxSessionsResult.limit ?? 5
+
+    // Monthly counter enforcement — monthlyPublicSessionsTotal
+    const publicCounterResult = await checkAndIncrement({
+      tenantId,
+      counterName: 'monthlyPublicSessionsTotal',
+      tenantRecord,
+      systemRecord,
+      orgId: tenantRecord.orgId ?? null,
+    })
+    if (!publicCounterResult.allowed) {
+      log('warn', 'CreatePublicSession: monthly public session limit reached', { requestId, tenantId, reason: publicCounterResult.reason })
+      return errorResponse(403, 'Monthly public session limit reached', {
+        reason: publicCounterResult.reason,
+        counter: publicCounterResult.counter,
+        resetDate: publicCounterResult.resetDate,
+      }, origin)
+    }
+
+    // Monthly counter enforcement — monthlySessionsTotal
+    const sessionCounterResult = await checkAndIncrement({
+      tenantId,
+      counterName: 'monthlySessionsTotal',
+      tenantRecord,
+      systemRecord,
+      orgId: tenantRecord.orgId ?? null,
+    })
+    if (!sessionCounterResult.allowed) {
+      log('warn', 'CreatePublicSession: monthly session limit reached', { requestId, tenantId, reason: sessionCounterResult.reason })
+      return errorResponse(403, 'Monthly session limit reached', {
+        reason: sessionCounterResult.reason,
+        counter: sessionCounterResult.counter,
+        resetDate: sessionCounterResult.resetDate,
+      }, origin)
+    }
 
     const sessionId = randomUUID()
     const pulseCode = generatePulseCode()

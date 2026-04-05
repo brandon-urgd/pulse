@@ -8,6 +8,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { checkAndIncrement } from './shared/counters.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
@@ -153,6 +154,8 @@ export const handler = async (event) => {
             tier: tenantFetch.Item.tier?.S ?? 'free',
             features: unmarshalFeatures(tenantFetch.Item.features?.M),
             serviceFlags: unmarshalFeatures(tenantFetch.Item.serviceFlags?.M),
+            usageCounters: unmarshalFeatures(tenantFetch.Item.usageCounters?.M),
+            orgId: tenantFetch.Item.orgId?.S ?? null,
           }
         }
         if (systemFetch.Item) {
@@ -187,6 +190,23 @@ export const handler = async (event) => {
     if (existingCount >= maxSessions) {
       log('warn', 'CreateSelfSession: session limit exceeded', { requestId, tenantId, itemId, existingCount, maxSessions })
       return errorResponse(403, 'Session limit reached for this item.', {}, origin)
+    }
+
+    // Monthly counter enforcement — monthlySessionsTotal
+    const counterResult = await checkAndIncrement({
+      tenantId,
+      counterName: 'monthlySessionsTotal',
+      tenantRecord,
+      systemRecord,
+      orgId: tenantRecord.orgId ?? null,
+    })
+    if (!counterResult.allowed) {
+      log('warn', 'CreateSelfSession: monthly session limit reached', { requestId, tenantId, reason: counterResult.reason })
+      return errorResponse(403, 'Monthly session limit reached', {
+        reason: counterResult.reason,
+        counter: counterResult.counter,
+        resetDate: counterResult.resetDate,
+      }, origin)
     }
 
     // Create the self-review session
