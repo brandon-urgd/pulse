@@ -1128,6 +1128,7 @@ Resources:
       - PulsePostChatMethod
       - PulseGetSessionStateMethod
       - PulseGetSessionSummaryMethod
+      - PulsePatchSessionSummaryMethod
       - PulseDeleteSessionTranscriptMethod
       - PulseGetSessionFileMethod
       - PulseGetDocumentUrlMethod
@@ -5403,6 +5404,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
 
   PulseGenerateSessionSummaryFunctionRole:
@@ -6082,6 +6084,20 @@ Resources:
       RestApiId: !Ref PulseApiGateway
       ResourceId: !Ref PulseSessionSummaryResource
       HttpMethod: GET
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref PulseSessionAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PulseGetSessionSummaryFunction.Arn}/invocations'
+
+  # PATCH /api/session/{sessionId}/summary — summary feedback
+  PulsePatchSessionSummaryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PulseApiGateway
+      ResourceId: !Ref PulseSessionSummaryResource
+      HttpMethod: PATCH
       AuthorizationType: CUSTOM
       AuthorizerId: !Ref PulseSessionAuthorizer
       Integration:

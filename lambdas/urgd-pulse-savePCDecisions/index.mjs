@@ -32,7 +32,37 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { decisions } = body
+  const { decisions, pulseCheckFeedback } = body
+
+  // Handle pulseCheckFeedback separately — doesn't require decisions
+  if (pulseCheckFeedback && typeof pulseCheckFeedback === 'object') {
+    const { rating, reason, timestamp } = pulseCheckFeedback
+    if (rating === 'up' || rating === 'down') {
+      try {
+        const fbMap = {
+          rating: { S: rating },
+          timestamp: { S: timestamp || new Date().toISOString() },
+          tenantId: { S: tenantId },
+        }
+        if (reason && typeof reason === 'string') {
+          fbMap.reason = { S: reason }
+        }
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.PULSE_CHECKS_TABLE,
+          Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          UpdateExpression: 'SET pulseCheckFeedback = :fb',
+          ExpressionAttributeValues: { ':fb': { M: fbMap } },
+        }))
+        log('info', 'SavePCDecisions: pulseCheckFeedback saved', { requestId, tenantId, itemId, rating })
+        // If only feedback was sent (no decisions), return early
+        if (!decisions) {
+          return createResponse(200, { data: { feedbackSaved: true } }, {}, origin)
+        }
+      } catch (fbErr) {
+        log('warn', 'SavePCDecisions: failed to save pulseCheckFeedback', { requestId, tenantId, itemId, errorName: fbErr.name })
+      }
+    }
+  }
 
   if (!decisions || typeof decisions !== 'object' || Array.isArray(decisions)) {
     return errorResponse(400, 'decisions must be an object keyed by themeId', {}, origin)

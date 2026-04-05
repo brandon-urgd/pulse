@@ -260,7 +260,7 @@ export async function submitSummaryFeedback(
   sessionToken: string,
   feedback: { rating: 'up' | 'down'; reason?: string; timestamp: string }
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/session/${sessionId}/feedback`, {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/summary`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
