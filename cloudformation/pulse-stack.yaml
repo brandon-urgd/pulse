@@ -2049,6 +2049,7 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
               # Spec 2 — S3: Example session seeding during registration
               - Effect: Allow
@@ -2108,6 +2109,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
               # Spec 2 — S3: Example session seeding permissions
               - Effect: Allow
