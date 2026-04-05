@@ -8867,6 +8867,7 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           ALERTS_TOPIC_ARN: !Ref PulseCriticalTopic
           STRIPE_WEBHOOK_SECRET_PARAM: !Sub '/pulse/${Environment}/stripe/webhook-secret'
+          STRIPE_SECRET_KEY_PARAM: !Sub '/pulse/${Environment}/stripe/secret-key'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           ENVIRONMENT: !Ref Environment
           VERSION: !Ref DeploymentVersion
