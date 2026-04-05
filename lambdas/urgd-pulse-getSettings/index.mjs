@@ -94,6 +94,7 @@ export const handler = async (event) => {
         enrichedFeatures,
         usage: { itemCount, sessionCount },
         usageCounters: tenant.usageCounters ?? {},
+        stripeCustomerId: tenant.stripeCustomerId ?? null,
         onboardingComplete: tenant.onboardingComplete ?? false,
         preferences: tenant.preferences ?? {},
         termsAcceptedVersion: tenant.termsAcceptedVersion ?? null,
