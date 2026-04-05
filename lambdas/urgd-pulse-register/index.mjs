@@ -142,7 +142,7 @@ export const handler = async (event) => {
           }))
           log('info', 'Register: Stripe Customer created', { requestId, tenantId, stripeCustomerId: customer.id })
         } catch (stripeErr) {
-          log('warn', 'Register: Stripe Customer creation failed, continuing', { requestId, tenantId, errorName: stripeErr.name })
+          log('warn', 'Register: Stripe Customer creation failed, continuing', { requestId, tenantId, errorName: stripeErr.name, errorMessage: stripeErr.message })
           // Store null so Plan page knows Stripe setup failed
           try {
             await dynamo.send(new UpdateItemCommand({
