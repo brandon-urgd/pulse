@@ -415,6 +415,7 @@ export default function SessionSummary() {
             <span>Your summary is taking longer than expected. Try refreshing in a moment.</span>
           </div>
         ) : summary ? (
+          <>
           <div style={styles.card}>
             <h1 style={styles.cardHeading}>Your Session Summary</h1>
 
@@ -474,6 +475,7 @@ export default function SessionSummary() {
               existingFeedback={summary.summaryFeedback}
             />
           )}
+        </>
         ) : null}
       </div>
       <SessionFooter sessionId={sessionId} sessionToken={sessionToken ?? undefined} />

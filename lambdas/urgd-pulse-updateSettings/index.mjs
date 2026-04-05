@@ -28,7 +28,7 @@ export const handler = async (event) => {
     return errorResponse(400, 'Invalid request body', {}, origin)
   }
 
-  const { displayName, preferences, termsAcceptedVersion, termsAcceptedAt } = body
+  const { displayName, preferences, termsAcceptedVersion, termsAcceptedAt, onboardingComplete } = body
 
   // Validate theme if provided
   if (preferences?.theme !== undefined && !VALID_THEMES.has(preferences.theme)) {
@@ -63,6 +63,12 @@ export const handler = async (event) => {
     expressionParts.push('#termsAcceptedAt = :termsAcceptedAt')
     expressionNames['#termsAcceptedAt'] = 'termsAcceptedAt'
     expressionValues[':termsAcceptedAt'] = { S: termsAcceptedAt }
+  }
+
+  if (typeof onboardingComplete === 'boolean') {
+    expressionParts.push('#onboardingComplete = :onboardingComplete')
+    expressionNames['#onboardingComplete'] = 'onboardingComplete'
+    expressionValues[':onboardingComplete'] = { BOOL: onboardingComplete }
   }
 
   log('info', 'UpdateSettings: updating tenant', { requestId, tenantId })
