@@ -79,7 +79,7 @@ const s = StyleSheet.create({
   tableColLeft: { width: 80 },
   tableColRight: { flex: 1 },
   signalTypeLabel: { fontSize: 10, fontFamily: 'Rubik', fontWeight: 500 },
-  signalQuote: { fontSize: 10, fontStyle: 'italic', color: '#212529' },
+  signalQuote: { fontSize: 10, color: '#495057' },
   // Revisions
   revisionBlock: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e9ecef' },
   revisionBlockLast: { marginBottom: 12, paddingBottom: 0, borderBottomWidth: 0 },

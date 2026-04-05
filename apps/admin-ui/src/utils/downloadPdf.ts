@@ -9,17 +9,22 @@ export type { PulseCheckPdfData, SessionReportPdfData };
 
 // ─── Brand Font Registration ──────────────────────────────────────────────────
 // Register Archivo (headings) and Rubik (body) for branded PDF exports.
+// Import as Vite assets so they're bundled under /assets/ (served by CloudFront).
+
+import archivoBoldUrl from '/fonts/Archivo-Bold.ttf?url'
+import rubikRegularUrl from '/fonts/Rubik-Regular.ttf?url'
+import rubikMediumUrl from '/fonts/Rubik-Medium.ttf?url'
 
 Font.register({
   family: 'Archivo',
-  src: '/fonts/Archivo-Bold.ttf',
+  src: archivoBoldUrl,
   fontWeight: 700,
 });
 Font.register({
   family: 'Rubik',
   fonts: [
-    { src: '/fonts/Rubik-Regular.ttf', fontWeight: 400 },
-    { src: '/fonts/Rubik-Medium.ttf', fontWeight: 500 },
+    { src: rubikRegularUrl, fontWeight: 400 },
+    { src: rubikMediumUrl, fontWeight: 500 },
   ],
 });
 
