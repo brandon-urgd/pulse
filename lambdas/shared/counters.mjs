@@ -165,6 +165,14 @@ export async function checkAndIncrement({ tenantId, counterName, tenantRecord, s
       const tableToUpdate = counterSource === 'org' ? process.env.ORGS_TABLE : tableName
       const keyField = counterSource === 'org' ? 'orgId' : 'tenantId'
 
+      // Ensure parent map exists before setting nested counter
+      await dynamo.send(new UpdateItemCommand({
+        TableName: tableToUpdate,
+        Key: { [keyField]: { S: counterRecordId } },
+        UpdateExpression: 'SET usageCounters = if_not_exists(usageCounters, :emptyMap)',
+        ExpressionAttributeValues: { ':emptyMap': { M: {} } },
+      }))
+
       await dynamo.send(new UpdateItemCommand({
         TableName: tableToUpdate,
         Key: { [keyField]: { S: counterRecordId } },
@@ -188,23 +196,42 @@ export async function checkAndIncrement({ tenantId, counterName, tenantRecord, s
     return { allowed: false, reason: 'monthly_limit', counter: counterName, resetDate }
   }
 
-  // Atomic increment
+  // Atomic increment — ensure parent maps exist, then increment
   try {
     const tableToUpdate = counterSource === 'org' ? process.env.ORGS_TABLE : tableName
     const keyField = counterSource === 'org' ? 'orgId' : 'tenantId'
 
+    // Two-step: first ensure usageCounters and the counter map exist, then increment.
+    // DynamoDB ADD can't create nested paths — the parent map must exist.
     await dynamo.send(new UpdateItemCommand({
       TableName: tableToUpdate,
       Key: { [keyField]: { S: counterRecordId } },
-      UpdateExpression: 'ADD usageCounters.#counter.#count :inc SET usageCounters.#counter.#ps = if_not_exists(usageCounters.#counter.#ps, :ps)',
+      UpdateExpression: 'SET usageCounters = if_not_exists(usageCounters, :emptyMap)',
+      ExpressionAttributeValues: {
+        ':emptyMap': { M: {} },
+      },
+    }))
+
+    await dynamo.send(new UpdateItemCommand({
+      TableName: tableToUpdate,
+      Key: { [keyField]: { S: counterRecordId } },
+      UpdateExpression: 'SET usageCounters.#counter = if_not_exists(usageCounters.#counter, :initCounter)',
+      ExpressionAttributeNames: { '#counter': counterName },
+      ExpressionAttributeValues: {
+        ':initCounter': { M: { count: { N: '0' }, periodStart: { S: periodStart } } },
+      },
+    }))
+
+    await dynamo.send(new UpdateItemCommand({
+      TableName: tableToUpdate,
+      Key: { [keyField]: { S: counterRecordId } },
+      UpdateExpression: 'ADD usageCounters.#counter.#count :inc',
       ExpressionAttributeNames: {
         '#counter': counterName,
         '#count': 'count',
-        '#ps': 'periodStart',
       },
       ExpressionAttributeValues: {
         ':inc': { N: '1' },
-        ':ps': { S: periodStart },
       },
     }))
 
