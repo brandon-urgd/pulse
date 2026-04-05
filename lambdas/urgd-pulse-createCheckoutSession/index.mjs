@@ -109,11 +109,21 @@ export const handler = async (event) => {
 
       log('info', 'CreateCheckoutSession: creating checkout session', { requestId, tenantId, priceId })
 
+      // Calculate billing cycle anchor: 1st of next month (UTC)
+      // This prorates the first partial period and aligns all renewals to the 1st
+      const now = new Date()
+      const firstOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+      const billingCycleAnchor = Math.floor(firstOfNextMonth.getTime() / 1000)
+
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
         mode: 'subscription',
         line_items: [{ price: stripePriceId, quantity: 1 }],
-        subscription_data: { metadata: { tier: priceId, tenantId } },
+        subscription_data: {
+          metadata: { tier: priceId, tenantId },
+          billing_cycle_anchor: billingCycleAnchor,
+          proration_behavior: 'create_prorations',
+        },
         success_url: `${process.env.PLAN_PAGE_URL}?upgraded=true`,
         cancel_url: process.env.PLAN_PAGE_URL,
       })
