@@ -19,13 +19,13 @@ const s = StyleSheet.create({
   page: {
     padding: 40,
     backgroundColor: '#ffffff',
-    fontFamily: 'Helvetica',
+    fontFamily: 'Rubik, Helvetica',
     fontSize: 10,
     color: '#212529',
   },
-  title: { fontSize: 24, fontFamily: 'Helvetica-Bold', color: '#1a1a1a' },
+  title: { fontSize: 24, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: '#1a1a1a' },
   accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 16 },
-  sectionHeader: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: SAGE, marginTop: 16, marginBottom: 8 },
+  sectionHeader: { fontSize: 16, fontFamily: 'Archivo, Helvetica-Bold', fontWeight: 700, color: SAGE, marginTop: 16, marginBottom: 8 },
   contentBlock: {
     fontSize: 10,
     color: '#212529',

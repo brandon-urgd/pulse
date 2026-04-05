@@ -589,6 +589,164 @@
   cursor: not-allowed;
 }
 
+/* ── Confidence indicator ── */
+.confidenceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.confidencelow {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
+}
+
+.confidencemoderate {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
+}
+
+.confidencehigh {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent-pulse);
+  border: 1px solid var(--color-accent-pulse);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
+  font-weight: 500;
+}
+
+.scaleTier {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ── Inline quote preview ── */
+.quotePreview {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.quotePreview:hover {
+  color: var(--color-accent-pulse);
+}
+
+/* ── Revision weight ── */
+.revisionWeight {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+  display: block;
+}
+
+/* ── Batch actions ── */
+.batchActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.batchActions button {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.batchActions button:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ── Feedback prompt ── */
+.feedbackPrompt {
+  margin-top: var(--space-8);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  text-align: center;
+}
+
+.feedbackPrompt p {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.feedbackButtons {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.feedbackButtons button {
+  font-size: 1.25rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.feedbackButtons button:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.feedbackButtons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selected {
+  border-color: var(--color-accent-pulse) !important;
+  background: var(--color-accent-pulse-subtle) !important;
+}
+
+.reasonPills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.reasonPill {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reasonPill:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.thanks {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent-pulse);
+  font-weight: 500;
+  margin: var(--space-2) 0 0;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .themeDecisionRow {

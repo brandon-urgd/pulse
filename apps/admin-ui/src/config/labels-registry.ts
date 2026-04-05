@@ -303,6 +303,35 @@ export const labels = {
     featureLocked: 'Locked',
     featureMaintenance: 'Maintenance',
     upgradeButton: 'Upgrade',
+    // Billing (S4)
+    upgradeToIndividual: 'Upgrade to Individual',
+    upgradeToPro: 'Upgrade to Pro',
+    upgradeToEnterprise: 'Upgrade to Enterprise',
+    manageBilling: 'Manage Billing',
+    changePlan: 'Change Plan',
+    upgradeDisabledNoStripe: 'Billing setup incomplete. Contact support.',
+    upgradeSuccess: 'Plan upgraded successfully!',
+    periodLabel: 'Billing period',
+    resetDateLabel: 'Resets',
+    monthlyLimitReached: 'Monthly limit reached. Resets {resetDate}. Upgrade for more.',
+    monthlyLimitNear: 'You have {remaining} left this month. Resets {resetDate}.',
+  },
+
+  // Feedback
+  feedback: {
+    summaryPrompt: 'Was this summary helpful?',
+    pulseCheckPrompt: 'Did this help you decide what to do next?',
+    reasonPromptSummary: 'What was off?',
+    reasonPromptPulseCheck: 'What could be better?',
+    thanks: 'Thanks',
+    summaryDidntCapture: "Didn't capture what I said",
+    summaryFeltGeneric: 'Felt generic',
+    summaryLeftOutImportant: 'Left out the important parts',
+    summaryWouldntShare: "I wouldn't share this",
+    pcAlreadyKnew: 'I already knew this',
+    pcTooAbstract: 'Too abstract to act on',
+    pcDidntReflectReviewers: "Didn't reflect what reviewers told me",
+    pcNeedMoreFeedback: 'Need more feedback first',
   },
 
   // Layout
@@ -453,6 +482,16 @@ export const labels = {
     basedOnSessions: 'Based on {count} session{plural}',
     downloadPdf: 'Download PDF',
     downloadingPdf: 'Generating PDF…',
+    // S4 enhancements
+    confidenceSolo: 'Based on 1 reviewer',
+    confidenceMulti: 'Based on {count} reviewers',
+    scaleSolo: 'Solo',
+    scaleSmallGroup: 'Small Group',
+    revisionWeight: '{count} of {total} reviewers flagged this',
+    revisionWeightSolo: '1 reviewer flagged this',
+    batchAcceptAll: 'Accept All',
+    batchDismissAll: 'Dismiss All',
+    batchUndo: 'Undo',
   },
 
   // Support / Report Modal (Task 37)

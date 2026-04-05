@@ -253,3 +253,24 @@ export async function emailSessionSummary(
   const json = await res.json()
   return json.data ?? json
 }
+
+
+export async function submitSummaryFeedback(
+  sessionId: string,
+  sessionToken: string,
+  feedback: { rating: 'up' | 'down'; reason?: string; timestamp: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/feedback`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ summaryFeedback: feedback }),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw makeError(body, 'Failed to submit feedback', res.status)
+  }
+}

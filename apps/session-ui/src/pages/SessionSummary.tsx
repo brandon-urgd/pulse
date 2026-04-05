@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
-import { getSessionSummary } from '../api/session'
+import { getSessionSummary, submitSummaryFeedback } from '../api/session'
 import PulseLine from '../components/PulseLine'
 import SessionFooter from '../components/SessionFooter'
 import EmailOptIn from '../components/EmailOptIn'
@@ -11,6 +11,7 @@ interface SummaryData {
   themes: string[]
   closingMessage: string
   tenantName?: string
+  summaryFeedback?: { rating?: string; reason?: string }
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -174,6 +175,153 @@ const styles: Record<string, React.CSSProperties> = {
   },
 }
 
+// ─── Feedback styles ──────────────────────────────────────────────────────────
+
+const feedbackStyles: Record<string, React.CSSProperties> = {
+  container: {
+    marginTop: '1.5rem',
+    padding: '1.25rem',
+    border: '1px solid #2a2a2a',
+    borderRadius: '12px',
+    background: '#1a1a1a',
+    textAlign: 'center' as const,
+  },
+  prompt: {
+    margin: '0 0 0.75rem',
+    fontSize: '0.875rem',
+    color: '#ccc',
+  },
+  buttons: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    marginBottom: '0.75rem',
+  },
+  button: {
+    fontSize: '1.25rem',
+    padding: '0.375rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #3a3a3a',
+    background: '#1a1a1a',
+    cursor: 'pointer',
+  },
+  buttonDisabled: {
+    fontSize: '1.25rem',
+    padding: '0.375rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #3a3a3a',
+    background: '#1a1a1a',
+    cursor: 'not-allowed',
+    opacity: 0.5,
+  },
+  selected: {
+    fontSize: '1.25rem',
+    padding: '0.375rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #4a7c59',
+    background: 'rgba(74, 124, 89, 0.15)',
+    cursor: 'not-allowed',
+    opacity: 0.5,
+  },
+  reasonPills: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    justifyContent: 'center',
+    gap: '0.5rem',
+    marginTop: '0.75rem',
+  },
+  reasonPrompt: {
+    margin: '0 0 0.5rem',
+    fontSize: '0.8125rem',
+    color: '#888',
+    width: '100%',
+  },
+  pill: {
+    padding: '0.25rem 0.75rem',
+    borderRadius: '999px',
+    fontSize: '0.75rem',
+    border: '1px solid #3a3a3a',
+    background: '#1a1a1a',
+    color: '#ccc',
+    cursor: 'pointer',
+  },
+  thanks: {
+    fontSize: '0.875rem',
+    color: '#4a7c59',
+    fontWeight: 500,
+    margin: '0.5rem 0 0',
+  },
+}
+
+// ─── SummaryFeedback ──────────────────────────────────────────────────────────
+
+function SummaryFeedback({ sessionId, sessionToken, existingFeedback }: {
+  sessionId: string
+  sessionToken: string
+  existingFeedback?: { rating?: string; reason?: string }
+}) {
+  const [rating, setRating] = useState<'up' | 'down' | null>((existingFeedback?.rating as 'up' | 'down') ?? null)
+  const [showReasons, setShowReasons] = useState(false)
+  const [submitted, setSubmitted] = useState(!!existingFeedback?.rating)
+
+  const reasons = [
+    { key: 'didnt_capture', label: "Didn't capture what I said" },
+    { key: 'felt_generic', label: 'Felt generic' },
+    { key: 'left_out_important', label: 'Left out the important parts' },
+    { key: 'wouldnt_share', label: "I wouldn't share this" },
+  ]
+
+  const handleUp = async () => {
+    setRating('up')
+    setSubmitted(true)
+    try {
+      await submitSummaryFeedback(sessionId, sessionToken, { rating: 'up', timestamp: new Date().toISOString() })
+    } catch { /* best-effort */ }
+  }
+
+  const handleDown = () => {
+    setRating('down')
+    setShowReasons(true)
+  }
+
+  const handleReason = async (reasonKey: string) => {
+    setSubmitted(true)
+    setShowReasons(false)
+    try {
+      await submitSummaryFeedback(sessionId, sessionToken, { rating: 'down', reason: reasonKey, timestamp: new Date().toISOString() })
+    } catch { /* best-effort */ }
+  }
+
+  return (
+    <div style={feedbackStyles.container}>
+      <p style={feedbackStyles.prompt}>Was this summary helpful?</p>
+      <div style={feedbackStyles.buttons}>
+        <button
+          type="button"
+          disabled={submitted}
+          onClick={handleUp}
+          style={rating === 'up' ? feedbackStyles.selected : submitted ? feedbackStyles.buttonDisabled : feedbackStyles.button}
+        >👍</button>
+        <button
+          type="button"
+          disabled={submitted}
+          onClick={handleDown}
+          style={rating === 'down' ? feedbackStyles.selected : submitted ? feedbackStyles.buttonDisabled : feedbackStyles.button}
+        >👎</button>
+      </div>
+      {showReasons && !submitted && (
+        <div style={feedbackStyles.reasonPills}>
+          <p style={feedbackStyles.reasonPrompt}>What was off?</p>
+          {reasons.map(r => (
+            <button key={r.key} type="button" onClick={() => handleReason(r.key)} style={feedbackStyles.pill}>{r.label}</button>
+          ))}
+        </div>
+      )}
+      {submitted && <p style={feedbackStyles.thanks}>Thanks</p>}
+    </div>
+  )
+}
+
 export default function SessionSummary() {
   const { sessionId: paramSessionId } = useParams<{ sessionId: string }>()
   const { sessionToken, sessionId: ctxSessionId } = useSession()
@@ -317,6 +465,15 @@ export default function SessionSummary() {
               </>
             )}
           </div>
+
+          {/* Summary feedback */}
+          {sessionToken && (
+            <SummaryFeedback
+              sessionId={sessionId}
+              sessionToken={sessionToken}
+              existingFeedback={summary.summaryFeedback}
+            />
+          )}
         ) : null}
       </div>
       <SessionFooter sessionId={sessionId} sessionToken={sessionToken ?? undefined} />

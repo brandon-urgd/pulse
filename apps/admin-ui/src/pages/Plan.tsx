@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
+import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import styles from './Plan.module.css';
 
@@ -27,6 +29,7 @@ interface SettingsData {
   onboardingComplete: boolean;
   preferences: Record<string, unknown>;
   usageCounters?: Record<string, UsageCounter>;
+  stripeCustomerId?: string | null;
 }
 
 interface SettingsResponse {
@@ -68,6 +71,13 @@ function tierBadgeClass(tier: string): string {
   }
 }
 
+function calculateResetDate(periodStart: string): string {
+  const d = new Date(periodStart);
+  if (isNaN(d.getTime())) return '';
+  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+  return next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function UsageBar({ used, max }: { used: number; max: number }) {
   const pct = max > 0 ? Math.min((used / max) * 100, 100) : 0;
   const fillClass = pct >= 100
@@ -93,13 +103,39 @@ function FeatureStatus({ feature }: { feature: EnrichedFeature }) {
   return <span className={styles.statusAllowed}>{labels.plan?.featureAllowed ?? 'Included'}</span>;
 }
 
+// Monthly counter names that should show reset date info
+const MONTHLY_COUNTERS = new Set(['monthlyItemsCreated', 'monthlySessionsTotal', 'monthlyPublicSessionsTotal']);
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Plan() {
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
     '/api/manage/settings'
   );
+
+  const checkoutMutation = useAuthedMutation<{ data: { url: string } }, { action: string; priceId?: string }>(
+    '/api/manage/checkout',
+    'POST'
+  );
+
+  // Handle ?upgraded=true return from Stripe Checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('upgraded') === 'true') {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [queryClient]);
+
+  // Invalidate settings cache on page focus (for portal return)
+  useEffect(() => {
+    const handleFocus = () => queryClient.invalidateQueries({ queryKey: ['settings'] });
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [queryClient]);
 
   useEffect(() => {
     document.title = labels.plan?.documentTitle ?? 'Plan — Pulse';
@@ -109,8 +145,28 @@ export default function Plan() {
   const tier = s?.tier ?? 'free';
   const enriched = s?.enrichedFeatures ?? {};
   const itemCount = s?.usage?.itemCount ?? 0;
-  const sessionCount = s?.usage?.sessionCount ?? 0;
+  const stripeCustomerId = s?.stripeCustomerId;
   const showUpgrade = tier !== 'enterprise' && tier !== 'admin';
+  const isFree = tier === 'free';
+  const isPaying = !isFree && tier !== 'admin';
+
+  const handleUpgrade = async (priceId: 'individual' | 'pro' | 'enterprise') => {
+    try {
+      const result = await checkoutMutation.mutateAsync({ action: 'checkout', priceId });
+      window.location.href = result.data.url;
+    } catch {
+      // Error handled by mutation state
+    }
+  };
+
+  const handleManageBilling = async () => {
+    try {
+      const result = await checkoutMutation.mutateAsync({ action: 'portal' });
+      window.location.href = result.data.url;
+    } catch {
+      // Error handled by mutation state
+    }
+  };
 
   // Trackable limits — usage increments over time, show "X of Y" bars
   const TRACKABLE: Set<string> = new Set([
@@ -173,6 +229,10 @@ export default function Plan() {
               {trackable.map(([flag, feature]) => {
                 const max = feature.limit ?? 0;
                 const used = usageCounts[flag] ?? 0;
+                const pct = max > 0 ? (used / max) * 100 : 0;
+                const isMonthly = MONTHLY_COUNTERS.has(flag);
+                const periodStart = isMonthly ? s?.usageCounters?.[flag]?.periodStart : undefined;
+                const resetDate = periodStart ? calculateResetDate(periodStart) : '';
                 return (
                   <div key={flag} className={styles.usageRow}>
                     <div className={styles.usageHeader}>
@@ -180,6 +240,13 @@ export default function Plan() {
                       <span className={styles.usageCount}>{used} of {max}</span>
                     </div>
                     <UsageBar used={used} max={max} />
+                    {isMonthly && resetDate && (
+                      <span className={styles.resetDate}>
+                        {pct >= 100
+                          ? `${labels.plan.resetDateLabel} ${resetDate}`
+                          : `${labels.plan.periodLabel} · ${labels.plan.resetDateLabel} ${resetDate}`}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -224,14 +291,67 @@ export default function Plan() {
         })()}
       </section>
 
-      {/* ── Upgrade CTA ── */}
-      {showUpgrade && (
+      {/* ── Billing CTA ── */}
+      {showUpgrade && !isLoading && (
         <section className={styles.section}>
           <div className={styles.upgradeSection}>
-            <p className={styles.upgradeHint}>Unlock more features by upgrading your plan.</p>
-            <button type="button" className={styles.upgradeButton} disabled>
-              {labels.plan?.upgradeButton ?? 'Upgrade'}
-            </button>
+            {isFree && stripeCustomerId ? (
+              <>
+                <p className={styles.upgradeHint}>Unlock more features by upgrading your plan.</p>
+                <div className={styles.upgradeButtons}>
+                  <button
+                    type="button"
+                    className={styles.upgradeButton}
+                    onClick={() => handleUpgrade('individual')}
+                    disabled={checkoutMutation.isPending}
+                  >
+                    {labels.plan.upgradeToIndividual}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.upgradeButton}
+                    onClick={() => handleUpgrade('pro')}
+                    disabled={checkoutMutation.isPending}
+                  >
+                    {labels.plan.upgradeToPro}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.upgradeButton}
+                    onClick={() => handleUpgrade('enterprise')}
+                    disabled={checkoutMutation.isPending}
+                  >
+                    {labels.plan.upgradeToEnterprise}
+                  </button>
+                </div>
+              </>
+            ) : isFree && !stripeCustomerId ? (
+              <>
+                <p className={styles.upgradeHint}>{labels.plan.upgradeDisabledNoStripe}</p>
+                <button type="button" className={styles.upgradeButton} disabled>
+                  {labels.plan?.upgradeButton ?? 'Upgrade'}
+                </button>
+              </>
+            ) : isPaying ? (
+              <div className={styles.upgradeButtons}>
+                <button
+                  type="button"
+                  className={styles.upgradeButton}
+                  onClick={handleManageBilling}
+                  disabled={checkoutMutation.isPending}
+                >
+                  {labels.plan.manageBilling}
+                </button>
+                <button
+                  type="button"
+                  className={styles.upgradeButton}
+                  onClick={handleManageBilling}
+                  disabled={checkoutMutation.isPending}
+                >
+                  {labels.plan.changePlan}
+                </button>
+              </div>
+            ) : null}
           </div>
         </section>
       )}

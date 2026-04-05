@@ -668,6 +668,37 @@ async function handleChat(event, responseStream) {
         }
       }
 
+      // Coverage fallback — infer from transcript when sectionCoverage is empty
+      if (sessionComplete && sectionCoverage && Object.keys(sectionCoverage).length === 0) {
+        if (frozenSnapshot?.sectionMap?.sections) {
+          const inferredCoverage = {}
+          const agentMessages = history.filter(m => m.role === 'assistant').map(m => m.content)
+          // Include the current agent response in inference
+          agentMessages.push(agentText)
+          const allAgentText = agentMessages.join(' ')
+
+          for (const section of frozenSnapshot.sectionMap.sections) {
+            if (section.title && allAgentText.includes(section.title)) {
+              inferredCoverage[section.id] = { touched: true, depth: 'inferred' }
+            }
+          }
+
+          if (Object.keys(inferredCoverage).length > 0) {
+            sectionCoverage = inferredCoverage
+            // Update session record with inferred coverage
+            await dynamo.send(new UpdateItemCommand({
+              TableName: process.env.SESSIONS_TABLE,
+              Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+              UpdateExpression: 'SET sectionCoverage = :cov',
+              ExpressionAttributeValues: {
+                ':cov': marshalSectionCoverage(inferredCoverage),
+              },
+            }))
+            log('info', 'Chat: inferred sectionCoverage from transcript', { sessionId, inferredSections: Object.keys(inferredCoverage).length })
+          }
+        }
+      }
+
       // Invoke downstream Lambdas on session complete
       if (sessionComplete) {
         const generateSummaryFnName = process.env.GENERATE_SESSION_SUMMARY_FUNCTION_NAME
@@ -941,6 +972,15 @@ ${uncoveredSections.map(s => `- ${s}`).join('\n')}
 `
     }
   }
+
+  // ── Section coverage tracking (critical) ──
+  prompt += `SECTION COVERAGE TRACKING (CRITICAL):
+You MUST emit a [SECTION:N] tag at the start of EVERY section transition, including the FIRST section.
+This applies to ALL session types including self-review sessions.
+If you discuss content from section 2, emit [SECTION:2] before your first message about that section.
+Missing tags means the coverage map will be incomplete — this directly affects the tenant's ability to see which sections received feedback.
+
+`
 
   // ── Section transition rules ──
   prompt += `Section transitions:

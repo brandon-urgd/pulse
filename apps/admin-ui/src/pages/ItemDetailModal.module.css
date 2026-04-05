@@ -355,6 +355,12 @@
   margin: 0;
 }
 
+.limitNotice {
+  color: var(--color-warning);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
 .actions {
   display: flex;
   align-items: center;

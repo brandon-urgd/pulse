@@ -110,6 +110,142 @@ function buildMatrixData(
   return { themeRows, reviewerCols };
 }
 
+// ─── S4 Enhancement Components ────────────────────────────────────────────────
+
+function ConfidenceIndicator({ sessionCount }: { sessionCount: number }) {
+  const label = sessionCount === 1
+    ? labels.pulseCheck.confidenceSolo
+    : labels.pulseCheck.confidenceMulti.replace('{count}', String(sessionCount));
+  const level = sessionCount >= 5 ? 'high' : sessionCount >= 2 ? 'moderate' : 'low';
+  return <span className={styles[`confidence${level}`]}>{label}</span>;
+}
+
+function ScaleTierLabel({ sessionCount }: { sessionCount: number }) {
+  const label = sessionCount === 1 ? labels.pulseCheck.scaleSolo : labels.pulseCheck.scaleSmallGroup;
+  return <span className={styles.scaleTier}>{label}</span>;
+}
+
+function InlineQuotePreview({ quote }: { quote: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = quote.length > 60;
+  const preview = needsTruncation ? quote.slice(0, 60) + '…' : quote;
+
+  return (
+    <span
+      className={styles.quotePreview}
+      onClick={() => needsTruncation && setExpanded(!expanded)}
+      role={needsTruncation ? 'button' : undefined}
+    >
+      {expanded ? quote : preview}
+    </span>
+  );
+}
+
+function RevisionWeightIndicator({ count, total }: { count: number; total: number }) {
+  if (count === 1 && total === 1) {
+    return <span className={styles.revisionWeight}>{labels.pulseCheck.revisionWeightSolo}</span>;
+  }
+  return (
+    <span className={styles.revisionWeight}>
+      {labels.pulseCheck.revisionWeight.replace('{count}', String(count)).replace('{total}', String(total))}
+    </span>
+  );
+}
+
+interface BatchActionProps {
+  revisionType: string;
+  revisionIds: string[];
+  onBatchAccept: (type: string) => void;
+  onBatchDismiss: (type: string) => void;
+  onUndo: (type: string) => void;
+}
+
+function BatchActionControls({ revisionType, revisionIds, onBatchAccept, onBatchDismiss, onUndo }: BatchActionProps) {
+  const [lastAction, setLastAction] = useState<'accept' | 'dismiss' | null>(null);
+
+  if (revisionIds.length <= 1) return null;
+
+  return (
+    <div className={styles.batchActions}>
+      <button type="button" onClick={() => { onBatchAccept(revisionType); setLastAction('accept'); }}>
+        {labels.pulseCheck.batchAcceptAll}
+      </button>
+      <button type="button" onClick={() => { onBatchDismiss(revisionType); setLastAction('dismiss'); }}>
+        {labels.pulseCheck.batchDismissAll}
+      </button>
+      {lastAction && (
+        <button type="button" onClick={() => { onUndo(revisionType); setLastAction(null); }}>
+          {labels.pulseCheck.batchUndo}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PulseCheckFeedback({ itemId, existingFeedback }: { itemId: string; existingFeedback?: { rating?: string; reason?: string } }) {
+  const [rating, setRating] = useState<'up' | 'down' | null>((existingFeedback?.rating as 'up' | 'down') ?? null);
+  const [showReasons, setShowReasons] = useState(false);
+  const [submitted, setSubmitted] = useState(!!existingFeedback?.rating);
+  const navigate = useNavigate();
+
+  const reasons = [
+    { key: 'already_knew', label: labels.feedback.pcAlreadyKnew },
+    { key: 'too_abstract', label: labels.feedback.pcTooAbstract },
+    { key: 'didnt_reflect_reviewers', label: labels.feedback.pcDidntReflectReviewers },
+    { key: 'need_more_feedback', label: labels.feedback.pcNeedMoreFeedback },
+  ];
+
+  const handleUp = async () => {
+    setRating('up');
+    setSubmitted(true);
+    try {
+      await authedMutate(
+        `/api/manage/items/${itemId}/pulse-check/decisions`,
+        'PUT',
+        { pulseCheckFeedback: { rating: 'up', timestamp: new Date().toISOString() } },
+        navigate
+      );
+    } catch { /* best-effort */ }
+  };
+
+  const handleDown = () => {
+    setRating('down');
+    setShowReasons(true);
+  };
+
+  const handleReason = async (reasonKey: string) => {
+    setSubmitted(true);
+    setShowReasons(false);
+    try {
+      await authedMutate(
+        `/api/manage/items/${itemId}/pulse-check/decisions`,
+        'PUT',
+        { pulseCheckFeedback: { rating: 'down', reason: reasonKey, timestamp: new Date().toISOString() } },
+        navigate
+      );
+    } catch { /* best-effort */ }
+  };
+
+  return (
+    <div className={styles.feedbackPrompt}>
+      <p>{labels.feedback.pulseCheckPrompt}</p>
+      <div className={styles.feedbackButtons}>
+        <button type="button" disabled={submitted} onClick={handleUp} className={rating === 'up' ? styles.selected : ''}>👍</button>
+        <button type="button" disabled={submitted} onClick={handleDown} className={rating === 'down' ? styles.selected : ''}>👎</button>
+      </div>
+      {showReasons && !submitted && (
+        <div className={styles.reasonPills}>
+          <p>{labels.feedback.reasonPromptPulseCheck}</p>
+          {reasons.map(r => (
+            <button key={r.key} type="button" onClick={() => handleReason(r.key)} className={styles.reasonPill}>{r.label}</button>
+          ))}
+        </div>
+      )}
+      {submitted && <p className={styles.thanks}>{labels.feedback.thanks}</p>}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PulseCheck() {
@@ -130,6 +266,9 @@ export default function PulseCheck() {
   const [overlayDone, setOverlayDone] = useState(false);
   const [overlayError, setOverlayError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
+
+  // Batch action state — stores pre-batch decisions for undo
+  const [preBatchDecisions, setPreBatchDecisions] = useState<Record<string, Record<string, FeedbackAction>>>({});
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -287,6 +426,34 @@ export default function PulseCheck() {
       const status = (err as { status?: number }).status;
       setSaveErrorMsg(status === 409 ? labels.pulseCheck.sessionsStillOpenError : labels.pulseCheck.saveDecisionsError);
       setSaveStatus('error');
+    }
+  }
+
+  function handleBatchAccept(revisionType: string) {
+    const revisions = (pc?.proposedRevisions ?? []).filter(r => r.revisionType === revisionType);
+    setPreBatchDecisions(prev => ({ ...prev, [revisionType]: { ...decisions } }));
+    setDecisions(prev => {
+      const next = { ...prev };
+      for (const r of revisions) next[r.revisionId] = 'accept';
+      return next;
+    });
+  }
+
+  function handleBatchDismiss(revisionType: string) {
+    const revisions = (pc?.proposedRevisions ?? []).filter(r => r.revisionType === revisionType);
+    setPreBatchDecisions(prev => ({ ...prev, [revisionType]: { ...decisions } }));
+    setDecisions(prev => {
+      const next = { ...prev };
+      for (const r of revisions) next[r.revisionId] = 'dismiss';
+      return next;
+    });
+  }
+
+  function handleBatchUndo(revisionType: string) {
+    const saved = preBatchDecisions[revisionType];
+    if (saved) {
+      setDecisions(saved);
+      setPreBatchDecisions(prev => { const next = { ...prev }; delete next[revisionType]; return next; });
     }
   }
 
@@ -458,6 +625,10 @@ export default function PulseCheck() {
                   <span className={styles.energyLabel}>{labels.pulseCheck.energyLabel}</span>
                   <SignalBadge variant={energy} />
                 </div>
+                <div className={styles.confidenceRow}>
+                  <ConfidenceIndicator sessionCount={pc.sessionCount} />
+                  <ScaleTierLabel sessionCount={pc.sessionCount} />
+                </div>
               </div>
             );
           })()}
@@ -474,7 +645,7 @@ export default function PulseCheck() {
                   </h3>
                   <ul className={styles.quoteList}>
                     {t.reviewerSignals.map((rs, i) => (
-                      <li key={i} className={styles.quoteItem}>"{rs.quote}"</li>
+                      <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={rs.quote} /></li>
                     ))}
                   </ul>
                 </div>
@@ -510,9 +681,17 @@ export default function PulseCheck() {
                   return (
                     <div key={type} className={styles.revisionGroup}>
                       <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
+                      <BatchActionControls
+                        revisionType={type}
+                        revisionIds={group.map(r => r.revisionId)}
+                        onBatchAccept={handleBatchAccept}
+                        onBatchDismiss={handleBatchDismiss}
+                        onUndo={handleBatchUndo}
+                      />
                       <ul className={styles.themeDecisionList}>
                         {group.map((revision) => {
                           const decided = decisions[revision.revisionId] ?? null;
+                          const sourceCount = revision.sourceThemeIds?.length ?? 1;
                           return (
                             <li
                               key={revision.revisionId}
@@ -521,6 +700,7 @@ export default function PulseCheck() {
                             >
                               <div className={styles.themeDecisionHeader}>
                                 <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                                <RevisionWeightIndicator count={sourceCount} total={pc.sessionCount} />
                                 <div className={styles.themeDecisionBody}>
                                   <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
                                   <FeedbackActionPills
@@ -557,7 +737,7 @@ export default function PulseCheck() {
               </>
             )}
           </section>
-
+          <PulseCheckFeedback itemId={itemId!} existingFeedback={(pc as unknown as { pulseCheckFeedback?: { rating?: string; reason?: string } }).pulseCheckFeedback} />
           <p className={styles.meta}>
             {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
           </p>
@@ -619,6 +799,10 @@ export default function PulseCheck() {
                   .replace('{count}', String(pc.sessionCount))
                   .replace('{plural}', pc.sessionCount === 1 ? '' : 's')}
               </p>
+              <div className={styles.confidenceRow}>
+                <ConfidenceIndicator sessionCount={pc.sessionCount} />
+                <ScaleTierLabel sessionCount={pc.sessionCount} />
+              </div>
               <p className={styles.verdictMeta}>
                 {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
               </p>
@@ -653,7 +837,7 @@ export default function PulseCheck() {
             </h3>
             {sharedConvictions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {sharedConvictions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+                {sharedConvictions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
@@ -667,7 +851,7 @@ export default function PulseCheck() {
             </h3>
             {repeatedTensions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {repeatedTensions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+                {repeatedTensions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
@@ -681,7 +865,7 @@ export default function PulseCheck() {
             </h3>
             {openQuestions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {openQuestions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
+                {openQuestions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>
@@ -703,9 +887,17 @@ export default function PulseCheck() {
                 return (
                   <div key={type} className={styles.revisionGroup}>
                     <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
+                    <BatchActionControls
+                      revisionType={type}
+                      revisionIds={group.map(r => r.revisionId)}
+                      onBatchAccept={handleBatchAccept}
+                      onBatchDismiss={handleBatchDismiss}
+                      onUndo={handleBatchUndo}
+                    />
                     <ul className={styles.themeDecisionList}>
                       {group.map((revision) => {
                         const decided = decisions[revision.revisionId] ?? null;
+                        const sourceCount = revision.sourceThemeIds?.length ?? 1;
                         return (
                           <li
                             key={revision.revisionId}
@@ -714,6 +906,7 @@ export default function PulseCheck() {
                           >
                             <div className={styles.themeDecisionHeader}>
                               <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                              <RevisionWeightIndicator count={sourceCount} total={pc.sessionCount} />
                               <div className={styles.themeDecisionBody}>
                                 <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
                                 <FeedbackActionPills
@@ -750,6 +943,8 @@ export default function PulseCheck() {
             </>
           )}
         </section>
+
+        <PulseCheckFeedback itemId={itemId!} existingFeedback={(pc as unknown as { pulseCheckFeedback?: { rating?: string; reason?: string } }).pulseCheckFeedback} />
 
         <p className={styles.meta}>
           {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}

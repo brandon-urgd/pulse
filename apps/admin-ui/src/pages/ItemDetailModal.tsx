@@ -165,6 +165,17 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const { limit: sessionTimeLimit } = useCan('sessionTimeLimitMinutes');
   const { limit: maxUploadMb } = useCan('maxUploadSizeMb');
 
+  // Monthly item creation limit awareness
+  const { limit: monthlyItemsLimit } = useCan('monthlyItemsCreated');
+  const settingsCache = queryClient.getQueryData<{ data: { usageCounters?: Record<string, { count: number; periodStart?: string }> } }>(['settings']);
+  const monthlyItemsCount = settingsCache?.data?.usageCounters?.monthlyItemsCreated?.count ?? 0;
+  const monthlyItemsPeriodStart = settingsCache?.data?.usageCounters?.monthlyItemsCreated?.periodStart;
+  const monthlyItemsAtLimit = monthlyItemsLimit !== null && monthlyItemsCount >= monthlyItemsLimit;
+  const monthlyItemsNearLimit = monthlyItemsLimit !== null && !monthlyItemsAtLimit && (monthlyItemsLimit - monthlyItemsCount) <= 1;
+  const monthlyItemsResetDate = monthlyItemsPeriodStart
+    ? (() => { const d = new Date(monthlyItemsPeriodStart); const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)); return next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()
+    : '';
+
   // Self-review "start over" confirm state
   const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
 
@@ -1039,13 +1050,25 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                     type="submit"
                     form="item-detail-form"
                     className={styles.saveButton}
-                    disabled={isSaving || isAnyFileInFlight}
-                    title={isAnyFileInFlight ? 'Waiting for document to finish processing…' : undefined}
+                    disabled={isSaving || isAnyFileInFlight || (!isEditMode && monthlyItemsAtLimit)}
+                    title={isAnyFileInFlight ? 'Waiting for document to finish processing…' : (!isEditMode && monthlyItemsAtLimit) ? labels.plan.monthlyLimitReached.replace('{resetDate}', monthlyItemsResetDate) : undefined}
                   >
                     {isSaving ? '…' : isAnyFileInFlight ? 'Processing…'
                       : (!isEditMode && !savedItemId.current && content.trim().length > 0) ? 'Next'
                       : labels.itemDetail.saveButton}
                   </button>
+                )}
+                {!isEditMode && monthlyItemsAtLimit && (
+                  <p className={styles.formError} role="status">
+                    {labels.plan.monthlyLimitReached.replace('{resetDate}', monthlyItemsResetDate)}
+                  </p>
+                )}
+                {!isEditMode && monthlyItemsNearLimit && !monthlyItemsAtLimit && (
+                  <p className={styles.limitNotice} role="status">
+                    {labels.plan.monthlyLimitNear
+                      .replace('{remaining}', String(monthlyItemsLimit! - monthlyItemsCount))
+                      .replace('{resetDate}', monthlyItemsResetDate)}
+                  </p>
                 )}
               </div>
             )}
