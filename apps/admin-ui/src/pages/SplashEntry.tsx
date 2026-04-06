@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { signInWithRedirect } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { labels } from '../config/labels-registry';
 import { TERMS_VERSION } from '../config/terms';
 import TermsGate from '../components/TermsGate';
@@ -17,6 +18,9 @@ type EntryState = 'splash' | 'login' | 'register' | 'new-password' | 'registered
 
 export default function SplashEntry() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
   const navigate = useNavigate();
   const location = useLocation();
   const registeredSuccessfully = (location.state as { registered?: boolean } | null)?.registered === true;
@@ -239,7 +243,7 @@ export default function SplashEntry() {
             style={{
               height: 'clamp(15rem, 28.125vw, 22.5rem)',
               width: 'clamp(15rem, 28.125vw, 22.5rem)',
-              backgroundImage: `url(${window.location.origin}/logo.svg)`,
+              backgroundImage: `url(${logoUrl})`,
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',

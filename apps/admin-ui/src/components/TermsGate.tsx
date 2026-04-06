@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { labels } from '../config/labels-registry';
 import { TERMS_VERSION } from '../config/terms';
+import { useTheme } from '../hooks/useTheme';
 import styles from './TermsGate.module.css';
 import '../styles/glass.css';
 
@@ -19,6 +20,9 @@ function formatTermsDate(version: string): string {
 
 export default function TermsGate({ isUpdated, onAccept, isAccepting }: TermsGateProps) {
   const headingId = useId();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
   const t = labels.termsGate;
 
   return (
@@ -38,7 +42,7 @@ export default function TermsGate({ isUpdated, onAccept, isAccepting }: TermsGat
             style={{
               height: 'clamp(10rem, 18.75vw, 15rem)',
               width: 'clamp(10rem, 18.75vw, 15rem)',
-              backgroundImage: `url(${window.location.origin}/logo.svg)`,
+              backgroundImage: `url(${logoUrl})`,
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',

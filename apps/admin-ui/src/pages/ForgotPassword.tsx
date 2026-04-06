@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 import { labels } from '../config/labels-registry';
+import { useTheme } from '../hooks/useTheme';
 import styles from './ForgotPassword.module.css';
 import '../styles/glass.css';
 
@@ -47,6 +48,9 @@ type Step = 'email' | 'code' | 'success';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
 
   const [step, setStep] = useState<Step>('email');
   const [animating, setAnimating] = useState(false);
@@ -138,7 +142,7 @@ export default function ForgotPassword() {
             style={{
               height: 'clamp(15rem, 28.125vw, 22.5rem)',
               width: 'clamp(15rem, 28.125vw, 22.5rem)',
-              backgroundImage: `url(${window.location.origin}/logo.svg)`,
+              backgroundImage: `url(${logoUrl})`,
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',
