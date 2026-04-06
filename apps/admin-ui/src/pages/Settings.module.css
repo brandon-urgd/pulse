@@ -536,13 +536,14 @@
     align-items: flex-end;
     padding: 0;
     overflow: hidden;
-    touch-action: none;
+    /* Allow touch scrolling to reach the modal body on mobile */
+    touch-action: auto;
   }
 
   .modalCard {
     max-width: 100%;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding-bottom: env(safe-area-inset-bottom, var(--space-7));
-    touch-action: auto;
+    overflow: hidden;
   }
 }

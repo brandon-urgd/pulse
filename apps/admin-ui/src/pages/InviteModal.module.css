@@ -499,6 +499,8 @@
   .overlay {
     align-items: flex-end;
     padding: 0;
+    /* Allow touch scrolling to reach the modal body on mobile */
+    touch-action: auto;
   }
 
   .modal {
@@ -507,9 +509,12 @@
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     /* Respect iOS home indicator */
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
   }
 
   .modalBody {
     padding: var(--space-4);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 }
