@@ -105,6 +105,13 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
   const privateSessions = sessions.filter(s => !s.isPublic);
   const publicSessions  = sessions.filter(s => s.isPublic);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Esc to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

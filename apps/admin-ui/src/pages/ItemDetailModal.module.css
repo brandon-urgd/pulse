@@ -12,8 +12,6 @@
   z-index: 200;
   padding: var(--space-4);
   animation: fadeIn 0.2s ease;
-  overflow: hidden;
-  touch-action: none;
 }
 
 @keyframes fadeIn {
@@ -33,8 +31,8 @@
   max-height: min(90dvh, 860px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  touch-action: auto;
 }
 
 @keyframes slideUp {
@@ -144,8 +142,11 @@
 
 .modalBody {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: var(--space-6) var(--space-6) var(--space-4);
   flex: 1;
+  min-height: 0;
 }
 
 .loading {
@@ -883,8 +884,6 @@
   .overlay {
     align-items: flex-end;
     padding: 0;
-    /* Allow touch scrolling to reach the modal body on mobile */
-    touch-action: auto;
   }
 
   .modal {
@@ -892,7 +891,6 @@
     max-height: 96dvh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    overflow: hidden;
   }
 
   /* On mobile, title takes full width on its own row, actions wrap below */
@@ -920,8 +918,6 @@
 
   .modalBody {
     padding: var(--space-4);
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
 }
 

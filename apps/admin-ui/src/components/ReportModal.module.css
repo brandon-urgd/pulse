@@ -35,6 +35,8 @@
   box-shadow: var(--shadow-modal);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 @keyframes slideUp {
@@ -188,9 +190,6 @@
   .overlay {
     align-items: flex-end;
     padding: 0;
-    overflow: hidden;
-    /* Allow touch scrolling to reach the modal body on mobile */
-    touch-action: auto;
   }
 
   .modal {
@@ -198,8 +197,5 @@
     max-height: 92dvh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    overflow: hidden;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
 }

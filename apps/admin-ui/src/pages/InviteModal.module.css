@@ -12,9 +12,6 @@
   z-index: 200;
   padding: var(--space-4);
   animation: fadeIn 0.2s ease;
-  /* Prevent background from scrolling when modal is open */
-  overflow: hidden;
-  touch-action: none;
 }
 
 @keyframes fadeIn {
@@ -37,7 +34,6 @@
   flex-direction: column;
   overflow: hidden;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  touch-action: auto;
 }
 
 @keyframes slideUp {
@@ -99,6 +95,7 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   flex: 1;
+  min-height: 0;
 }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
@@ -499,8 +496,6 @@
   .overlay {
     align-items: flex-end;
     padding: 0;
-    /* Allow touch scrolling to reach the modal body on mobile */
-    touch-action: auto;
   }
 
   .modal {
@@ -509,12 +504,9 @@
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     /* Respect iOS home indicator */
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    overflow: hidden;
   }
 
   .modalBody {
     padding: var(--space-4);
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
 }

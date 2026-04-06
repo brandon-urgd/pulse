@@ -272,6 +272,13 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // ── Lock body scroll while modal is open ────────────────────────────────────
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // ── Esc to close ────────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancel(); };
