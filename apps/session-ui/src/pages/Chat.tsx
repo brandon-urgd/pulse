@@ -652,13 +652,30 @@ export default function Chat() {
         </div>
         <div style={styles.discardedPage}>
           <div style={styles.discardedWordmark}>pulse</div>
-          <h1 style={styles.discardedHeading}>Your session has ended.</h1>
+          <h1 style={styles.discardedHeading}>Your session was discarded.</h1>
           <p style={styles.discardedBody}>
             Your responses have been removed and won't be shared.
           </p>
-          <a href="https://pulse.urgdstudios.com" style={styles.discardedLink}>
-            Go to pulse.urgdstudios.com
-          </a>
+          <p style={styles.discardedBody}>
+            You can start a new session if the item is still open.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(`/s/${sessionId}`)}
+            style={{
+              background: 'var(--color-accent-deep)',
+              color: 'var(--color-text-white)',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.625rem 1.25rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginTop: '0.5rem',
+            }}
+          >
+            Start over
+          </button>
         </div>
       </div>
     )

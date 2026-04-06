@@ -235,17 +235,10 @@ async function triggerPulseChecksForTerminalItems(expiredByItem) {
         log('warn', 'ExpireSessions: failed to invoke runPulseCheck', { tenantId, itemId, errorName: err.name })
       }
 
-      // Invoke sendPulseCheckReady async (fire-and-forget)
-      try {
-        await lambda.send(new InvokeCommand({
-          FunctionName: sendReadyFnName,
-          InvocationType: 'Event',
-          Payload: JSON.stringify({ tenantId, itemId, itemName }),
-        }))
-        log('info', 'ExpireSessions: sendPulseCheckReady invoked', { tenantId, itemId })
-      } catch (err) {
-        log('warn', 'ExpireSessions: failed to invoke sendPulseCheckReady', { tenantId, itemId, errorName: err.name })
-      }
+      // NOTE: sendPulseCheckReady is NOT invoked here — the tenant notification
+      // email should only fire when the item is actually closed (via closeExpiredItems),
+      // not just because all sessions are terminal. The tenant may still want to
+      // invite more reviewers while the item is open.
     } catch (err) {
       log('error', 'ExpireSessions: error checking item for auto-trigger', { tenantId, itemId, errorName: err.name })
     }

@@ -883,6 +883,8 @@
   .overlay {
     align-items: flex-end;
     padding: 0;
+    /* Allow touch scrolling to reach the modal body on mobile */
+    touch-action: auto;
   }
 
   .modal {
@@ -890,6 +892,7 @@
     max-height: 96dvh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
   }
 
   /* On mobile, title takes full width on its own row, actions wrap below */

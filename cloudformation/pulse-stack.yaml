@@ -5444,6 +5444,7 @@ Resources:
                 Resource: !GetAtt PulseTranscriptsTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
               - Effect: Allow

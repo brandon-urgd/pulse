@@ -163,12 +163,9 @@ export default function Confidentiality() {
         return
       }
 
-      // Fade out the card, then show transition screen
-      // ScanScopeTransition handles navigation via onComplete
-      setFadeOut(true)
-      setTimeout(() => {
-        setTransitioning(true)
-      }, 300)
+      // Mount transition immediately — ScanScopeTransition handles the visual takeover
+      // with its own fade-in, so no need for a sequential card fade first
+      setTransitioning(true)
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
       setLoading(false)
