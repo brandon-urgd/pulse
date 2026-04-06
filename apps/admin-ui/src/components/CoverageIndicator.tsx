@@ -1,5 +1,10 @@
-import { labels } from '../config/labels-registry';
 import styles from './CoverageIndicator.module.css';
+
+const COVERAGE_LABELS = {
+  coverageTitle: 'Section Coverage',
+  covered: 'Covered',
+  notCovered: 'Not yet covered',
+} as const;
 
 interface CoverageEntry {
   sessionCount: number;
@@ -27,7 +32,7 @@ export default function CoverageIndicator({ sections, coverageMap }: Props) {
 
   return (
     <div className={styles.panel}>
-      <h3 className={styles.title}>{labels.coverage.coverageTitle}</h3>
+      <h3 className={styles.title}>{COVERAGE_LABELS.coverageTitle}</h3>
 
       {sections.map((section) => {
         const entry = coverageMap[section.id];
@@ -48,7 +53,7 @@ export default function CoverageIndicator({ sections, coverageMap }: Props) {
                 isCovered ? styles.covered : styles.notCovered
               }`}
             >
-              {isCovered ? labels.coverage.covered : labels.coverage.notCovered}
+              {isCovered ? COVERAGE_LABELS.covered : COVERAGE_LABELS.notCovered}
             </span>
           </div>
         );
