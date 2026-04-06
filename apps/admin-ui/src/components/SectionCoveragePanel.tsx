@@ -17,25 +17,40 @@ export default function SectionCoveragePanel({
 }: SectionCoveragePanelProps) {
   if (sections.length === 0) return null;
 
-  return (
-    <div className={styles.panel} role="list" aria-label="Section coverage">
-      {sections.map((section) => {
-        const isCovered = (coverageMap[section.id]?.sessionCount ?? 0) > 0;
-        const depth = depthPreferences[section.id];
+  const coveredCount = sections.filter(
+    (s) => (coverageMap[s.id]?.sessionCount ?? 0) > 0,
+  ).length;
 
-        return (
-          <div key={section.id} className={styles.row} role="listitem">
-            <span className={styles.sectionName}>{section.title}</span>
-            {depth && <span className={styles.depthBadge}>{depth}</span>}
-            <span
-              className={`${styles.coverageIndicator} ${isCovered ? styles.covered : styles.notCovered}`}
-              aria-label={isCovered ? 'Covered' : 'Not covered'}
-            >
-              {isCovered ? '✓' : '○'}
-            </span>
-          </div>
-        );
-      })}
+  return (
+    <div className={styles.wrapper}>
+      <div className={styles.header}>
+        <h3 className={styles.heading}>Section Coverage</h3>
+        <p className={styles.description}>
+          {coveredCount === sections.length
+            ? 'All sections received feedback.'
+            : `${coveredCount} of ${sections.length} sections received feedback. Uncovered sections may benefit from additional reviewers.`}
+        </p>
+      </div>
+      <div className={styles.panel} role="list" aria-label="Section coverage">
+        {sections.map((section) => {
+          const isCovered = (coverageMap[section.id]?.sessionCount ?? 0) > 0;
+          const depth = depthPreferences[section.id];
+
+          return (
+            <div key={section.id} className={styles.row} role="listitem">
+              <span className={styles.sectionName}>{section.title}</span>
+              {depth && <span className={styles.depthBadge}>{depth}</span>}
+              <span
+                className={`${styles.coverageIndicator} ${isCovered ? styles.covered : styles.notCovered}`}
+                aria-label={isCovered ? 'Covered' : 'Not covered'}
+              >
+                {isCovered ? '✓' : '○'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <hr className={styles.divider} />
     </div>
   );
 }
