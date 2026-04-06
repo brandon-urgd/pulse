@@ -17,7 +17,7 @@ export const PDF_COLORS = {
 export const PDF_SIGNAL_STYLES = {
   conviction: { border: '#7a9e87', bg: '#f0f7f2', heading: '#5a7e67', icon: '✓', label: 'What Landed' },
   tension:    { border: '#d4a843', bg: '#fdf8ed', heading: '#8a6d2b', icon: '⚠', label: 'Where It Struggled' },
-  uncertainty:{ border: '#5b8db8', bg: '#edf4fa', heading: '#3d6d94', icon: '?', label: 'Open Questions' },
+  uncertainty:{ border: '#5b8db8', bg: '#edf4fa', heading: '#3d6d94', icon: '', label: 'Open Questions' },
 } as const;
 
 export const PDF_SIGNAL_TYPE_COLORS: Record<string, string> = {

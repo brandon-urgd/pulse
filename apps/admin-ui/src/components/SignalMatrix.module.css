@@ -84,6 +84,8 @@
   font-weight: 500;
   color: var(--color-text-primary);
   min-width: 160px;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
 }
 
 /* Signal cell */
@@ -101,7 +103,7 @@
 
 .signalQuote {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-style: italic;
   line-height: 1.5;
   text-align: left;

@@ -171,7 +171,7 @@ export default function SignalMatrix({ themes, reviewers, ariaLabel }: SignalMat
                     <span className={styles.reviewerName}>{r.name}</span>
                   )}
                   <SignalBadge variant={r.energy} />
-                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', fontStyle: 'italic', maxWidth: 160, textAlign: 'center' }}>
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-primary)', fontStyle: 'italic', maxWidth: 160, textAlign: 'center' }}>
                     {r.verdict}
                   </span>
                 </div>

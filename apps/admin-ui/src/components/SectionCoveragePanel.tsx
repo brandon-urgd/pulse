@@ -24,11 +24,11 @@ export default function SectionCoveragePanel({
   return (
     <div className={styles.wrapper}>
       <div className={styles.header}>
-        <h3 className={styles.heading}>Section Coverage</h3>
+        <h3 className={styles.heading}>What was reviewed</h3>
         <p className={styles.description}>
           {coveredCount === sections.length
-            ? 'All sections received feedback.'
-            : `${coveredCount} of ${sections.length} sections received feedback. Uncovered sections may benefit from additional reviewers.`}
+            ? 'Reviewers touched on every section.'
+            : `Reviewers covered ${coveredCount} of ${sections.length} sections. Gaps may mean you need another perspective.`}
         </p>
       </div>
       <div className={styles.panel} role="list" aria-label="Section coverage">
