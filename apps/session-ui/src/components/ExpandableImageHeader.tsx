@@ -8,16 +8,16 @@ interface Props {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    borderBottom: '1px solid #2a2a2a',
+    borderBottom: '1px solid var(--color-border)',
     flexShrink: 0,
     overflow: 'hidden',
   },
   trigger: {
     width: '100%',
     padding: '0.625rem 1rem',
-    background: '#141414',
+    background: 'var(--color-bg)',
     border: 'none',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.875rem',
     cursor: 'pointer',
     display: 'flex',
@@ -28,7 +28,7 @@ const styles: Record<string, React.CSSProperties> = {
   imageWrapper: {
     overflow: 'hidden',
     transition: 'max-height 0.3s ease, opacity 0.3s ease',
-    background: '#0a0a0a',
+    background: 'var(--color-bg)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

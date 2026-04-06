@@ -700,3 +700,9 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.coverageSummary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-2) 0 0;
+}

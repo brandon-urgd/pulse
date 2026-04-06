@@ -40,7 +40,7 @@ const overlayDesktop: React.CSSProperties = {
 }
 
 const sheet: React.CSSProperties = {
-  background: '#1a1a1a',
+  background: 'var(--color-surface)',
   borderRadius: '16px 16px 0 0',
   padding: '1.5rem',
   width: '100%',
@@ -48,8 +48,8 @@ const sheet: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '1rem',
-  fontFamily: 'system-ui, -apple-system, sans-serif',
-  color: '#e5e5e5',
+  fontFamily: 'var(--font-body)',
+  color: 'var(--color-text-primary)',
 }
 
 const sheetDesktop: React.CSSProperties = {
@@ -66,14 +66,14 @@ const titleRow: React.CSSProperties = {
 const titleStyle: React.CSSProperties = {
   fontSize: '1rem',
   fontWeight: 600,
-  color: '#ffffff',
+  color: 'var(--color-text-white)',
   margin: 0,
 }
 
 const closeBtn: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  color: '#888',
+  color: 'var(--color-text-muted)',
   fontSize: '1.25rem',
   cursor: 'pointer',
   padding: '0.25rem',
@@ -83,10 +83,10 @@ const closeBtn: React.CSSProperties = {
 const textarea: React.CSSProperties = {
   width: '100%',
   minHeight: '80px',
-  background: '#111',
-  border: '1px solid #333',
+  background: 'var(--color-bg)',
+  border: '1px solid var(--color-border-subtle)',
   borderRadius: '8px',
-  color: '#e5e5e5',
+  color: 'var(--color-text-primary)',
   fontSize: '0.9375rem',
   padding: '0.75rem',
   resize: 'vertical' as const,
@@ -98,8 +98,8 @@ const textarea: React.CSSProperties = {
 const submitBtn: React.CSSProperties = {
   width: '100%',
   padding: '0.75rem',
-  background: '#4a7c59',
-  color: '#fff',
+  background: 'var(--color-accent-deep)',
+  color: 'var(--color-text-white)',
   border: 'none',
   borderRadius: '8px',
   fontSize: '1rem',
@@ -113,17 +113,17 @@ const submitBtnDisabled: React.CSSProperties = {
 }
 
 const errorStyle: React.CSSProperties = {
-  background: '#2a1a1a',
-  border: '1px solid #5a2a2a',
+  background: 'var(--color-error-bg)',
+  border: '1px solid var(--color-error-border)',
   borderRadius: '6px',
   padding: '0.75rem',
-  color: '#f87171',
+  color: 'var(--color-error)',
   fontSize: '0.875rem',
 }
 
 const successStyle: React.CSSProperties = {
   textAlign: 'center' as const,
-  color: '#7C9E8A',
+  color: 'var(--color-accent)',
   fontSize: '0.9375rem',
   padding: '1rem 0',
 }

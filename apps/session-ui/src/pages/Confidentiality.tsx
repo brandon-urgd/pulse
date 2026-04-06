@@ -4,29 +4,30 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { acceptConfidentiality } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
+import ScanScopeTransition from '../components/ScanScopeTransition'
 
-const SAGE = '#4a7c59'
-const SAGE_SUBTLE = 'rgba(74, 124, 89, 0.12)'
+const SAGE = 'var(--color-accent-deep)'
+const SAGE_SUBTLE = 'var(--color-accent-subtle)'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
     height: '100dvh',
-    backgroundColor: '#0f0f0f',
+    backgroundColor: 'var(--color-bg)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-start',
     padding: '2rem 1.5rem 1.5rem',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#e5e5e5',
+    fontFamily: 'var(--font-body)',
+    color: 'var(--color-text-primary)',
     overflowY: 'auto' as const,
   },
   card: {
     width: '100%',
     maxWidth: '520px',
-    backgroundColor: '#1a1a1a',
-    borderRadius: '12px',
-    border: '1px solid #2a2a2a',
+    backgroundColor: 'var(--color-surface)',
+    borderRadius: 'var(--radius-lg)',
+    border: '1px solid var(--color-border)',
     overflow: 'visible',
   },
   header: {
@@ -46,7 +47,7 @@ const styles: Record<string, React.CSSProperties> = {
   headerText: {
     fontSize: '1.125rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: 0,
   },
   body: {
@@ -63,7 +64,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   paragraph: {
     fontSize: '0.9375rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     lineHeight: 1.65,
     margin: '0 0 1rem',
   },
@@ -83,9 +84,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     padding: '0.75rem',
     backgroundColor: SAGE,
-    color: '#fff',
+    color: 'var(--color-text-white)',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: 'var(--radius-sm)',
     fontSize: '1rem',
     fontWeight: 600,
     cursor: 'pointer',
@@ -95,11 +96,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'not-allowed',
   },
   error: {
-    backgroundColor: '#2a1a1a',
-    border: '1px solid #5a2a2a',
-    borderRadius: '6px',
+    backgroundColor: 'var(--color-error-bg)',
+    border: '1px solid var(--color-error-border)',
+    borderRadius: 'var(--radius-sm)',
     padding: '0.75rem 1rem',
-    color: '#f87171',
+    color: 'var(--color-error)',
     fontSize: '0.875rem',
     marginBottom: '1.25rem',
     lineHeight: 1.5,
@@ -162,13 +163,11 @@ export default function Confidentiality() {
         return
       }
 
-      // Fade out the card, then show transition screen, then navigate
+      // Fade out the card, then show transition screen
+      // ScanScopeTransition handles navigation via onComplete
       setFadeOut(true)
       setTimeout(() => {
         setTransitioning(true)
-        setTimeout(() => {
-          navigate(`/s/${sessionId}/chat`, { replace: true })
-        }, 1200)
       }, 300)
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
@@ -183,38 +182,13 @@ export default function Confidentiality() {
     }
   }
 
-  // Transition screen — full black fade with "Let's get your pulse..."
+  // Transition screen — ScanScopeTransition animation
   if (transitioning) {
     return (
-      <div
-        style={{
-          minHeight: '100dvh',
-          backgroundColor: '#0f0f0f',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          animation: 'pulseTextFadeIn 0.4s ease forwards',
-        }}
-        aria-live="polite"
-        aria-label="Starting session"
-      >
-        <style>{`
-          @keyframes pulseTextFadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-        `}</style>
-        <p style={{
-          fontSize: '1.25rem',
-          fontWeight: 500,
-          color: SAGE,
-          letterSpacing: '0.02em',
-          margin: 0,
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}>
-          Let's get your pulse...
-        </p>
-      </div>
+      <ScanScopeTransition
+        playing={true}
+        onComplete={() => navigate(`/s/${sessionId}/chat`, { replace: true })}
+      />
     )
   }
 
@@ -237,8 +211,8 @@ export default function Confidentiality() {
           <span style={styles.wordmark} aria-label="Pulse">pulse</span>
 
           {itemName && (
-            <p style={{ fontSize: '0.875rem', color: '#888', marginBottom: '1.25rem', marginTop: 0 }}>
-              Reviewing: <strong style={{ color: '#ccc' }}>{itemName}</strong>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem', marginTop: 0 }}>
+              Reviewing: <strong style={{ color: 'var(--color-text-secondary)' }}>{itemName}</strong>
             </p>
           )}
 

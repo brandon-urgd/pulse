@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import styles from './PulseCheckOverlay.module.css';
+import { labels } from '../config/labels-registry';
 
-// Phrases that cycle during the wait — heartbeat metaphor, calm and a little alive
+// Radar-themed phases that cycle during the wait
 const PHASES: { message: string; targetPct: number; durationMs: number }[] = [
-  { message: 'Checking your pulse…',                  targetPct: 18,  durationMs: 2000 },
-  { message: 'Feeling for a heartbeat…',              targetPct: 35,  durationMs: 4000 },
-  { message: 'Listening for what\'s alive in here…',  targetPct: 52,  durationMs: 5000 },
-  { message: 'Finding what\'s beating strongest…',    targetPct: 68,  durationMs: 5000 },
-  { message: 'Taking the temperature…',               targetPct: 82,  durationMs: 5000 },
-  { message: 'Almost got a read…',                    targetPct: 92,  durationMs: 99999 },
+  { message: labels.pulseCheck.overlayPhase1, targetPct: 18,  durationMs: 2000 },
+  { message: labels.pulseCheck.overlayPhase2, targetPct: 35,  durationMs: 4000 },
+  { message: labels.pulseCheck.overlayPhase3, targetPct: 52,  durationMs: 5000 },
+  { message: labels.pulseCheck.overlayPhase4, targetPct: 68,  durationMs: 5000 },
+  { message: labels.pulseCheck.overlayPhase5, targetPct: 82,  durationMs: 5000 },
+  { message: labels.pulseCheck.overlayPhase6, targetPct: 92,  durationMs: 99999 },
 ];
 
 interface PulseCheckOverlayProps {
@@ -127,7 +128,7 @@ export default function PulseCheckOverlay({
             </div>
 
             <p className={styles.notice}>
-              Don't close this tab — your Pulse Check is being generated.
+              {labels.pulseCheck.overlayNotice}
             </p>
           </>
         )}

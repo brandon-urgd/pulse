@@ -10,6 +10,7 @@ import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import SignalMatrix, { type ThemeRow, type ReviewerColumn } from '../components/SignalMatrix';
 import FeedbackActionPills, { type FeedbackAction } from '../components/FeedbackActionPills';
 import PulseCheckOverlay from '../components/PulseCheckOverlay';
+import SectionCoveragePanel from '../components/SectionCoveragePanel';
 import styles from './PulseCheck.module.css';
 
 // ─── Types (matching actual lambda response shape) ────────────────────────────
@@ -81,6 +82,7 @@ interface ItemResponse {
     sectionMap?: {
       sections: Array<{ id: string; title: string; classification: string }>;
     };
+    sectionDepthPreferences?: Record<string, 'deep' | 'explore' | 'skim'>;
   };
 }
 
@@ -278,18 +280,8 @@ export default function PulseCheck() {
   const itemName = itemResp?.data?.itemName ?? '';
   const itemStatus = itemResp?.data?.status ?? '';
   const itemDescription = itemResp?.data?.description ?? '';
-  const itemFeedbackSections = itemResp?.data?.feedbackSections ?? [];
   const itemCoverageMap = itemResp?.data?.coverageMap ?? {};
   const itemSectionMap = itemResp?.data?.sectionMap;
-
-  // Compute uncovered sections
-  const uncoveredSections = itemFeedbackSections.filter((sId) => {
-    const entry = itemCoverageMap[sId];
-    return !entry || entry.sessionCount === 0;
-  });
-  const uncoveredSectionNames = uncoveredSections
-    .map((sId) => itemSectionMap?.sections?.find((s) => s.id === sId)?.title ?? sId)
-    .filter(Boolean);
 
   const { data: pcResp, isLoading, isError, refetch } = useAuthedQuery<PulseCheckResponse>(
     ['pulse-check', itemId],
@@ -546,16 +538,6 @@ export default function PulseCheck() {
     </p>
   ) : null;
 
-  const CoverageGapCallout = uncoveredSectionNames.length > 0 ? (
-    <div className={styles.incompleteNotice} role="note">
-      <p style={{ margin: 0 }}>
-        {labels.coverage.gapCallout}{' '}
-        <strong>{labels.coverage.gapCalloutPrefix}</strong>{' '}
-        {uncoveredSectionNames.join(', ')}
-      </p>
-    </div>
-  ) : null;
-
   const NewSessionsBanner = newlyCompletedCount > 0 ? (
     <div className={styles.rerunBanner} role="status">
       <p className={styles.rerunBannerText}>
@@ -571,8 +553,6 @@ export default function PulseCheck() {
       </button>
     </div>
   ) : null;
-
-  const isRerunPending = generateMutation.isPending;
 
   // ── Single-session view ─────────────────────────────────────────────────────
   if (!isMultiSession) {
@@ -607,15 +587,14 @@ export default function PulseCheck() {
             </button>
           </div>
           {IncompleteNotice}
-          {CoverageGapCallout}
           {NewSessionsBanner}
 
           {(() => {
             // Verdict color based on verdict text sentiment, not energy
             const v = verdict.toLowerCase();
-            const isPositive = v.includes('ready') || v.includes('strong') || v.includes('solid') || v.includes('good');
-            const isNegative = v.includes('not there') || v.includes('needs work') || v.includes('not ready') || v.includes('weak') || v.includes('gaps');
-            const verdictColorClass = isNegative ? styles.verdictBlockResistant : isPositive ? '' : styles.verdictBlockNeutral;
+            const isPositive = v.includes('strong consensus') || v.includes('move forward');
+            const isNegative = v.includes('not enough') || v.includes('gather more');
+            const verdictColorClass = isNegative ? styles.verdictBlockNegative : isPositive ? styles.verdictBlockPositive : styles.verdictBlockNeutral;
             return (
               <div className={`${styles.verdictBlock} ${verdictColorClass}`}>
                 <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
@@ -632,6 +611,15 @@ export default function PulseCheck() {
               </div>
             );
           })()}
+
+          {/* Section coverage panel */}
+          {itemSectionMap?.sections && itemSectionMap.sections.length > 0 && (
+            <SectionCoveragePanel
+              sections={itemSectionMap.sections}
+              coverageMap={itemCoverageMap}
+              depthPreferences={itemResp?.data?.sectionDepthPreferences ?? {}}
+            />
+          )}
 
           {/* Themes — what the reviewer flagged */}
           {themes.length > 0 && (
@@ -780,25 +768,19 @@ export default function PulseCheck() {
           </button>
         </div>
         {IncompleteNotice}
-        {CoverageGapCallout}
         {NewSessionsBanner}
 
         {/* Verdict + narrative — above everything else */}
         {(() => {
           const v = synthesizedVerdict.toLowerCase();
-          const isPositive = v.includes('ready') || v.includes('strong') || v.includes('solid') || v.includes('good');
-          const isNegative = v.includes('not there') || v.includes('needs work') || v.includes('not ready') || v.includes('weak') || v.includes('gaps');
-          const verdictColorClass = isNegative ? styles.verdictBlockResistant : isPositive ? '' : styles.verdictBlockNeutral;
+          const isPositive = v.includes('strong consensus') || v.includes('move forward');
+          const isNegative = v.includes('not enough') || v.includes('gather more');
+          const verdictColorClass = isNegative ? styles.verdictBlockNegative : isPositive ? styles.verdictBlockPositive : styles.verdictBlockNeutral;
           return (
             <div className={`${styles.verdictBlock} ${verdictColorClass}`}>
               <p className={styles.verdictLabel}>{labels.pulseCheck.verdictLabel}</p>
               <p className={styles.verdictText}>{synthesizedVerdict}</p>
               {narrative && <p className={styles.verdictNarrative}>{narrative}</p>}
-              <p className={styles.verdictSessionCount}>
-                {labels.pulseCheck.basedOnSessions
-                  .replace('{count}', String(pc.sessionCount))
-                  .replace('{plural}', pc.sessionCount === 1 ? '' : 's')}
-              </p>
               <div className={styles.confidenceRow}>
                 <ConfidenceIndicator sessionCount={pc.sessionCount} />
                 <ScaleTierLabel sessionCount={pc.sessionCount} />
@@ -816,6 +798,15 @@ export default function PulseCheck() {
             <p className={styles.descriptionContextLabel}>{labels.pulseCheck.askedForLabel}</p>
             <p className={styles.descriptionContextText}>{itemDescription}</p>
           </div>
+        )}
+
+        {/* Section coverage panel */}
+        {itemSectionMap?.sections && itemSectionMap.sections.length > 0 && (
+          <SectionCoveragePanel
+            sections={itemSectionMap.sections}
+            coverageMap={itemCoverageMap}
+            depthPreferences={itemResp?.data?.sectionDepthPreferences ?? {}}
+          />
         )}
 
         {themeRows.length > 0 && reviewerCols.length > 0 && (

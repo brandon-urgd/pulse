@@ -1,0 +1,70 @@
+/* ═══════════════════════════════════════════════════════════
+   brand.css — Session UI design tokens & animation keyframes
+   Import FIRST in main.tsx so all components inherit these values.
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Brand accent ── */
+  --color-accent: #7a9e87;
+  --color-accent-deep: #4a7c59;
+  --color-accent-subtle: rgba(74, 124, 89, 0.12);
+  --color-accent-glow: #4ade80;
+
+  /* ── Backgrounds ── */
+  --color-bg: #0f0f0f;
+  --color-surface: #1a1a1a;
+  --color-surface-raised: #222;
+
+  /* ── Text ── */
+  --color-text-primary: #e5e5e5;
+  --color-text-secondary: #ccc;
+  --color-text-muted: #888;
+  --color-text-white: #ffffff;
+
+  /* ── Borders ── */
+  --color-border: #2a2a2a;
+  --color-border-subtle: #333;
+  --color-border-strong: #3a3a3a;
+
+  /* ── Semantic ── */
+  --color-error: #f87171;
+  --color-error-bg: #2a1a1a;
+  --color-error-border: #5a2a2a;
+
+  /* ── Typography ── */
+  --font-body: system-ui, -apple-system, sans-serif;
+  --font-brand: 'Rubik', sans-serif;
+
+  /* ── Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+}
+
+/* ── Required keyframes for brand animation components ── */
+@keyframes trace-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes peak-flash {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes thinking-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* ── Base reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}

@@ -174,16 +174,22 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-pulse) 20%, transparent);
 }
 
-.verdictBlockNeutral {
-  border-left-color: var(--color-text-secondary);
-  background: var(--color-bg-tertiary);
-  box-shadow: inset 0 0 0 1px var(--color-border);
+.verdictBlockPositive {
+  border-left-color: #7a9e87;
+  background: rgba(122, 158, 135, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(122, 158, 135, 0.2);
 }
 
-.verdictBlockResistant {
-  border-left-color: var(--color-warning);
-  background: var(--color-warning-bg);
-  box-shadow: inset 0 0 0 1px var(--color-warning-border-strong);
+.verdictBlockNeutral {
+  border-left-color: #d4a843;
+  background: rgba(212, 168, 67, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(212, 168, 67, 0.2);
+}
+
+.verdictBlockNegative {
+  border-left-color: #c46565;
+  background: rgba(196, 101, 101, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(196, 101, 101, 0.2);
 }
 
 .verdictLabel {
@@ -208,12 +214,6 @@
   color: var(--color-text-primary);
   margin: var(--space-3) 0 0;
   line-height: 1.65;
-}
-
-.verdictSessionCount {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin: var(--space-2) 0 0;
 }
 
 .verdictMeta {

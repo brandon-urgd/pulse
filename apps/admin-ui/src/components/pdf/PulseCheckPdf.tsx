@@ -1,4 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { PDF_COLORS, PDF_SIGNAL_STYLES, PDF_SIGNAL_TYPE_COLORS, PDF_FONTS } from '../../config/pdf-brand';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -8,7 +9,7 @@ export interface PulseCheckPdfData {
   themes: Array<{
     themeId: string;
     label: string;
-    reviewerSignals: Array<{ signalType: string; quote: string }>;
+    reviewerSignals: Array<{ sessionId?: string; signalType: string; quote: string }>;
   }>;
   sharedConviction: string[];
   repeatedTension: string[];
@@ -18,7 +19,7 @@ export interface PulseCheckPdfData {
     rationale: string;
     revisionType: string;
   }>;
-  reviewerVerdicts: Array<{ verdict: string; energy: string; isSelfReview: boolean }>;
+  reviewerVerdicts: Array<{ sessionId?: string; verdict: string; energy: string; isSelfReview: boolean }>;
   sessionCount: number;
   generatedAt: string;
 }
@@ -28,68 +29,60 @@ interface Props {
   itemName: string;
 }
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-
-const SAGE = '#7a9e87';
-const AMBER = '#d4a843';
-const BLUE = '#5b8db8';
-
-const SIGNAL_STYLES = {
-  conviction: { border: SAGE, bg: '#f0f7f2', heading: '#5a7e67', icon: '✓', label: 'What Landed' },
-  tension:    { border: AMBER, bg: '#fdf8ed', heading: '#8a6d2b', icon: '⚠', label: 'Where It Struggled' },
-  uncertainty:{ border: BLUE,  bg: '#edf4fa', heading: '#3d6d94', icon: '', label: 'Open Questions' },
-} as const;
-
-const SIGNAL_TYPE_COLORS: Record<string, string> = {
-  conviction: '#5a7e67',
-  tension: '#8a6d2b',
-  uncertainty: '#3d6d94',
-};
-
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   page: {
     padding: 40,
-    backgroundColor: '#ffffff',
-    fontFamily: 'Rubik',
+    backgroundColor: PDF_COLORS.page,
+    fontFamily: PDF_FONTS.body,
     fontSize: 10,
-    color: '#212529',
+    color: PDF_COLORS.text,
   },
   // Header
-  title: { fontSize: 24, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a' },
-  dateLine: { fontSize: 9, color: '#868e96', marginTop: 4 },
-  accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 24 },
+  title: { fontSize: 24, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: '#1a1a1a' },
+  dateLine: { fontSize: 9, color: PDF_COLORS.textMuted, marginTop: 4 },
+  accentLine: { height: 1, backgroundColor: PDF_COLORS.accent, marginTop: 8, marginBottom: 24 },
   // Verdict
-  verdictLabel: { fontSize: 9, color: '#868e96', textTransform: 'uppercase', letterSpacing: 1 },
-  verdictText: { fontSize: 18, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a', marginTop: 4 },
-  narrative: { fontSize: 11, color: '#212529', marginTop: 8 },
-  metaLine: { fontSize: 9, color: '#868e96', marginTop: 8, marginBottom: 28 },
+  verdictLabel: { fontSize: 9, color: PDF_COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
+  verdictText: { fontSize: 18, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: '#1a1a1a', marginTop: 4 },
+  narrative: { fontSize: 11, color: PDF_COLORS.text, marginTop: 8 },
+  metaLine: { fontSize: 9, color: PDF_COLORS.textMuted, marginTop: 8, marginBottom: 28 },
   // Signal section
   signalBlock: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 10, paddingRight: 10, marginBottom: 20 },
-  signalHeading: { fontSize: 13, fontFamily: 'Archivo', fontWeight: 700, marginBottom: 6 },
-  bullet: { fontSize: 10, color: '#212529', marginBottom: 3, paddingLeft: 8 },
+  signalHeading: { fontSize: 13, fontFamily: PDF_FONTS.heading, fontWeight: 700, marginBottom: 6 },
+  bullet: { fontSize: 10, color: PDF_COLORS.text, marginBottom: 3, paddingLeft: 8 },
   // Themes
-  sectionHeader: { fontSize: 16, fontFamily: 'Archivo', fontWeight: 700, color: SAGE, marginTop: 16, marginBottom: 8 },
-  themeLabel: { fontSize: 12, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a', marginBottom: 6 },
+  sectionHeader: { fontSize: 16, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: PDF_COLORS.accent, marginTop: 16, marginBottom: 8 },
+  themeLabel: { fontSize: 12, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: '#1a1a1a', marginBottom: 6 },
   themeGroup: { marginBottom: 12 },
   // Theme table
   tableRow: { flexDirection: 'row', marginBottom: 4 },
   tableColLeft: { width: 80 },
   tableColRight: { flex: 1 },
-  signalTypeLabel: { fontSize: 10, fontFamily: 'Rubik', fontWeight: 500 },
-  signalQuote: { fontSize: 10, color: '#495057' },
+  signalTypeLabel: { fontSize: 10, fontFamily: PDF_FONTS.body, fontWeight: 500 },
+  signalQuote: { fontSize: 10, color: PDF_COLORS.textSecondary },
   // Revisions
-  revisionBlock: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e9ecef' },
+  revisionBlock: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: PDF_COLORS.border },
   revisionBlockLast: { marginBottom: 12, paddingBottom: 0, borderBottomWidth: 0 },
-  revisionTypeBadge: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5, color: '#868e96', marginBottom: 4 },
-  revisionProposal: { fontSize: 11, fontFamily: 'Rubik', fontWeight: 500, color: '#1a1a1a' },
-  revisionRationale: { fontSize: 10, color: '#868e96', paddingLeft: 12, marginTop: 4 },
+  revisionTypeBadge: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5, color: PDF_COLORS.textMuted, marginBottom: 4 },
+  revisionProposal: { fontSize: 11, fontFamily: PDF_FONTS.body, fontWeight: 500, color: '#1a1a1a' },
+  revisionRationale: { fontSize: 10, color: PDF_COLORS.textMuted, paddingLeft: 12, marginTop: 4 },
+  // Signal Matrix
+  matrixHeader: { fontSize: 16, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: PDF_COLORS.accent, marginTop: 16, marginBottom: 8 },
+  matrixRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: PDF_COLORS.border, paddingVertical: 4 },
+  matrixHeaderRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: PDF_COLORS.accent, paddingBottom: 6, marginBottom: 4 },
+  matrixThemeCol: { width: 120 },
+  matrixReviewerCol: { flex: 1, paddingHorizontal: 4 },
+  matrixReviewerName: { fontSize: 9, fontWeight: 700, color: PDF_COLORS.text },
+  matrixReviewerMeta: { fontSize: 8, color: PDF_COLORS.textMuted },
+  matrixCellQuote: { fontSize: 9, color: PDF_COLORS.textSecondary },
+  matrixCellSignal: { fontSize: 8, fontWeight: 500 },
+  matrixThemeLabel: { fontSize: 10, fontWeight: 500, color: PDF_COLORS.text },
   // Footer
   footer: { position: 'absolute', bottom: 20, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between' },
-  footerBrand: { fontSize: 8, color: '#868e96' },
-  footerPage: { fontSize: 8, color: '#868e96' },
+  footerBrand: { fontSize: 8, color: PDF_COLORS.textMuted },
+  footerPage: { fontSize: 8, color: PDF_COLORS.textMuted },
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -108,9 +101,9 @@ function capitalize(str: string): string {
 
 // ─── Signal Section Component ─────────────────────────────────────────────────
 
-function SignalSection({ type, items }: { type: keyof typeof SIGNAL_STYLES; items: string[] }) {
+function SignalSection({ type, items }: { type: keyof typeof PDF_SIGNAL_STYLES; items: string[] }) {
   if (items.length === 0) return null;
-  const cfg = SIGNAL_STYLES[type];
+  const cfg = PDF_SIGNAL_STYLES[type];
   return (
     <View
       style={[s.signalBlock, { borderLeftColor: cfg.border, backgroundColor: cfg.bg }]}
@@ -133,6 +126,60 @@ function Footer() {
     <View style={s.footer} fixed>
       <Text style={s.footerBrand}>© 2026 ur/gd Studios LLC. All rights reserved. | Pulse</Text>
       <Text style={s.footerPage} render={({ pageNumber }) => `${pageNumber}`} />
+    </View>
+  );
+}
+
+// ─── Signal Matrix Component ──────────────────────────────────────────────────
+
+function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
+  const reviewers = data.reviewerVerdicts.map((rv, i) => ({
+    sessionId: rv.sessionId,
+    name: rv.isSelfReview ? 'Self-review' : `Reviewer ${i + 1}`,
+    verdict: rv.verdict,
+    energy: rv.energy,
+  }));
+
+  return (
+    <View wrap={false}>
+      <Text style={s.matrixHeader}>Signal Matrix</Text>
+      {/* Header row */}
+      <View style={s.matrixHeaderRow}>
+        <View style={s.matrixThemeCol}>
+          <Text style={s.matrixReviewerName}>Theme</Text>
+        </View>
+        {reviewers.map((r, i) => (
+          <View key={i} style={s.matrixReviewerCol}>
+            <Text style={s.matrixReviewerName}>{r.name}</Text>
+            <Text style={s.matrixReviewerMeta}>{r.energy}</Text>
+          </View>
+        ))}
+      </View>
+      {/* Body rows */}
+      {data.themes.map((theme) => (
+        <View key={theme.themeId} style={s.matrixRow}>
+          <View style={s.matrixThemeCol}>
+            <Text style={s.matrixThemeLabel}>{theme.label}</Text>
+          </View>
+          {reviewers.map((r, ri) => {
+            const signal = theme.reviewerSignals.find(rs => rs.sessionId === r.sessionId);
+            return (
+              <View key={ri} style={s.matrixReviewerCol}>
+                {signal ? (
+                  <>
+                    <Text style={[s.matrixCellSignal, { color: PDF_SIGNAL_TYPE_COLORS[signal.signalType] ?? '#6c757d' }]}>
+                      {capitalize(signal.signalType)}
+                    </Text>
+                    <Text style={s.matrixCellQuote}>"{signal.quote}"</Text>
+                  </>
+                ) : (
+                  <Text style={s.matrixCellQuote}>—</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
@@ -165,7 +212,7 @@ export function PulseCheckPdf({ data, itemName }: Props) {
 
         {/* Themes */}
         {data.themes.length > 0 && (
-          <View>
+          <View break>
             <Text style={s.sectionHeader}>Themes</Text>
             {data.themes.map((theme) => (
               <View key={theme.themeId} style={s.themeGroup} wrap={false}>
@@ -173,7 +220,7 @@ export function PulseCheckPdf({ data, itemName }: Props) {
                 {theme.reviewerSignals.map((sig, i) => (
                   <View key={i} style={s.tableRow}>
                     <View style={s.tableColLeft}>
-                      <Text style={[s.signalTypeLabel, { color: SIGNAL_TYPE_COLORS[sig.signalType] ?? '#6c757d' }]}>
+                      <Text style={[s.signalTypeLabel, { color: PDF_SIGNAL_TYPE_COLORS[sig.signalType] ?? '#6c757d' }]}>
                         [{capitalize(sig.signalType)}]
                       </Text>
                     </View>
@@ -187,9 +234,16 @@ export function PulseCheckPdf({ data, itemName }: Props) {
           </View>
         )}
 
+        {/* Signal Matrix — only for multi-session */}
+        {data.sessionCount >= 2 && data.themes.length > 0 && (
+          <View break>
+            <PdfSignalMatrix data={data} />
+          </View>
+        )}
+
         {/* Proposed Revisions */}
         {data.proposedRevisions.length > 0 && (
-          <View>
+          <View break>
             <Text style={s.sectionHeader}>Proposed Revisions</Text>
             {data.proposedRevisions.map((rev, i) => (
               <View

@@ -9,6 +9,7 @@ import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import SectionPanel, { type Section } from '../components/SectionPanel';
 import CoverageIndicator from '../components/CoverageIndicator';
+import { ScanLineLoader } from '../components/ScanLineLoader';
 import AssessmentHelper from '../components/AssessmentHelper';
 import styles from './ItemDetailModal.module.css';
 
@@ -158,6 +159,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
   // Self-review state
   const [isSelfReviewLoading, setIsSelfReviewLoading] = useState(false);
+
+  // Section analysis polling timeout
+  const [sectionAnalysisTimedOut, setSectionAnalysisTimedOut] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState('');
 
   // Time limit state (for session preview / self-review)
@@ -523,8 +527,13 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   function pollForSectionMap(targetItemId: string) {
     let attempts = 0
     const maxAttempts = 15 // ~30 seconds at 2s intervals
+    setSectionAnalysisTimedOut(false)
     async function poll() {
-      if (!mountedRef.current || attempts >= maxAttempts) return
+      if (!mountedRef.current) return
+      if (attempts >= maxAttempts) {
+        if (mountedRef.current) setSectionAnalysisTimedOut(true)
+        return
+      }
       attempts++
       try {
         const resp = await authedMutate(`/api/manage/items/${targetItemId}`, 'GET', undefined, navigate) as { data: Item }
@@ -1138,8 +1147,8 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                 )}
               </div>
 
-              {/* Section panel */}
-              {hasSections && (
+              {/* Section panel — or loading indicator while analyzing */}
+              {hasSections ? (
                 <SectionPanel
                   sections={itemData!.sectionMap!.sections}
                   feedbackSections={feedbackSections}
@@ -1158,6 +1167,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                   }}
                   disabled={isLocked}
                 />
+              ) : (
+                <div className={styles.sectionsPaneBlock}>
+                  {sectionAnalysisTimedOut ? (
+                    <p className={styles.timeLimitHint}>{labels.itemDetail.analysisTimeout}</p>
+                  ) : (
+                    <ScanLineLoader text={labels.itemDetail.analyzingDocument} />
+                  )}
+                </div>
               )}
 
               {/* Coverage indicator */}

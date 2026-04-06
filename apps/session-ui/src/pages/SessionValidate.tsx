@@ -8,31 +8,33 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { validateSession } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
+import { ScanLineTrace } from '../components/ScanLineTrace'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
     height: '100dvh',
-    backgroundColor: '#0f0f0f',
+    backgroundColor: 'var(--color-bg)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-start',
     padding: '2rem 1.5rem 1.5rem',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#e5e5e5',
+    fontFamily: 'var(--font-body)',
+    color: 'var(--color-text-primary)',
+    position: 'relative' as const,
   },
   card: {
     width: '100%',
     maxWidth: '420px',
-    backgroundColor: '#1a1a1a',
-    borderRadius: '12px',
+    backgroundColor: 'var(--color-surface)',
+    borderRadius: 'var(--radius-lg)',
     padding: '2rem',
-    border: '1px solid #2a2a2a',
+    border: '1px solid var(--color-border)',
   },
   wordmark: {
     fontSize: '1.125rem',
     fontWeight: 700,
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     letterSpacing: '0.05em',
     textTransform: 'lowercase' as const,
     marginBottom: '1.5rem',
@@ -41,12 +43,12 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1.375rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: '0 0 0.5rem',
   },
   subheading: {
     fontSize: '0.9375rem',
-    color: '#999',
+    color: 'var(--color-text-muted)',
     margin: '0 0 1.75rem',
     lineHeight: 1.5,
   },
@@ -54,28 +56,28 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'block',
     fontSize: '0.875rem',
     fontWeight: 500,
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     marginBottom: '0.375rem',
   },
   optionalLabel: {
     display: 'block',
     fontSize: '0.875rem',
     fontWeight: 500,
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     marginBottom: '0.375rem',
   },
   optionalHint: {
     fontSize: '0.75rem',
-    color: '#666',
+    color: 'var(--color-text-muted)',
     marginLeft: '0.375rem',
   },
   input: {
     width: '100%',
     padding: '0.625rem 0.75rem',
-    backgroundColor: '#111',
-    border: '1px solid #333',
-    borderRadius: '6px',
-    color: '#e5e5e5',
+    backgroundColor: 'var(--color-bg)',
+    border: '1px solid var(--color-border-subtle)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--color-text-primary)',
     fontSize: '1rem',
     outline: 'none',
     boxSizing: 'border-box' as const,
@@ -84,10 +86,10 @@ const styles: Record<string, React.CSSProperties> = {
   button: {
     width: '100%',
     padding: '0.75rem',
-    backgroundColor: '#4a7c59',
-    color: '#fff',
+    backgroundColor: 'var(--color-accent-deep)',
+    color: 'var(--color-text-white)',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: 'var(--radius-sm)',
     fontSize: '1rem',
     fontWeight: 600,
     cursor: 'pointer',
@@ -97,11 +99,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'not-allowed',
   },
   error: {
-    backgroundColor: '#2a1a1a',
-    border: '1px solid #5a2a2a',
-    borderRadius: '6px',
+    backgroundColor: 'var(--color-error-bg)',
+    border: '1px solid var(--color-error-border)',
+    borderRadius: 'var(--radius-sm)',
     padding: '0.75rem 1rem',
-    color: '#f87171',
+    color: 'var(--color-error)',
     fontSize: '0.875rem',
     marginBottom: '1.25rem',
     lineHeight: 1.5,
@@ -129,6 +131,8 @@ export default function SessionValidate() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   useEffect(() => {
     document.title = 'Access Your Session — Pulse'
@@ -212,6 +216,17 @@ export default function SessionValidate() {
 
   return (
     <main style={styles.page}>
+      {!prefersReducedMotion && (
+        <div style={{
+          position: 'absolute',
+          bottom: '20%',
+          left: 0,
+          right: 0,
+          pointerEvents: 'none',
+        }}>
+          <ScanLineTrace opacity={0.035} peaks={3} />
+        </div>
+      )}
       <div style={styles.card}>
         <span style={styles.wordmark} aria-label="Pulse">pulse</span>
 

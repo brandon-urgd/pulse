@@ -23,8 +23,8 @@ interface ViewerData {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    background: '#0f0f0f',
-    borderBottom: '1px solid #2a2a2a',
+    background: 'var(--color-bg)',
+    borderBottom: '1px solid var(--color-border)',
     padding: '0.5rem 1rem',
     display: 'flex',
     gap: '0.5rem',
@@ -36,12 +36,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     flexShrink: 0,
   },
   pill: {
-    background: '#1a1a1a',
-    border: '1px solid #2a2a2a',
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
     borderRadius: '16px',
     padding: '0.375rem 0.75rem',
     display: 'inline-flex',
@@ -52,8 +52,8 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'background 0.15s, border-color 0.15s',
   },
   pillLoading: {
-    background: '#222',
-    border: '1px solid #3a3a3a',
+    background: 'var(--color-surface-raised)',
+    border: '1px solid var(--color-border-strong)',
     borderRadius: '16px',
     padding: '0.375rem 0.75rem',
     display: 'inline-flex',
@@ -69,12 +69,12 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
     fontSize: '0.8125rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
   },
   pillBadge: {
     fontSize: '0.6875rem',
     textTransform: 'uppercase' as const,
-    color: '#888',
+    color: 'var(--color-text-muted)',
     background: 'rgba(255,255,255,0.06)',
     borderRadius: '4px',
     padding: '0.125rem 0.375rem',

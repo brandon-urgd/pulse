@@ -38,6 +38,8 @@ interface Item {
   sessionCount: number;
   updatedAt: string;
   recommendedTimeLimitMinutes?: number;
+  coverageMap?: Record<string, { sessionCount: number; avgDepth?: string; reviewerIds?: string[] }>;
+  sectionMap?: { sections: Array<{ id: string; title: string; classification: string }> };
 }
 
 interface CreateItemPayload {
@@ -496,6 +498,11 @@ export default function ItemDetail() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
 
+  const totalSections = itemData?.sectionMap?.sections?.length ?? 0;
+  const coveredSections = itemData?.sectionMap?.sections?.filter(
+    s => (itemData?.coverageMap?.[s.id]?.sessionCount ?? 0) > 0
+  ).length ?? 0;
+
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
@@ -542,6 +549,14 @@ export default function ItemDetail() {
           </div>
         )}
       </div>
+
+      {totalSections > 0 && coveredSections > 0 && (
+        <p className={styles.coverageSummary}>
+          {coveredSections === totalSections
+            ? 'All sections covered ✓'
+            : `${coveredSections} of ${totalSections} sections covered`}
+        </p>
+      )}
 
       {isLocked && (
         <p className={styles.lockedNotice} role="status">

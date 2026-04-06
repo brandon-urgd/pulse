@@ -786,6 +786,19 @@ async function handleChat(event, responseStream) {
  * Update item coverageMap with aggregate coverage from this session (4.4).
  */
 async function updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionId, reviewerId) {
+  // Guard: skip if sectionCoverage is null/empty — nothing to aggregate
+  if (!sectionCoverage || Object.keys(sectionCoverage).length === 0) {
+    log('warn', 'updateItemCoverageMap: sectionCoverage is empty, skipping', { tenantId, itemId, sessionId })
+    return
+  }
+
+  // Guard: skip if no sections were actually touched
+  const hasTouched = Object.values(sectionCoverage).some(d => d.touched)
+  if (!hasTouched) {
+    log('warn', 'updateItemCoverageMap: no touched sections, skipping', { tenantId, itemId, sessionId })
+    return
+  }
+
   // Read current item coverageMap
   const itemResult = await dynamo.send(new GetItemCommand({
     TableName: process.env.ITEMS_TABLE,

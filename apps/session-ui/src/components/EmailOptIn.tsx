@@ -18,7 +18,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   label: {
     fontSize: '0.8125rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     margin: 0,
   },
   row: {
@@ -28,20 +28,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   input: {
     flex: 1,
-    background: '#1a1a1a',
-    border: '1px solid #3a3a3a',
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border-strong)',
     borderRadius: '8px',
-    color: '#e5e5e5',
+    color: 'var(--color-text-primary)',
     fontSize: '0.875rem',
     padding: '0.5rem 0.75rem',
     fontFamily: 'inherit',
     outline: 'none',
   },
   button: {
-    background: '#4a7c59',
+    background: 'var(--color-accent-deep)',
     border: 'none',
     borderRadius: '8px',
-    color: '#fff',
+    color: 'var(--color-text-white)',
     fontSize: '0.875rem',
     fontWeight: 600,
     padding: '0.5rem 1rem',
@@ -50,10 +50,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'inherit',
   },
   buttonDisabled: {
-    background: '#3a3a3a',
+    background: 'var(--color-border-strong)',
     border: 'none',
     borderRadius: '8px',
-    color: '#666',
+    color: 'var(--color-text-muted)',
     fontSize: '0.875rem',
     fontWeight: 600,
     padding: '0.5rem 1rem',
@@ -119,13 +119,13 @@ export default function EmailOptIn({ sessionId, sessionToken }: Props) {
       </div>
 
       {sendState === 'sent' && (
-        <p style={{ ...styles.status, color: '#7C9E8A' }}>
+        <p style={{ ...styles.status, color: 'var(--color-accent)' }}>
           ✓ Summary sent — check your inbox.
         </p>
       )}
 
       {sendState === 'error' && (
-        <p style={{ ...styles.status, color: '#c97070' }}>
+        <p style={{ ...styles.status, color: 'var(--color-error)' }}>
           Something went wrong.{' '}
           <button
             type="button"
@@ -133,7 +133,7 @@ export default function EmailOptIn({ sessionId, sessionToken }: Props) {
             style={{
               background: 'none',
               border: 'none',
-              color: '#7C9E8A',
+              color: 'var(--color-accent)',
               cursor: 'pointer',
               padding: 0,
               fontSize: 'inherit',

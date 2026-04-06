@@ -133,7 +133,7 @@ CRITICAL RULES:
 
 Respond in valid JSON:
 {
-  "verdict": "synthesized one-line verdict — must be exactly one of: 'Worth developing further' | 'Not there yet' | 'Unclear / needs clarity'",
+  "verdict": "synthesized one-line verdict — must be exactly one of: 'Strong consensus — move forward' | 'Mixed perspectives — review the gaps' | 'Not enough to go on — gather more input'",
   "narrative": "2–3 sentences from the facilitator's perspective. Orient the reader: what does this feedback mean for the work? What's the key tension or open question? Plain, direct language. No bullet points. No hedging.",
   "themes": [
     {
@@ -220,8 +220,8 @@ Synthesize these reports into a consolidated Pulse Check following the JSON form
       consolidated = {}
     }
 
-    const VALID_VERDICTS = ['Worth developing further', 'Not there yet', 'Unclear / needs clarity']
-    const verdict = VALID_VERDICTS.includes(consolidated.verdict) ? consolidated.verdict : 'Unclear / needs clarity'
+    const VALID_VERDICTS = ['Strong consensus — move forward', 'Mixed perspectives — review the gaps', 'Not enough to go on — gather more input']
+    const verdict = VALID_VERDICTS.includes(consolidated.verdict) ? consolidated.verdict : 'Mixed perspectives — review the gaps'
     const narrative = typeof consolidated.narrative === 'string' ? consolidated.narrative.trim() : ''
     const themes = Array.isArray(consolidated.themes) ? consolidated.themes : []
     const sharedConviction = Array.isArray(consolidated.sharedConviction) ? consolidated.sharedConviction : []

@@ -177,6 +177,8 @@ export const labels = {
     selfReviewExistsNotice: 'You already have a review for this item.',
     selfReviewStartOver: 'Start over',
     selfReviewStartOverCancel: 'Cancel',
+    analyzingDocument: 'Analyzing your document\u2026',
+    analysisTimeout: 'Analysis is taking longer than expected.',
   },
 
   // Invitation section (within ItemDetail)
@@ -446,11 +448,21 @@ export const labels = {
     generateButton: 'Run Pulse Check',
     pulseCheckCta: 'It\u2019s time to check the pulse on {itemName}',
     generating: 'Generating…',
+    overlayPhase1: 'Initiating scan…',
+    overlayPhase2: 'Sweeping for signal…',
+    overlayPhase3: 'Processing returns…',
+    overlayPhase4: 'Mapping signal patterns…',
+    overlayPhase5: 'Consolidating returns…',
+    overlayPhase6: 'Locking signal…',
+    overlayNotice: 'Don\u2019t close this tab — your Pulse Check is being generated.',
     generateError: 'Failed to generate pulse check. Please try again.',
     sessionsStillOpenError: 'Not all sessions are closed. Wait for remaining sessions to complete or expire.',
     verdictLabel: 'Verdict',
     energyLabel: 'Overall energy',
     noVerdict: 'No verdict available.',
+    verdictPositive: 'Strong consensus — move forward',
+    verdictNeutral: 'Mixed perspectives — review the gaps',
+    verdictNegative: 'Not enough to go on — gather more input',
     askedForLabel: 'You asked for a pulse on',
     convictionsHeading: 'What Landed',
     tensionsHeading: 'Where It Struggled',
@@ -479,7 +491,6 @@ export const labels = {
     rerunNote: 'Re-running will incorporate any sessions that completed since the last run.',
     rerunError: 'Failed to re-run pulse check. Please try again.',
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
-    basedOnSessions: 'Based on {count} session{plural}',
     downloadPdf: 'Download PDF',
     downloadingPdf: 'Generating PDF…',
     // S4 enhancements
@@ -545,15 +556,6 @@ export const labels = {
     validationAllExcluded: 'At least one section must be included.',
     analyzing: 'Analyzing document sections…',
     noSections: 'No sections detected.',
-  },
-
-  // Coverage
-  coverage: {
-    coverageTitle: 'Section Coverage',
-    covered: 'Covered',
-    notCovered: 'Not yet covered',
-    gapCallout: 'Some sections haven\u2019t received feedback yet.',
-    gapCalloutPrefix: 'Uncovered sections:',
   },
 
   // Assessment Helper

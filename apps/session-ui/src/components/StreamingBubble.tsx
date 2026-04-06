@@ -14,8 +14,8 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '100%',
   },
   bubble: {
-    background: '#1a1a1a',
-    color: '#e5e5e5',
+    background: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     borderRadius: '16px 16px 16px 4px',

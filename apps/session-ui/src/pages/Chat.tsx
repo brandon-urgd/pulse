@@ -9,7 +9,7 @@ import {
 } from '../api/session'
 import { consumeStream } from '../hooks/useStreaming'
 import ChatBubble from '../components/ChatBubble'
-import PulseDot from '../components/PulseDot'
+import { ScanLineIcon } from '../components/ScanLineIcon'
 import PulseLine from '../components/PulseLine'
 import FileAttachmentBar from '../components/FileAttachmentBar'
 import ThinkingIndicator from '../components/ThinkingIndicator'
@@ -55,15 +55,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100dvh',
-    background: '#0f0f0f',
-    color: '#e5e5e5',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    background: 'var(--color-bg)',
+    color: 'var(--color-text-primary)',
+    fontFamily: 'var(--font-body)',
     minWidth: '375px',
   },
   topBar: {
     height: '48px',
-    background: '#0f0f0f',
-    borderBottom: '1px solid #2a2a2a',
+    background: 'var(--color-bg)',
+    borderBottom: '1px solid var(--color-border)',
     padding: '0 1rem',
     display: 'flex',
     alignItems: 'center',
@@ -71,7 +71,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   wordmark: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontWeight: 700,
     letterSpacing: '0.05em',
     fontSize: '0.875rem',
@@ -83,12 +83,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   timeDisplay: {
     fontSize: '0.8125rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
   },
   endSessionButton: {
     background: 'transparent',
     border: 'none',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     fontSize: '0.8125rem',
     cursor: 'pointer',
     padding: '0.25rem 0.5rem',
@@ -120,12 +120,12 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end',
   },
   inputArea: {
-    borderTop: '1px solid #2a2a2a',
+    borderTop: '1px solid var(--color-border)',
     padding: '0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px))',
     display: 'flex',
     gap: '0.5rem',
     alignItems: 'flex-end',
-    background: '#0f0f0f',
+    background: 'var(--color-bg)',
     flexShrink: 0,
     boxSizing: 'border-box' as const,
     minWidth: 0,
@@ -135,9 +135,9 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
     minHeight: '48px',
     borderRadius: '24px',
-    background: '#0f0f0f',
-    border: '1px solid #2a2a2a',
-    color: '#e5e5e5',
+    background: 'var(--color-bg)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text-primary)',
     fontSize: '0.9375rem',
     padding: '0.75rem 1rem',
     resize: 'none' as const,
@@ -147,15 +147,15 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box' as const,
   },
   inputFocused: {
-    border: '1px solid #4a7c59',
+    border: '1px solid var(--color-accent-deep)',
   },
   sendButton: {
     width: '36px',
     height: '36px',
     borderRadius: '50%',
-    background: '#4a7c59',
+    background: 'var(--color-accent-deep)',
     border: 'none',
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     fontSize: '1rem',
     cursor: 'pointer',
     display: 'flex',
@@ -171,15 +171,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sessionCompleteCaption: {
     fontSize: '0.875rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     textAlign: 'center' as const,
     padding: '1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px))',
-    borderTop: '1px solid #2a2a2a',
+    borderTop: '1px solid var(--color-border)',
   },
   completionCard: {
-    background: 'rgba(74,124,89,0.12)',
-    borderLeft: '3px solid #4a7c59',
-    borderRadius: '12px',
+    background: 'var(--color-accent-subtle)',
+    borderLeft: '3px solid var(--color-accent-deep)',
+    borderRadius: 'var(--radius-lg)',
     padding: '1rem 1.25rem',
     display: 'flex',
     flexDirection: 'column',
@@ -188,17 +188,17 @@ const styles: Record<string, React.CSSProperties> = {
   completionHeading: {
     fontSize: '1rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: 0,
   },
   completionBody: {
     fontSize: '0.875rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     margin: 0,
     lineHeight: 1.6,
   },
   completionLink: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontSize: '0.875rem',
     textDecoration: 'none',
   },
@@ -213,7 +213,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center' as const,
   },
   discardedWordmark: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontWeight: 700,
     letterSpacing: '0.05em',
     fontSize: '1.25rem',
@@ -222,34 +222,34 @@ const styles: Record<string, React.CSSProperties> = {
   discardedHeading: {
     fontSize: '1.125rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: 0,
   },
   discardedBody: {
     fontSize: '0.875rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     margin: 0,
     lineHeight: 1.6,
     maxWidth: '320px',
   },
   discardedLink: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontSize: '0.875rem',
     textDecoration: 'none',
   },
   expiredLink: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontSize: '0.875rem',
     textDecoration: 'none',
     display: 'block',
     marginTop: '0.5rem',
   },
   previewBanner: {
-    background: 'var(--color-accent-pulse-subtle, rgba(74, 124, 89, 0.12))',
+    background: 'var(--color-accent-subtle)',
     borderBottom: '1px solid rgba(74, 124, 89, 0.25)',
     padding: '0.5rem 1rem',
     fontSize: '0.8125rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     textAlign: 'center' as const,
     flexShrink: 0,
     width: '100%',
@@ -780,7 +780,7 @@ export default function Chat() {
             width: '60%',
             minWidth: '320px',
             flexShrink: 0,
-            borderRight: '1px solid #2a2a2a',
+            borderRight: '1px solid var(--color-border)',
             overflow: 'hidden',
             alignSelf: 'stretch',
           }}>
@@ -810,7 +810,7 @@ export default function Chat() {
                   <button
                     type="button"
                     onClick={() => { window.close(); if (!window.closed) navigate('/') }}
-                    style={{ background: 'transparent', border: '1px solid #3a3a3a', color: '#888', fontSize: '0.875rem', borderRadius: '8px', padding: '0.25rem 0.75rem', cursor: 'pointer' }}
+                    style={{ background: 'transparent', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-muted)', fontSize: '0.875rem', borderRadius: 'var(--radius-md)', padding: '0.25rem 0.75rem', cursor: 'pointer' }}
                   >
                     Close preview
                   </button>
@@ -872,14 +872,14 @@ export default function Chat() {
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', ...(isFirstInCluster ? {} : { marginTop: '-0.375rem' }) }}>
               {/* Name label — only on first message in an agent cluster */}
               {isFirstInCluster && (
-                <span style={{ fontSize: '0.6875rem', color: '#666', fontWeight: 500, marginLeft: '36px', letterSpacing: '0.02em' }}>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', fontWeight: 500, marginLeft: '36px', letterSpacing: '0.02em' }}>
                   Pulse
                 </span>
               )}
               <div style={styles.messageRow}>
                 {isFirstInCluster ? (
                   <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
-                    <PulseDot state="idle" />
+                    <ScanLineIcon size={28} />
                   </div>
                 ) : (
                   <div style={{ width: '28px', flexShrink: 0 }} />

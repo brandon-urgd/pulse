@@ -8,8 +8,8 @@ interface Props {
 
 const styles: Record<string, React.CSSProperties> = {
   card: {
-    background: 'rgba(74,124,89,0.12)',
-    borderLeft: '3px solid #4a7c59',
+    background: 'var(--color-accent-subtle)',
+    borderLeft: '3px solid var(--color-accent-deep)',
     borderRadius: '12px',
     padding: '1rem 1.25rem',
     display: 'flex',
@@ -19,12 +19,12 @@ const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: '1rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: 0,
   },
   body: {
     fontSize: '0.875rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     margin: 0,
     lineHeight: 1.6,
   },
@@ -35,14 +35,14 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap' as const,
   },
   link: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontSize: '0.875rem',
     textDecoration: 'none',
   },
   closeButton: {
     background: 'transparent',
-    border: '1px solid #3a3a3a',
-    color: '#888',
+    border: '1px solid var(--color-border-strong)',
+    color: 'var(--color-text-muted)',
     fontSize: '0.875rem',
     borderRadius: '8px',
     padding: '0.25rem 0.75rem',

@@ -596,6 +596,13 @@ jobs:
               --cache-control "public, max-age=31536000, immutable" \
               --region ${{ env.AWS_REGION }}
           fi
+          if [ -f assets/logo-light.svg ]; then
+            aws s3 cp assets/logo-light.svg \
+              "s3://${CF_FrontendBucketName}/logo-light.svg" \
+              --content-type "image/svg+xml" \
+              --cache-control "public, max-age=31536000, immutable" \
+              --region ${{ env.AWS_REGION }}
+          fi
           if [ -f assets/favicon.svg ]; then
             aws s3 cp assets/favicon.svg \
               "s3://${CF_FrontendBucketName}/favicon.svg" \

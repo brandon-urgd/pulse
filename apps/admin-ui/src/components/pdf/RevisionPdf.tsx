@@ -1,4 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { PDF_COLORS, PDF_FONTS } from '../../config/pdf-brand';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,28 +10,24 @@ interface Props {
   revisionNumber: number;
 }
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-
-const SAGE = '#7a9e87';
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   page: {
     padding: 40,
-    backgroundColor: '#ffffff',
-    fontFamily: 'Rubik',
+    backgroundColor: PDF_COLORS.page,
+    fontFamily: PDF_FONTS.body,
     fontSize: 10,
-    color: '#212529',
+    color: PDF_COLORS.text,
   },
-  title: { fontSize: 24, fontFamily: 'Archivo', fontWeight: 700, color: '#1a1a1a' },
-  accentLine: { height: 1, backgroundColor: SAGE, marginTop: 8, marginBottom: 16 },
-  sectionHeader: { fontSize: 16, fontFamily: 'Archivo', fontWeight: 700, color: SAGE, marginTop: 16, marginBottom: 8 },
+  title: { fontSize: 24, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: '#1a1a1a' },
+  accentLine: { height: 1, backgroundColor: PDF_COLORS.accent, marginTop: 8, marginBottom: 16 },
+  sectionHeader: { fontSize: 16, fontFamily: PDF_FONTS.heading, fontWeight: 700, color: PDF_COLORS.accent, marginTop: 16, marginBottom: 8 },
   contentBlock: {
     fontSize: 10,
-    color: '#212529',
+    color: PDF_COLORS.text,
     lineHeight: 1.6,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: PDF_COLORS.bgSubtle,
     padding: 12,
     borderRadius: 4,
   },

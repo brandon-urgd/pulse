@@ -16,13 +16,13 @@ const footerStyle: React.CSSProperties = {
   gap: '1rem',
   padding: '1rem',
   fontSize: '0.75rem',
-  color: '#555',
+  color: 'var(--color-text-muted)',
   flexWrap: 'wrap' as const,
   textAlign: 'center' as const,
 }
 
 const linkStyle: React.CSSProperties = {
-  color: '#555',
+  color: 'var(--color-text-muted)',
   textDecoration: 'none',
   background: 'none',
   border: 'none',

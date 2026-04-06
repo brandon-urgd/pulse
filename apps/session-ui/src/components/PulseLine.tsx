@@ -27,12 +27,17 @@ export default function PulseLine({ current, total, animationDuration = '2s' }: 
 
   // Percentage complete — sections completed (not including current) / total
   // Current section counts as half-done to give a sense of progress within it
-  const pct = total > 0 ? Math.min(100, ((current - 0.5) / total) * 100) : 0
+  // When current >= total (session complete), snap to 100%
+  const pct = total > 0
+    ? current >= total
+      ? 100
+      : Math.min(100, ((current - 0.5) / total) * 100)
+    : 0
 
   const trackStyle: React.CSSProperties = {
     width: '100%',
     height: '3px',
-    background: '#2a2a2a',
+    background: 'var(--color-border)',
     position: 'relative' as const,
     overflow: 'hidden',
   }
@@ -43,7 +48,7 @@ export default function PulseLine({ current, total, animationDuration = '2s' }: 
     left: 0,
     height: '100%',
     width: `${pct}%`,
-    background: '#4a7c59',
+    background: 'var(--color-accent-deep)',
     borderRadius: '0 2px 2px 0',
     transition: 'width 0.6s ease',
     ...(pct > 0 && pct < 100 && !reducedMotion

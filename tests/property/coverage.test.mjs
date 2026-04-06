@@ -288,3 +288,154 @@ describe('Property P9: Coverage map aggregation', () => {
     )
   })
 })
+
+/**
+ * Feature: pulse-check-polish, Property 2: Coverage aggregation preserves session counts and reviewer uniqueness
+ *
+ * For any sequence of session coverage records (each mapping section IDs to { touched, depth }
+ * with a reviewer ID), aggregating all sessions SHALL produce a coverageMap where each section's
+ * sessionCount equals the number of sessions that touched it, and reviewerIds contains exactly
+ * the distinct reviewer IDs from touching sessions with no duplicates.
+ *
+ * Validates: Requirements 1.4
+ */
+describe('Feature: pulse-check-polish, Property 2: Coverage aggregation preserves session counts and reviewer uniqueness', () => {
+  // Reviewer ID generator
+  const reviewerIdArb = fc.stringMatching(/^[a-zA-Z0-9]{1,12}$/)
+
+  // Session generator with explicit touched/depth per section
+  const sessionWithSectionsArb = fc.record({
+    reviewerId: reviewerIdArb,
+    sectionCoverage: fc.dictionary(
+      sectionIdArb,
+      fc.record({
+        touched: fc.boolean(),
+        depth: fc.constantFrom('explore', 'skim', 'deep', null),
+      }),
+    ),
+  })
+
+  it('same reviewer completing multiple sessions for the same item produces no duplicate reviewerIds per section', () => {
+    fc.assert(
+      fc.property(
+        reviewerIdArb,
+        fc.array(
+          fc.dictionary(
+            sectionIdArb,
+            fc.record({
+              touched: fc.constant(true),
+              depth: fc.constantFrom('explore', 'skim', 'deep'),
+            }),
+            { minKeys: 1, maxKeys: 5 },
+          ),
+          { minLength: 2, maxLength: 6 },
+        ),
+        (reviewerId, coverages) => {
+          // All sessions from the same reviewer
+          const sessions = coverages.map(sc => ({ reviewerId, sectionCoverage: sc }))
+          const coverageMap = aggregateCoverage(sessions)
+
+          for (const [, data] of Object.entries(coverageMap)) {
+            const unique = new Set(data.reviewerIds)
+            // No duplicates — reviewer appears at most once
+            expect(data.reviewerIds.length).toBe(unique.size)
+            // The single reviewer should appear at most once
+            expect(data.reviewerIds.filter(id => id === reviewerId).length).toBeLessThanOrEqual(1)
+          }
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('sessionCount increments for each session that touches a section, even from the same reviewer', () => {
+    fc.assert(
+      fc.property(
+        reviewerIdArb,
+        fc.array(
+          fc.dictionary(
+            sectionIdArb,
+            fc.record({
+              touched: fc.constant(true),
+              depth: fc.constantFrom('explore', 'skim', 'deep'),
+            }),
+            { minKeys: 1, maxKeys: 5 },
+          ),
+          { minLength: 1, maxLength: 8 },
+        ),
+        (reviewerId, coverages) => {
+          const sessions = coverages.map(sc => ({ reviewerId, sectionCoverage: sc }))
+          const coverageMap = aggregateCoverage(sessions)
+
+          for (const [sectionId, data] of Object.entries(coverageMap)) {
+            // Count how many sessions actually have this section with touched: true
+            const expectedCount = sessions.filter(
+              s => s.sectionCoverage[sectionId]?.touched === true,
+            ).length
+            expect(data.sessionCount).toBe(expectedCount)
+          }
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('multiple distinct reviewers touching the same section produces all reviewer IDs', () => {
+    fc.assert(
+      fc.property(
+        fc.array(reviewerIdArb, { minLength: 2, maxLength: 6 }),
+        sectionIdArb,
+        (reviewerIds, sharedSectionId) => {
+          // Each reviewer touches the same section
+          const sessions = reviewerIds.map(rid => ({
+            reviewerId: rid,
+            sectionCoverage: {
+              [sharedSectionId]: { touched: true, depth: 'explore' },
+            },
+          }))
+          const coverageMap = aggregateCoverage(sessions)
+
+          const sectionData = coverageMap[sharedSectionId]
+          expect(sectionData).toBeDefined()
+
+          // All distinct reviewer IDs should be present
+          const expectedReviewers = new Set(reviewerIds)
+          expect(new Set(sectionData.reviewerIds)).toEqual(expectedReviewers)
+          // No duplicates
+          expect(sectionData.reviewerIds.length).toBe(expectedReviewers.size)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('empty sectionCoverage does not corrupt existing coverage data', () => {
+    fc.assert(
+      fc.property(
+        fc.array(sessionWithSectionsArb, { minLength: 1, maxLength: 6 }),
+        reviewerIdArb,
+        (realSessions, emptyReviewerId) => {
+          // Aggregate real sessions first
+          const baselineMap = aggregateCoverage(realSessions)
+
+          // Now aggregate real sessions + an empty-coverage session (the bug scenario)
+          const emptySession = { reviewerId: emptyReviewerId, sectionCoverage: {} }
+          const withEmptyMap = aggregateCoverage([...realSessions, emptySession])
+
+          // The empty session should not change any existing coverage data
+          for (const [sectionId, baseData] of Object.entries(baselineMap)) {
+            expect(withEmptyMap[sectionId]).toBeDefined()
+            expect(withEmptyMap[sectionId].sessionCount).toBe(baseData.sessionCount)
+            expect(new Set(withEmptyMap[sectionId].reviewerIds)).toEqual(
+              new Set(baseData.reviewerIds),
+            )
+          }
+
+          // No new sections should appear from the empty session
+          expect(Object.keys(withEmptyMap).length).toBe(Object.keys(baselineMap).length)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+})

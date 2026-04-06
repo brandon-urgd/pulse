@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
 import { getSessionSummary, submitSummaryFeedback } from '../api/session'
 import PulseLine from '../components/PulseLine'
+import { ScanLineLoader } from '../components/ScanLineLoader'
+import { ScanLineTrace } from '../components/ScanLineTrace'
 import SessionFooter from '../components/SessionFooter'
 import EmailOptIn from '../components/EmailOptIn'
 
@@ -17,13 +19,14 @@ interface SummaryData {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     height: '100dvh',
-    background: '#0f0f0f',
-    color: '#e5e5e5',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    background: 'var(--color-bg)',
+    color: 'var(--color-text-primary)',
+    fontFamily: 'var(--font-body)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     overflowY: 'auto' as const,
+    position: 'relative' as const,
   },
   topBar: {
     width: '100%',
@@ -36,21 +39,21 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '0.5rem',
   },
   wordmark: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontWeight: 700,
     letterSpacing: '0.05em',
     fontSize: '0.875rem',
   },
   backLink: {
-    color: '#7C9E8A',
+    color: 'var(--color-accent)',
     fontSize: '0.875rem',
     textDecoration: 'none',
   },
   closeButton: {
     background: 'transparent',
-    border: '1px solid #3a3a3a',
-    borderRadius: '6px',
-    color: '#888',
+    border: '1px solid var(--color-border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--color-text-muted)',
     fontSize: '0.875rem',
     padding: '0.25rem 0.75rem',
     cursor: 'pointer',
@@ -67,10 +70,10 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.5rem 0',
   },
   card: {
-    background: '#1a1a1a',
-    border: '1px solid #2a2a2a',
-    borderLeft: '4px solid #4a7c59',
-    borderRadius: '12px',
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    borderLeft: '4px solid var(--color-accent-deep)',
+    borderRadius: 'var(--radius-lg)',
     padding: '2rem 2rem',
     display: 'flex',
     flexDirection: 'column',
@@ -79,7 +82,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardHeading: {
     fontSize: '1.25rem',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--color-text-white)',
     margin: 0,
   },
   sectionSubheading: {
@@ -87,7 +90,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     margin: '0 0 0.75rem',
   },
   sectionList: {
@@ -103,11 +106,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
     gap: '0.5rem',
     fontSize: '0.9375rem',
-    color: '#e5e5e5',
+    color: 'var(--color-text-primary)',
     lineHeight: 1.5,
   },
   checkmark: {
-    color: '#4a7c59',
+    color: 'var(--color-accent-deep)',
     flexShrink: 0,
     fontWeight: 700,
   },
@@ -124,7 +127,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
     gap: '0.5rem',
     fontSize: '0.9375rem',
-    color: '#e5e5e5',
+    color: 'var(--color-text-primary)',
     lineHeight: 1.6,
     fontWeight: 500,
   },
@@ -132,24 +135,24 @@ const styles: Record<string, React.CSSProperties> = {
     width: '7px',
     height: '7px',
     borderRadius: '50%',
-    background: '#4a7c59',
+    background: 'var(--color-accent-deep)',
     flexShrink: 0,
     marginTop: '0.5em',
   },
   divider: {
-    borderTop: '1px solid #2a2a2a',
+    borderTop: '1px solid var(--color-border)',
     margin: '0',
   },
   closingMessage: {
     fontStyle: 'italic',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
     fontSize: '0.9375rem',
     lineHeight: 1.65,
     margin: 0,
   },
   footer: {
     fontSize: '0.8125rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     margin: 0,
   },
   loadingState: {
@@ -159,7 +162,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '1rem',
     padding: '4rem 1rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     fontSize: '0.9375rem',
   },
   errorState: {
@@ -169,7 +172,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '1rem',
     padding: '4rem 1rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     fontSize: '0.9375rem',
     textAlign: 'center' as const,
   },
@@ -181,15 +184,15 @@ const feedbackStyles: Record<string, React.CSSProperties> = {
   container: {
     marginTop: '1.5rem',
     padding: '1.25rem',
-    border: '1px solid #2a2a2a',
-    borderRadius: '12px',
-    background: '#1a1a1a',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-lg)',
+    background: 'var(--color-surface)',
     textAlign: 'center' as const,
   },
   prompt: {
     margin: '0 0 0.75rem',
     fontSize: '0.875rem',
-    color: '#ccc',
+    color: 'var(--color-text-secondary)',
   },
   buttons: {
     display: 'flex',
@@ -200,25 +203,25 @@ const feedbackStyles: Record<string, React.CSSProperties> = {
   button: {
     fontSize: '1.25rem',
     padding: '0.375rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #3a3a3a',
-    background: '#1a1a1a',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--color-border-strong)',
+    background: 'var(--color-surface)',
     cursor: 'pointer',
   },
   buttonDisabled: {
     fontSize: '1.25rem',
     padding: '0.375rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #3a3a3a',
-    background: '#1a1a1a',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--color-border-strong)',
+    background: 'var(--color-surface)',
     cursor: 'not-allowed',
     opacity: 0.5,
   },
   selected: {
     fontSize: '1.25rem',
     padding: '0.375rem 0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #4a7c59',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--color-accent-deep)',
     background: 'rgba(74, 124, 89, 0.15)',
     cursor: 'not-allowed',
     opacity: 0.5,
@@ -233,21 +236,21 @@ const feedbackStyles: Record<string, React.CSSProperties> = {
   reasonPrompt: {
     margin: '0 0 0.5rem',
     fontSize: '0.8125rem',
-    color: '#888',
+    color: 'var(--color-text-muted)',
     width: '100%',
   },
   pill: {
     padding: '0.25rem 0.75rem',
-    borderRadius: '999px',
+    borderRadius: 'var(--radius-full)',
     fontSize: '0.75rem',
-    border: '1px solid #3a3a3a',
-    background: '#1a1a1a',
-    color: '#ccc',
+    border: '1px solid var(--color-border-strong)',
+    background: 'var(--color-surface)',
+    color: 'var(--color-text-secondary)',
     cursor: 'pointer',
   },
   thanks: {
     fontSize: '0.875rem',
-    color: '#4a7c59',
+    color: 'var(--color-accent-deep)',
     fontWeight: 500,
     margin: '0.5rem 0 0',
   },
@@ -329,6 +332,8 @@ export default function SessionSummary() {
 
   const sessionId = paramSessionId ?? ctxSessionId ?? ''
 
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
   const [summary, setSummary] = useState<SummaryData | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'error' | 'not-ready'>('loading')
   const retryCountRef = useRef(0)
@@ -383,6 +388,17 @@ export default function SessionSummary() {
 
   return (
     <div className="page-scrollable" style={styles.page}>
+      {!prefersReducedMotion && (
+        <div style={{
+          position: 'absolute',
+          bottom: '20%',
+          left: 0,
+          right: 0,
+          pointerEvents: 'none',
+        }}>
+          <ScanLineTrace opacity={0.035} peaks={3} />
+        </div>
+      )}
       {/* Top bar */}
       <div style={styles.topBar}>
         <span style={styles.wordmark}>pulse</span>
@@ -404,11 +420,7 @@ export default function SessionSummary() {
 
         {loadState === 'loading' || loadState === 'not-ready' ? (
           <div style={styles.loadingState}>
-            <span>
-              {loadState === 'not-ready'
-                ? 'Preparing your summary…'
-                : 'Loading…'}
-            </span>
+            <ScanLineLoader text={loadState === 'not-ready' ? 'Preparing your summary…' : 'Loading…'} />
           </div>
         ) : loadState === 'error' ? (
           <div style={styles.errorState}>

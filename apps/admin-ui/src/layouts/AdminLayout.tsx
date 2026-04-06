@@ -11,7 +11,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/plan': 'Plan — Pulse',
 };
 
-const logoUrl = `${window.location.origin}/logo.svg`;
+function getLogoUrl(isDark: boolean) {
+  return `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
+}
 
 const NAV_LINKS = [
   { to: '/admin/items', label: () => labels.layout.navItems },
@@ -105,7 +107,7 @@ export default function AdminLayout() {
           aria-label="ur/gd pulse — go to items"
         >
           <img
-            src={logoUrl}
+            src={getLogoUrl(isDark)}
             alt="ur/gd Studios logo"
             style={{
               height: 'clamp(2.5rem, 2rem + 2vw, 3rem)',

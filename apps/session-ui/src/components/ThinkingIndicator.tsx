@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import PulseDot from './PulseDot'
+import { ScanLineIcon } from './ScanLineIcon'
 
 const KEYFRAMES = `
 @keyframes thinkDot {
@@ -28,7 +28,7 @@ export default function ThinkingIndicator() {
   }
 
   const bubbleStyle: React.CSSProperties = {
-    background: '#1a1a1a',
+    background: 'var(--color-surface)',
     borderRadius: '16px 16px 16px 4px',
     padding: '0.75rem 1rem',
     display: 'flex',
@@ -40,7 +40,7 @@ export default function ThinkingIndicator() {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    background: '#4a7c59',
+    background: 'var(--color-accent-deep)',
     opacity: reducedMotion ? 0.6 : undefined,
     animation: reducedMotion
       ? undefined
@@ -51,7 +51,7 @@ export default function ThinkingIndicator() {
     <>
       {!reducedMotion && <style>{KEYFRAMES}</style>}
       <div style={rowStyle}>
-        <PulseDot state="active" />
+        <ScanLineIcon size={28} />
         <div
           style={bubbleStyle}
           aria-label="Agent is thinking"
