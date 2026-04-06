@@ -47,10 +47,9 @@ export const handler = async (event) => {
   }
 
   if (preferences?.theme !== undefined) {
-    expressionParts.push('#preferences.#theme = :theme')
+    expressionParts.push('#preferences = :preferences')
     expressionNames['#preferences'] = 'preferences'
-    expressionNames['#theme'] = 'theme'
-    expressionValues[':theme'] = { S: preferences.theme }
+    expressionValues[':preferences'] = { M: { theme: { S: preferences.theme } } }
   }
 
   if (typeof termsAcceptedVersion === 'string') {
