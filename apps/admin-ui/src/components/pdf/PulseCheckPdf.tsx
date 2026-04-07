@@ -1,5 +1,6 @@
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
 import { PDF_COLORS, PDF_SIGNAL_STYLES, PDF_SIGNAL_TYPE_COLORS, PDF_FONTS } from '../../config/pdf-brand';
+import { labels } from '../../config/labels-registry';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,10 @@ function Footer() {
 // ─── Signal Matrix Component ──────────────────────────────────────────────────
 
 function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
+  const reviewerCount = data.reviewerVerdicts.length;
+  const isScaled = reviewerCount >= 4;
+  const isOverflow = reviewerCount >= 8;
+
   const reviewers = data.reviewerVerdicts.map((rv, i) => ({
     sessionId: rv.sessionId,
     name: rv.isSelfReview ? 'Self-review' : `Reviewer ${i + 1}`,
@@ -140,17 +145,34 @@ function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
     energy: rv.energy,
   }));
 
+  // Dynamic styles based on reviewer count
+  const themeColStyle = isScaled
+    ? { ...s.matrixThemeCol, width: 90 }
+    : s.matrixThemeCol;
+  const reviewerNameStyle = isScaled
+    ? { ...s.matrixReviewerName, fontSize: 8 }
+    : s.matrixReviewerName;
+  const cellSignalStyle = isScaled
+    ? { ...s.matrixCellSignal, fontSize: 7 }
+    : s.matrixCellSignal;
+  const cellQuoteStyle = isScaled
+    ? { ...s.matrixCellQuote, fontSize: 8 }
+    : s.matrixCellQuote;
+  const themeLabelStyle = isScaled
+    ? { ...s.matrixThemeLabel, fontSize: 9 }
+    : s.matrixThemeLabel;
+
   return (
-    <View wrap={false}>
+    <View wrap={isOverflow}>
       <Text style={s.matrixHeader}>Signal Matrix</Text>
-      {/* Header row */}
-      <View style={s.matrixHeaderRow}>
-        <View style={s.matrixThemeCol}>
-          <Text style={s.matrixReviewerName}>Theme</Text>
+      {/* Header row — fixed for multi-page overflow at 8+ reviewers */}
+      <View style={s.matrixHeaderRow} fixed={isOverflow}>
+        <View style={themeColStyle}>
+          <Text style={reviewerNameStyle}>Theme</Text>
         </View>
         {reviewers.map((r, i) => (
           <View key={i} style={s.matrixReviewerCol}>
-            <Text style={s.matrixReviewerName}>{r.name}</Text>
+            <Text style={reviewerNameStyle}>{r.name}</Text>
             <Text style={s.matrixReviewerMeta}>{r.energy}</Text>
           </View>
         ))}
@@ -158,8 +180,8 @@ function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
       {/* Body rows */}
       {data.themes.map((theme) => (
         <View key={theme.themeId} style={s.matrixRow}>
-          <View style={s.matrixThemeCol}>
-            <Text style={s.matrixThemeLabel}>{theme.label}</Text>
+          <View style={themeColStyle}>
+            <Text style={themeLabelStyle}>{theme.label}</Text>
           </View>
           {reviewers.map((r, ri) => {
             const signal = theme.reviewerSignals.find(rs => rs.sessionId === r.sessionId);
@@ -167,13 +189,13 @@ function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
               <View key={ri} style={s.matrixReviewerCol}>
                 {signal ? (
                   <>
-                    <Text style={[s.matrixCellSignal, { color: PDF_SIGNAL_TYPE_COLORS[signal.signalType] ?? '#6c757d' }]}>
+                    <Text style={[cellSignalStyle, { color: PDF_SIGNAL_TYPE_COLORS[signal.signalType] ?? '#6c757d' }]}>
                       {capitalize(signal.signalType)}
                     </Text>
-                    <Text style={s.matrixCellQuote}>"{signal.quote}"</Text>
+                    <Text style={cellQuoteStyle}>"{signal.quote}"</Text>
                   </>
                 ) : (
-                  <Text style={s.matrixCellQuote}>—</Text>
+                  <Text style={cellQuoteStyle}>—</Text>
                 )}
               </View>
             );
@@ -188,6 +210,8 @@ function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
 
 export function PulseCheckPdf({ data, itemName }: Props) {
   const energy = data.reviewerVerdicts?.[0]?.energy ?? 'neutral';
+  const reviewerCount = data.reviewerVerdicts.length;
+  const useLandscapeMatrix = reviewerCount >= 4;
 
   return (
     <Document>
@@ -213,7 +237,7 @@ export function PulseCheckPdf({ data, itemName }: Props) {
         {/* Themes */}
         {data.themes.length > 0 && (
           <View break>
-            <Text style={s.sectionHeader}>Themes</Text>
+            <Text style={s.sectionHeader}>{labels.pulseCheck.synthesisHeading}</Text>
             {data.themes.map((theme) => (
               <View key={theme.themeId} style={s.themeGroup} wrap={false}>
                 <Text style={s.themeLabel}>{theme.label}</Text>
@@ -234,8 +258,8 @@ export function PulseCheckPdf({ data, itemName }: Props) {
           </View>
         )}
 
-        {/* Signal Matrix — only for multi-session */}
-        {data.sessionCount >= 2 && data.themes.length > 0 && (
+        {/* Signal Matrix — inline for < 4 reviewers (portrait) */}
+        {!useLandscapeMatrix && data.sessionCount >= 2 && data.themes.length > 0 && (
           <View break>
             <PdfSignalMatrix data={data} />
           </View>
@@ -261,6 +285,14 @@ export function PulseCheckPdf({ data, itemName }: Props) {
 
         <Footer />
       </Page>
+
+      {/* Signal Matrix — separate landscape page for 4+ reviewers */}
+      {useLandscapeMatrix && data.sessionCount >= 2 && data.themes.length > 0 && (
+        <Page size="A4" orientation="landscape" style={s.page}>
+          <PdfSignalMatrix data={data} />
+          <Footer />
+        </Page>
+      )}
     </Document>
   );
 }

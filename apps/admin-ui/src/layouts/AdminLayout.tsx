@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
+import { useInactivityTimer } from '../hooks/useInactivityTimer';
+import SessionTimeoutModal from '../components/SessionTimeoutModal';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { labels } from '../config/labels-registry';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -32,7 +36,33 @@ export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // ── Session inactivity timer ──────────────────────────────────────────
+  const { reset, remainingMs } = useInactivityTimer({
+    onWarning: () => setShowWarning(true),
+    onTimeout: async () => {
+      await signOut();
+      navigate('/admin/login?expired=1', { replace: true });
+    },
+  });
+
+  const handleExtend = useCallback(async () => {
+    reset();
+    setShowWarning(false);
+    try {
+      await fetchAuthSession({ forceRefresh: true });
+    } catch {
+      await signOut();
+      navigate('/admin/login?expired=1', { replace: true });
+    }
+  }, [reset, signOut, navigate]);
+
+  const handleTimeoutSignOut = useCallback(async () => {
+    await signOut();
+    navigate('/admin/login?expired=1', { replace: true });
+  }, [signOut, navigate]);
 
   useEffect(() => {
     const title = PAGE_TITLES[location.pathname];
@@ -82,7 +112,7 @@ export default function AdminLayout() {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       {/* Top bar */}
       <header
         style={{
@@ -242,7 +272,10 @@ export default function AdminLayout() {
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-md)',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-                overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'auto',
+                maxHeight: 'calc(100vh - var(--topbar-height) - var(--space-4))',
+                WebkitOverflowScrolling: 'touch',
                 zIndex: 200,
               }}
             >
@@ -298,8 +331,10 @@ export default function AdminLayout() {
       </header>
 
       {/* Page content */}
-      <main style={{ flex: 1, background: 'var(--color-bg)', minWidth: 0 }}>
-        <Outlet />
+      <main style={{ flex: 1, background: 'var(--color-bg)', minWidth: 0, overflowX: 'hidden' }}>
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* Footer */}
@@ -338,6 +373,15 @@ export default function AdminLayout() {
           </div>
         </div>
       </footer>
+
+      {/* Session timeout warning modal */}
+      {showWarning && (
+        <SessionTimeoutModal
+          remainingSeconds={Math.ceil(remainingMs / 1000)}
+          onExtend={handleExtend}
+          onSignOut={handleTimeoutSignOut}
+        />
+      )}
     </div>
   );
 }

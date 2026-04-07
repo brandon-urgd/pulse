@@ -21,7 +21,7 @@
 .heading {
   font-size: var(--font-size-2xl);
   font-weight: 600;
-  margin: 2rem 0 var(--space-4);
+  margin: 2rem 0 var(--space-6);
 }
 
 .headingRow {
@@ -29,7 +29,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-6);
 }
 
 .headingRow .heading {
@@ -262,7 +262,7 @@
 
 /* ── Signal sections ── */
 .section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-6);
 }
 
 .sectionHeading {
@@ -315,13 +315,14 @@
 
 /* ── Multi-session: theme rows with decisions ── */
 .matrixSection {
+  margin-top: var(--space-8);
   margin-bottom: var(--space-8);
 }
 
 .matrixHeading {
   font-size: var(--font-size-xl);
   font-weight: 600;
-  margin: 0 0 var(--space-5);
+  margin: 0 0 var(--space-6);
 }
 
 .matrixScroll {
@@ -336,14 +337,14 @@
 .synthesisSection {
   margin-top: 2rem;
   margin-bottom: var(--space-8);
-  padding-top: var(--space-6);
+  padding-top: var(--space-8);
   border-top: 1px solid var(--color-border);
 }
 
 .synthesisHeading {
   font-size: var(--font-size-xl);
   font-weight: 600;
-  margin: 0 0 var(--space-5);
+  margin: 0 0 var(--space-6);
 }
 
 /* Proposed Revisions section — visual break from open questions above */
@@ -745,6 +746,34 @@
   color: var(--color-accent-pulse);
   font-weight: 500;
   margin: var(--space-2) 0 0;
+}
+
+/* ── Revision CTA ── */
+.revisionCta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-pulse);
+  color: var(--color-text-inverse);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.revisionCta:hover {
+  opacity: 0.88;
+}
+
+.revisionCtaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
 }
 
 /* Reduced motion */

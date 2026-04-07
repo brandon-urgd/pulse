@@ -472,7 +472,7 @@ export const labels = {
     noQuestions: 'No open questions recorded.',
     matrixHeading: 'Signal Matrix',
     matrixAriaLabel: 'Cross-reviewer feedback signal matrix',
-    synthesisHeading: 'Synthesis',
+    synthesisHeading: 'What Surfaced',
     decisionsHeading: 'Proposed Revisions',
     decisionsHint: 'Mark each proposal — decisions are saved and used when you generate a revision.',
     noProposedRevisions: 'No revisions proposed — reviewers were largely aligned.',
@@ -503,6 +503,8 @@ export const labels = {
     batchAcceptAll: 'Accept All',
     batchDismissAll: 'Dismiss All',
     batchUndo: 'Undo',
+    viewRevisions: 'View Revisions',
+    generateRevision: 'Generate Revision',
   },
 
   // Support / Report Modal (Task 37)
@@ -544,6 +546,23 @@ export const labels = {
     charLimitExceeded: 'Message must be 5,000 characters or fewer',
   },
 
+  // Error boundary
+  errorBoundary: {
+    heading: 'Something went wrong',
+    body: 'An unexpected error occurred. You can try reloading the page or go back to the items list.',
+    reloadButton: 'Reload',
+    goHomeLink: 'Go Home',
+  },
+
+  // Session timeout modal
+  sessionTimeout: {
+    heading: 'Session expiring',
+    body: 'Your session will expire due to inactivity.',
+    countdown: 'Time remaining: {seconds}s',
+    extendButton: 'Extend Session',
+    signOutButton: 'Sign Out',
+  },
+
   // Sections (SectionPanel)
   sections: {
     sectionPanelTitle: 'Document Sections',
@@ -556,6 +575,9 @@ export const labels = {
     validationAllExcluded: 'At least one section must be included.',
     analyzing: 'Analyzing document sections…',
     noSections: 'No sections detected.',
+    coveragePanelTitle: 'Sections you asked reviewers to cover',
+    coveragePartial: 'Reviewers covered {covered} of {total} requested sections.',
+    coverageFull: 'Reviewers touched on every section you requested.',
   },
 
   // Assessment Helper

@@ -1067,6 +1067,13 @@ Resources:
         - openid
         - profile
       AllowedOAuthFlowsUserPoolClient: true
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 24
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: hours
 
   PulseUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain

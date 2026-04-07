@@ -33,6 +33,9 @@ export default defineConfig({
       'tests/**/*.test.tsx',
       'apps/landing/__tests__/**/*.test.mjs',
       'apps/landing/__tests__/**/*.test.ts',
+      'scripts/__tests__/**/*.test.mjs',
+      'apps/session-ui/src/__tests__/**/*.test.ts',
+      'apps/session-ui/src/__tests__/**/*.test.tsx',
     ],
     coverage: {
       provider: 'v8',

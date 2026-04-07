@@ -1,4 +1,5 @@
 import styles from './SectionCoveragePanel.module.css';
+import { labels } from '../config/labels-registry';
 
 interface SectionCoveragePanelProps {
   sections: Array<{ id: string; title: string }>;
@@ -24,11 +25,13 @@ export default function SectionCoveragePanel({
   return (
     <div className={styles.wrapper}>
       <div className={styles.header}>
-        <h3 className={styles.heading}>What was reviewed</h3>
+        <h3 className={styles.heading}>{labels.sections.coveragePanelTitle}</h3>
         <p className={styles.description}>
           {coveredCount === sections.length
-            ? 'Reviewers touched on every section.'
-            : `Reviewers covered ${coveredCount} of ${sections.length} sections. Gaps may mean you need another perspective.`}
+            ? labels.sections.coverageFull
+            : labels.sections.coveragePartial
+                .replace('{covered}', String(coveredCount))
+                .replace('{total}', String(sections.length))}
         </p>
       </div>
       <div className={styles.panel} role="list" aria-label="Section coverage">

@@ -11,6 +11,8 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   animation: fadeIn 0.2s ease;
 }
 

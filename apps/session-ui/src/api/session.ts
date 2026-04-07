@@ -255,6 +255,26 @@ export async function emailSessionSummary(
 }
 
 
+export async function reportSessionCompletion(
+  sessionId: string,
+  sessionToken: string,
+  timing: { interactionTimeMs: number; wallClockTimeMs: number }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/complete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(timing),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw makeError(body, 'Failed to report session completion', res.status)
+  }
+}
+
 export async function submitSummaryFeedback(
   sessionId: string,
   sessionToken: string,

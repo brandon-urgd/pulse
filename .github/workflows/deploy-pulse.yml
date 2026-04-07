@@ -704,45 +704,181 @@ jobs:
           chmod +x scripts/smoke.sh
           ./scripts/smoke.sh "$CF_ApiBaseUrl"
 
-      - name: Cleanup old artifacts
+      - name: Cleanup old artifacts (environment-aware)
+        env:
+          RETAIN_COUNT: "5"
         run: |
           set -euo pipefail
-          echo "🧹 Cleaning up old artifacts (keeping last 5 versions)..."
+          echo "🧹 Environment-aware artifact cleanup (retain $RETAIN_COUNT unprotected versions)..."
 
-          # Download manifest to get the list of functions that were built
-          aws s3 cp \
-            "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/manifest-${VERSION}.json" \
-            /tmp/lambda-manifest.json \
-            --region ${{ env.AWS_REGION }}
+          BUCKET="${{ env.ARTIFACT_BUCKET }}"
+          REGION="${{ env.AWS_REGION }}"
+          APP="${{ env.APP_NAME }}"
 
-          FUNCTIONS=$(python3 -c "import json; m=json.load(open('/tmp/lambda-manifest.json')); print(' '.join(m['functions']))")
-
-          for fn in $FUNCTIONS; do
-            aws s3 ls "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/" \
-              --region ${{ env.AWS_REGION }} 2>/dev/null | \
-              sort -r | tail -n +6 | awk '{print $4}' | \
-              while read -r key; do
-                if [ -n "$key" ]; then
-                  echo "🗑️  Deleting s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/${key}"
-                  aws s3 rm "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/${fn}/${key}" \
-                    --region ${{ env.AWS_REGION }}
-                fi
-              done
+          # ── 1. Read deployment metadata from all three environments ──
+          for env_name in dev staging prod; do
+            META_KEY="${APP}/deployments/${env_name}/metadata.json"
+            if aws s3 cp "s3://${BUCKET}/${META_KEY}" "/tmp/meta-${env_name}.json" \
+                --region "$REGION" 2>/dev/null; then
+              echo "📋 ${env_name} metadata loaded"
+            else
+              echo "null" > "/tmp/meta-${env_name}.json"
+              echo "⚠️  ${env_name} metadata not found — no protected version for this environment"
+            fi
           done
 
-          # CloudFormation templates + parameter files
-          aws s3 ls "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/" \
-            --region ${{ env.AWS_REGION }} 2>/dev/null | \
-            sort -r | tail -n +6 | awk '{print $2}' | \
-            while read -r version_dir; do
-              if [ -n "$version_dir" ]; then
-                echo "🗑️  Deleting s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/${version_dir}"
-                aws s3 rm "s3://${{ env.ARTIFACT_BUCKET }}/${{ env.APP_NAME }}/cloudformation/${version_dir}" \
-                  --recursive --region ${{ env.AWS_REGION }}
-              fi
-            done
+          # ── 2. Compute protected versions and deletion plan via Node.js ──
+          export META_DEV=$(cat /tmp/meta-dev.json)
+          export META_STAGING=$(cat /tmp/meta-staging.json)
+          export META_PROD=$(cat /tmp/meta-prod.json)
+          export BUCKET REGION APP VERSION RETAIN_COUNT
+          node --input-type=module << 'CLEANUP_SCRIPT'
+          import { extractProtectedVersions, computeDeletionPlan } from './scripts/compute-cleanup.mjs';
+          import { execSync } from 'node:child_process';
 
-          echo "✅ Cleanup complete"
+          const BUCKET = process.env.BUCKET;
+          const REGION = process.env.REGION;
+          const APP = process.env.APP;
+          const VERSION = process.env.VERSION;
+          const RETAIN_COUNT = parseInt(process.env.RETAIN_COUNT, 10);
+
+          function aws(cmd) {
+            return execSync(`aws ${cmd}`, { encoding: 'utf-8' }).trim();
+          }
+
+          // Parse per-environment metadata
+          const metadataByEnv = {};
+          for (const [env, envVar] of [['dev', 'META_DEV'], ['staging', 'META_STAGING'], ['prod', 'META_PROD']]) {
+            try {
+              const raw = process.env[envVar];
+              metadataByEnv[env] = (raw && raw !== 'null') ? JSON.parse(raw) : null;
+            } catch {
+              metadataByEnv[env] = null;
+              console.log(`⚠️  Failed to parse ${env} metadata — treating as missing`);
+            }
+          }
+
+          // Build protected version set
+          const { protectedVersions, warnings } = extractProtectedVersions(metadataByEnv);
+          for (const w of warnings) console.log(`⚠️  ${w}`);
+          console.log(`🛡️  Protected versions: ${[...protectedVersions].join(', ') || '(none)'}`);
+
+          // ── Lambda ZIP cleanup ──
+          let manifest;
+          try {
+            const manifestRaw = aws(
+              `s3 cp "s3://${BUCKET}/lambda-packages/manifest-${VERSION}.json" - --region ${REGION}`
+            );
+            manifest = JSON.parse(manifestRaw);
+          } catch (err) {
+            console.log(`⚠️  Could not read lambda manifest — skipping Lambda cleanup: ${err.message}`);
+            manifest = null;
+          }
+
+          let totalDeleted = 0;
+          let totalFailed = 0;
+
+          if (manifest) {
+            for (const fn of manifest.functions) {
+              const prefix = `lambda-packages/${fn}/`;
+              let listing;
+              try {
+                listing = aws(
+                  `s3api list-objects-v2 --bucket "${BUCKET}" --prefix "${prefix}" --region ${REGION} --output json`
+                );
+              } catch (err) {
+                console.log(`❌ S3 ListObjects failed for ${prefix} — aborting cleanup for this function: ${err.message}`);
+                continue;
+              }
+
+              const parsed = JSON.parse(listing);
+              const contents = parsed.Contents || [];
+
+              // Build artifact entries: extract version from key (e.g. lambda-packages/fn/1.2.3.zip → 1.2.3)
+              const artifacts = contents.map(obj => {
+                const filename = obj.Key.split('/').pop();
+                const version = filename.replace(/\.zip$/, '');
+                return { key: obj.Key, version, timestamp: obj.LastModified };
+              });
+
+              const plan = computeDeletionPlan(artifacts, protectedVersions, RETAIN_COUNT);
+
+              for (const artifact of plan.toDelete) {
+                try {
+                  aws(`s3 rm "s3://${BUCKET}/${artifact.key}" --region ${REGION}`);
+                  console.log(`🗑️  Deleted: s3://${BUCKET}/${artifact.key} (version: ${artifact.version})`);
+                  totalDeleted++;
+                } catch (err) {
+                  console.log(`❌ Failed to delete s3://${BUCKET}/${artifact.key}: ${err.message}`);
+                  totalFailed++;
+                }
+              }
+
+              console.log(`   ${fn}: ${plan.toDelete.length} deleted, ${plan.toRetain.length} retained`);
+            }
+          }
+
+          // ── CloudFormation template cleanup ──
+          const cfPrefix = `${APP}/cloudformation/`;
+          let cfListing;
+          try {
+            cfListing = aws(
+              `s3api list-objects-v2 --bucket "${BUCKET}" --prefix "${cfPrefix}" --delimiter "/" --region ${REGION} --output json`
+            );
+          } catch (err) {
+            console.log(`❌ S3 ListObjects failed for ${cfPrefix} — aborting CloudFormation cleanup: ${err.message}`);
+            cfListing = null;
+          }
+
+          if (cfListing) {
+            const cfParsed = JSON.parse(cfListing);
+            const prefixes = (cfParsed.CommonPrefixes || []).map(p => p.Prefix);
+
+            // Build artifact entries from version directories
+            // e.g. pulse/cloudformation/1.2.3/ → version 1.2.3
+            const cfArtifacts = [];
+            for (const p of prefixes) {
+              const version = p.replace(cfPrefix, '').replace(/\/$/, '');
+              if (!version) continue;
+
+              // Get the latest LastModified from objects in this prefix for timestamp
+              let innerListing;
+              try {
+                innerListing = aws(
+                  `s3api list-objects-v2 --bucket "${BUCKET}" --prefix "${p}" --region ${REGION} --output json`
+                );
+              } catch {
+                continue;
+              }
+              const innerParsed = JSON.parse(innerListing);
+              const innerContents = innerParsed.Contents || [];
+              const latestTs = innerContents.reduce((max, obj) =>
+                obj.LastModified > max ? obj.LastModified : max, '');
+
+              cfArtifacts.push({ key: p, version, timestamp: latestTs });
+            }
+
+            const cfPlan = computeDeletionPlan(cfArtifacts, protectedVersions, RETAIN_COUNT);
+
+            for (const artifact of cfPlan.toDelete) {
+              try {
+                aws(`s3 rm "s3://${BUCKET}/${artifact.key}" --recursive --region ${REGION}`);
+                console.log(`🗑️  Deleted: s3://${BUCKET}/${artifact.key} (version: ${artifact.version})`);
+                totalDeleted++;
+              } catch (err) {
+                console.log(`❌ Failed to delete s3://${BUCKET}/${artifact.key}: ${err.message}`);
+                totalFailed++;
+              }
+            }
+
+            console.log(`   CloudFormation: ${cfPlan.toDelete.length} deleted, ${cfPlan.toRetain.length} retained`);
+          }
+
+          console.log(`\n✅ Cleanup complete — ${totalDeleted} artifacts deleted, ${totalFailed} failures`);
+          if (totalFailed > 0) {
+            console.log(`⚠️  ${totalFailed} deletion(s) failed — see logs above`);
+          }
+          CLEANUP_SCRIPT
 
       - name: Write deployment metadata
         run: |

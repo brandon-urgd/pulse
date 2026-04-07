@@ -4,6 +4,7 @@ import { useSession } from '../context/SessionContext'
 import {
   deleteSessionTranscript,
   getSessionState,
+  reportSessionCompletion,
   sendChatMessage,
   sendChatMessageStreaming,
 } from '../api/session'
@@ -18,6 +19,7 @@ import StreamingBubble from '../components/StreamingBubble'
 import ImagePanel from '../components/ImagePanel'
 import ExpandableImageHeader from '../components/ExpandableImageHeader'
 import CompletionCard from '../components/CompletionCard'
+import { useInteractionTimer } from '../hooks/useInteractionTimer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,10 +300,25 @@ export default function Chat() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef<number | null>(null)
 
+  // ── Interaction timer (engagement-aware session pacing) ─────────────────────
+  const { cumulativeMs, wallClockMs } = useInteractionTimer()
+  const completionReportedRef = useRef(false)
+
   // ── Document title ──────────────────────────────────────────────────────────
   useEffect(() => {
     document.title = 'Session — Pulse'
   }, [])
+
+  // ── Report interaction timing on session completion ─────────────────────────
+  useEffect(() => {
+    if (sessionStatus !== 'complete' || completionReportedRef.current) return
+    if (!sessionToken || !sessionId) return
+    completionReportedRef.current = true
+    reportSessionCompletion(sessionId, sessionToken, {
+      interactionTimeMs: cumulativeMs,
+      wallClockTimeMs: wallClockMs,
+    }).catch(() => { /* best-effort — don't block completion UX */ })
+  }, [sessionStatus, sessionId, sessionToken, cumulativeMs, wallClockMs])
 
   // ── Redirect if no token ────────────────────────────────────────────────────
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
@@ -112,12 +112,14 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Esc to close
+  // Esc to close (stable ref avoids listener churn on every render)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  });
+  }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 

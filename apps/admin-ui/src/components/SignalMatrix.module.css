@@ -227,6 +227,36 @@
   flex: 1;
 }
 
+/* ── Sticky first two columns during horizontal scroll ─────────────────────── */
+
+.table th:nth-child(1),
+.table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--color-bg-secondary);
+}
+
+.table th:nth-child(2),
+.table td:nth-child(2) {
+  position: sticky;
+  left: 140px; /* matches min-width of summary column */
+  z-index: 2;
+  background: var(--color-bg-secondary);
+}
+
+/* Body rows use surface color to distinguish from header */
+.table td:nth-child(1),
+.table td:nth-child(2) {
+  background: var(--color-surface);
+}
+
+/* Corner header cells are sticky in both directions — need highest z-index */
+.table th:nth-child(1),
+.table th:nth-child(2) {
+  z-index: 3;
+}
+
 /* Responsive breakpoint */
 @media (max-width: 640px) {
   .table {

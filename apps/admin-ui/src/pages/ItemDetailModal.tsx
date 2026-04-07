@@ -279,12 +279,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // ── Esc to close ────────────────────────────────────────────────────────────
+  // ── Esc to close (stable ref avoids listener churn on every render) ────────
+  const handleCancelRef = useRef(handleCancel);
+  handleCancelRef.current = handleCancel;
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancel(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancelRef.current(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  });
+  }, []);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createMutation = useAuthedMutation<{ data: Item }, CreateItemPayload>(

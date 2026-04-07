@@ -45,6 +45,13 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
   const headingId = 'report-modal-heading';
   const firstFocusRef = useRef<HTMLSelectElement>(null);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Focus trap
   useEffect(() => {
     firstFocusRef.current?.focus();

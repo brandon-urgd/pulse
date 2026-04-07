@@ -88,6 +88,16 @@ interface ItemResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Shallow-compare two Record<string, string> objects (avoids JSON.stringify in render) */
+function shallowRecordEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keysA = Object.keys(a);
+  if (keysA.length !== Object.keys(b).length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 function buildMatrixData(
   themes: PulseCheckTheme[],
   reviewerVerdicts: ReviewerVerdict[],
@@ -283,6 +293,14 @@ export default function PulseCheck() {
   const itemCoverageMap = itemResp?.data?.coverageMap ?? {};
   const itemSectionMap = itemResp?.data?.sectionMap;
 
+  // Filter sections to only those the tenant requested feedback on
+  const feedbackSections = itemResp?.data?.feedbackSections;
+  const allSections = itemSectionMap?.sections ?? [];
+  const coverageSections =
+    feedbackSections && feedbackSections.length > 0
+      ? allSections.filter((s) => feedbackSections.includes(s.id))
+      : allSections;
+
   const { data: pcResp, isLoading, isError, refetch } = useAuthedQuery<PulseCheckResponse>(
     ['pulse-check', itemId],
     `/api/manage/items/${itemId}/pulse-check`,
@@ -449,6 +467,12 @@ export default function PulseCheck() {
     }
   }
 
+  // ── Revision CTA visibility ─────────────────────────────────────────────────
+  // Show CTA when at least one accept/adjust decision has been persisted
+  const hasPersistedActionableDecision = Object.values(savedDecisionsRef.current).some(
+    (action) => action === 'accept' || action === 'adjust'
+  );
+
   // ── Overlay (rendered regardless of page state) ─────────────────────────────
   const Overlay = overlayVisible ? (
     <PulseCheckOverlay
@@ -613,9 +637,9 @@ export default function PulseCheck() {
           })()}
 
           {/* Section coverage panel */}
-          {itemSectionMap?.sections && itemSectionMap.sections.length > 0 && (
+          {coverageSections.length > 0 && (
             <SectionCoveragePanel
-              sections={itemSectionMap.sections}
+              sections={coverageSections}
               coverageMap={itemCoverageMap}
               depthPreferences={itemResp?.data?.sectionDepthPreferences ?? {}}
             />
@@ -711,7 +735,7 @@ export default function PulseCheck() {
                     type="button"
                     className={styles.saveButton}
                     onClick={handleSaveDecisions}
-                    disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || JSON.stringify(decisions) === JSON.stringify(savedDecisionsRef.current)}
+                    disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || shallowRecordEqual(decisions, savedDecisionsRef.current)}
                   >
                     {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                   </button>
@@ -722,6 +746,14 @@ export default function PulseCheck() {
                     <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
                   )}
                 </div>
+
+                {hasPersistedActionableDecision && (
+                  <div className={styles.revisionCtaRow}>
+                    <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
+                      {labels.pulseCheck.viewRevisions}
+                    </Link>
+                  </div>
+                )}
               </>
             )}
           </section>
@@ -801,9 +833,9 @@ export default function PulseCheck() {
         )}
 
         {/* Section coverage panel */}
-        {itemSectionMap?.sections && itemSectionMap.sections.length > 0 && (
+        {coverageSections.length > 0 && (
           <SectionCoveragePanel
-            sections={itemSectionMap.sections}
+            sections={coverageSections}
             coverageMap={itemCoverageMap}
             depthPreferences={itemResp?.data?.sectionDepthPreferences ?? {}}
           />
@@ -920,7 +952,7 @@ export default function PulseCheck() {
                   type="button"
                   className={styles.saveButton}
                   onClick={handleSaveDecisions}
-                  disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || JSON.stringify(decisions) === JSON.stringify(savedDecisionsRef.current)}
+                  disabled={saveStatus === 'saving' || Object.keys(decisions).length === 0 || shallowRecordEqual(decisions, savedDecisionsRef.current)}
                 >
                   {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                 </button>
@@ -931,6 +963,14 @@ export default function PulseCheck() {
                   <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
                 )}
               </div>
+
+              {hasPersistedActionableDecision && (
+                <div className={styles.revisionCtaRow}>
+                  <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
+                    {labels.pulseCheck.viewRevisions}
+                  </Link>
+                </div>
+              )}
             </>
           )}
         </section>
