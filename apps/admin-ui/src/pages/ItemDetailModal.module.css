@@ -861,6 +861,8 @@
   }
   .modalInner {
     flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .modalFormPane {
     flex: none;
@@ -873,9 +875,9 @@
     border-top: 1px solid var(--color-border);
   }
   .sectionsPane {
+    flex: none;
     min-width: 0;
     max-width: 100%;
-    max-height: 50vh;
     border-left: none;
     border-top: 1px solid var(--color-border);
     animation: none;
