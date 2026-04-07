@@ -149,6 +149,9 @@
   padding: var(--space-6) var(--space-6) var(--space-4);
   flex: 1;
   min-height: 0;
+  /* Ensure this container is the scroll target on touch devices,
+     preventing scroll events from propagating to parent containers */
+  touch-action: pan-y;
 }
 
 .loading {
@@ -861,12 +864,16 @@
   }
   .modalInner {
     flex-direction: column;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Let the inner container fill available space but NOT scroll itself.
+       Each child pane manages its own scroll to avoid nested-scroll traps
+       that lock touch scrolling on mobile WebKit. */
+    overflow: hidden;
   }
   .modalFormPane {
-    flex: none;
+    flex: 1 1 0;
+    min-height: 0;
     max-width: 100%;
+    /* Form pane scrolls internally via .modalBody — don't add overflow here */
   }
   .previewPane {
     min-width: 0;
@@ -875,11 +882,15 @@
     border-top: 1px solid var(--color-border);
   }
   .sectionsPane {
-    flex: none;
+    flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
+    max-height: 45dvh;
     border-left: none;
     border-top: 1px solid var(--color-border);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     animation: none;
   }
 }
