@@ -88,8 +88,8 @@ interface ItemResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Shallow-compare two Record<string, string> objects (avoids JSON.stringify in render) */
-function shallowRecordEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+/** Shallow-compare two Record<string, string | null> objects (avoids JSON.stringify in render) */
+function shallowRecordEqual(a: Record<string, string | null>, b: Record<string, string | null>): boolean {
   const keysA = Object.keys(a);
   if (keysA.length !== Object.keys(b).length) return false;
   for (const k of keysA) {

@@ -167,12 +167,12 @@ describe('ErrorBoundary — Go Home link', () => {
 });
 
 describe('ErrorBoundary — Console error logging', () => {
-  let consoleErrorSpy: ReturnType<typeof vi.fn>;
   const originalConsoleError = console.error;
+  let consoleErrorSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     consoleErrorSpy = vi.fn();
-    console.error = consoleErrorSpy;
+    console.error = consoleErrorSpy as typeof console.error;
   });
 
   afterEach(() => {
