@@ -151,23 +151,26 @@ export const handler = async (event) => {
     }
 
     // 5. Extract decisions from pulse check
+    // Decisions are keyed by revisionId (themeId on the frontend).
+    // proposedRevisions contains the feedback points with revisionId, proposal, rationale, etc.
     const decisionsMap = pulseCheck.decisions?.M ?? {}
-    const feedbackPoints = pulseCheck.feedbackPoints?.L ?? []
+    const proposedRevisions = pulseCheck.proposedRevisions?.L ?? []
 
-    const acceptedOrRevised = feedbackPoints
-      .filter(fp => {
-        const fpId = fp.M?.feedbackPointId?.S
-        const decision = fpId ? decisionsMap[fpId]?.M : null
-        return decision && (decision.action?.S === 'accept' || decision.action?.S === 'revise')
+    const acceptedOrRevised = proposedRevisions
+      .filter(pr => {
+        const revisionId = pr.M?.revisionId?.S
+        const decision = revisionId ? decisionsMap[revisionId]?.M : null
+        return decision && (decision.action?.S === 'Accept' || decision.action?.S === 'Revise')
       })
-      .map(fp => {
-        const fpId = fp.M?.feedbackPointId?.S
-        const decision = decisionsMap[fpId]?.M
+      .map(pr => {
+        const revisionId = pr.M?.revisionId?.S
+        const decision = decisionsMap[revisionId]?.M
         return {
-          feedbackPointId: fpId,
-          text: fp.M?.text?.S ?? '',
-          section: fp.M?.section?.S ?? '',
-          action: decision?.action?.S ?? 'accept',
+          revisionId,
+          proposal: pr.M?.proposal?.S ?? '',
+          rationale: pr.M?.rationale?.S ?? '',
+          revisionType: pr.M?.revisionType?.S ?? '',
+          action: decision?.action?.S ?? 'Accept',
           tenantNote: decision?.tenantNote?.S ?? '',
         }
       })
@@ -180,7 +183,8 @@ export const handler = async (event) => {
     // 6. Build Bedrock prompt
     const decisionsText = acceptedOrRevised.map((d, i) => {
       const noteText = d.tenantNote ? `\n   Tenant note: "${d.tenantNote}"` : ''
-      return `${i + 1}. [${d.action.toUpperCase()}] ${d.text}${noteText}`
+      const typeText = d.revisionType ? ` (${d.revisionType})` : ''
+      return `${i + 1}. [${d.action.toUpperCase()}]${typeText} ${d.proposal}${noteText}`
     }).join('\n')
 
     const prompt = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
