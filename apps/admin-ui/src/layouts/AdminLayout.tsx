@@ -276,7 +276,7 @@ export default function AdminLayout() {
                 overflowY: 'auto',
                 maxHeight: 'calc(100vh - var(--topbar-height) - var(--space-4))',
                 WebkitOverflowScrolling: 'touch',
-                zIndex: 200,
+                zIndex: 250,
               }}
             >
               {NAV_LINKS.map(({ to, label }) => {
