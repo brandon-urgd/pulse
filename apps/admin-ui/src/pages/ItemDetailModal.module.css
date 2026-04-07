@@ -503,7 +503,9 @@
 .modalFormPane {
   flex: 0 0 680px;
   max-width: 680px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Single-pane form wrapper — fills remaining height, allows body to scroll */
