@@ -22,7 +22,7 @@ export default function TermsGate({ isUpdated, onAccept, isAccepting }: TermsGat
   const headingId = useId();
   const { theme } = useTheme();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.png' : 'logo-light.png'}`;
   const t = labels.termsGate;
 
   return (

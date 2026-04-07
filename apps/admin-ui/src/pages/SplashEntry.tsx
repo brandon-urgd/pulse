@@ -20,7 +20,7 @@ export default function SplashEntry() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.png' : 'logo-light.png'}`;
   const navigate = useNavigate();
   const location = useLocation();
   const registeredSuccessfully = (location.state as { registered?: boolean } | null)?.registered === true;

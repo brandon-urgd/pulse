@@ -50,7 +50,7 @@ export default function ForgotPassword() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const logoUrl = `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
+  const logoUrl = `${window.location.origin}/${isDark ? 'logo.png' : 'logo-light.png'}`;
 
   const [step, setStep] = useState<Step>('email');
   const [animating, setAnimating] = useState(false);

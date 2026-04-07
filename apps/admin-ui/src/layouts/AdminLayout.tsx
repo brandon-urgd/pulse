@@ -16,7 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 function getLogoUrl(isDark: boolean) {
-  return `${window.location.origin}/${isDark ? 'logo.svg' : 'logo-light.svg'}`;
+  return `${window.location.origin}/${isDark ? 'logo.png' : 'logo-light.png'}`;
 }
 
 const NAV_LINKS = [

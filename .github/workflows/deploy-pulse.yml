@@ -590,16 +590,17 @@ jobs:
             --region ${{ env.AWS_REGION }}
 
           # Upload logo and favicon separately (not part of Vite build)
-          if [ -f assets/logo.svg ]; then
-            aws s3 cp assets/logo.svg \
-              "s3://${CF_FrontendBucketName}/logo.svg" \
+          if [ -f assets/logo.png ]; then
+            aws s3 cp assets/logo.png \
+              "s3://${CF_FrontendBucketName}/logo.png" \
+              --content-type "image/png" \
               --cache-control "public, max-age=31536000, immutable" \
               --region ${{ env.AWS_REGION }}
           fi
-          if [ -f assets/logo-light.svg ]; then
-            aws s3 cp assets/logo-light.svg \
-              "s3://${CF_FrontendBucketName}/logo-light.svg" \
-              --content-type "image/svg+xml" \
+          if [ -f assets/logo-light.png ]; then
+            aws s3 cp assets/logo-light.png \
+              "s3://${CF_FrontendBucketName}/logo-light.png" \
+              --content-type "image/png" \
               --cache-control "public, max-age=31536000, immutable" \
               --region ${{ env.AWS_REGION }}
           fi
