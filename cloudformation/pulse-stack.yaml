@@ -7264,7 +7264,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+                Resource:
+                  - !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+                  - !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/extracted.md'
               - Effect: Allow
                 Action:
                   - dynamodb:Query

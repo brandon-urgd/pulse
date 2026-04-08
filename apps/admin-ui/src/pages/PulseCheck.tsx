@@ -266,6 +266,7 @@ export default function PulseCheck() {
   const queryClient = useQueryClient();
 
   const [decisions, setDecisions] = useState<Record<string, FeedbackAction>>({});
+  const [tenantNotes, setTenantNotes] = useState<Record<string, string>>({});
   const savedDecisionsRef = useRef<Record<string, FeedbackAction>>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
@@ -336,13 +337,18 @@ export default function PulseCheck() {
   useEffect(() => {
     if (pc?.decisions) {
       const synced: Record<string, FeedbackAction> = {};
+      const syncedNotes: Record<string, string> = {};
       for (const [revisionId, d] of Object.entries(pc.decisions)) {
         const action = d.action.toLowerCase();
         // map legacy 'override'/'revise' to current action names
         const mapped = action === 'override' ? 'dismiss' : action === 'revise' ? 'adjust' : action;
         synced[revisionId] = mapped as FeedbackAction;
+        if (d.tenantNote) {
+          syncedNotes[revisionId] = d.tenantNote;
+        }
       }
       setDecisions(synced);
+      setTenantNotes(syncedNotes);
       savedDecisionsRef.current = synced;
     }
   }, [pc]);
@@ -418,7 +424,11 @@ export default function PulseCheck() {
     const payload: Record<string, { action: string; tenantNote?: string }> = {};
     for (const [themeId, action] of Object.entries(decisions)) {
       if (action !== null) {
-        payload[themeId] = { action: actionToApi[action] ?? action.charAt(0).toUpperCase() + action.slice(1) };
+        const entry: { action: string; tenantNote?: string } = { action: actionToApi[action] ?? action.charAt(0).toUpperCase() + action.slice(1) };
+        if (action === 'adjust' && tenantNotes[themeId]?.length) {
+          entry.tenantNote = tenantNotes[themeId];
+        }
+        payload[themeId] = entry;
       }
     }
     try {
@@ -447,6 +457,11 @@ export default function PulseCheck() {
       for (const r of revisions) next[r.revisionId] = 'accept';
       return next;
     });
+    setTenantNotes(prev => {
+      const next = { ...prev };
+      for (const r of revisions) delete next[r.revisionId];
+      return next;
+    });
   }
 
   function handleBatchDismiss(revisionType: string) {
@@ -455,6 +470,11 @@ export default function PulseCheck() {
     setDecisions(prev => {
       const next = { ...prev };
       for (const r of revisions) next[r.revisionId] = 'dismiss';
+      return next;
+    });
+    setTenantNotes(prev => {
+      const next = { ...prev };
+      for (const r of revisions) delete next[r.revisionId];
       return next;
     });
   }
@@ -717,8 +737,15 @@ export default function PulseCheck() {
                                   <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
                                   <FeedbackActionPills
                                     value={decided}
-                                    onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                                    onChange={(action) => {
+                                      setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }));
+                                      if (action !== 'adjust') {
+                                        setTenantNotes((prev) => { const next = { ...prev }; delete next[revision.revisionId]; return next; });
+                                      }
+                                    }}
                                     ariaLabel={`Decision for: ${revision.proposal}`}
+                                    noteValue={tenantNotes[revision.revisionId] ?? ''}
+                                    onNoteChange={(note) => setTenantNotes((prev) => ({ ...prev, [revision.revisionId]: note }))}
                                   />
                                 </div>
                               </div>
@@ -934,8 +961,15 @@ export default function PulseCheck() {
                                 <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
                                 <FeedbackActionPills
                                   value={decided}
-                                  onChange={(action) => setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }))}
+                                  onChange={(action) => {
+                                    setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }));
+                                    if (action !== 'adjust') {
+                                      setTenantNotes((prev) => { const next = { ...prev }; delete next[revision.revisionId]; return next; });
+                                    }
+                                  }}
                                   ariaLabel={`Decision for: ${revision.proposal}`}
+                                  noteValue={tenantNotes[revision.revisionId] ?? ''}
+                                  onNoteChange={(note) => setTenantNotes((prev) => ({ ...prev, [revision.revisionId]: note }))}
                                 />
                               </div>
                             </div>

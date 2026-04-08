@@ -70,3 +70,47 @@
 .dismiss.active::before {
   content: '✕ ';
 }
+
+/* Tenant note textarea for Adjust action */
+.noteContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.noteTextarea {
+  width: 100%;
+  min-height: 4rem;
+  padding: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  transition: border-color 0.1s;
+}
+
+.noteTextarea::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.noteTextarea:focus {
+  outline: none;
+  border-color: var(--color-interactive);
+  box-shadow: 0 0 0 1px var(--color-interactive);
+}
+
+.noteTextarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.charCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: right;
+}
