@@ -946,3 +946,10 @@
     animation: none;
   }
 }
+
+.charCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: right;
+  margin-top: var(--space-1);
+}

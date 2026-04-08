@@ -1030,6 +1030,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
                         disabled={isLocked}
                         placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
                       />
+                      <span className={styles.charCount}>{description.length}/2,000</span>
                       <AssessmentHelper
                         itemId={savedItemId.current ?? itemId ?? null}
                         itemType={itemData?.itemType ?? 'document'}

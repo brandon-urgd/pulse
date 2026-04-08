@@ -619,6 +619,7 @@ export default function ItemDetail() {
             disabled={isLocked}
             placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
           />
+          <span className={styles.charCount}>{description.length}/2,000</span>
         </div>
 
         {/* Close date */}
