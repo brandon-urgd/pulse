@@ -703,7 +703,7 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/smoke.sh
-          ./scripts/smoke.sh "$CF_ApiBaseUrl"
+          ./scripts/smoke.sh "$CF_ApiBaseUrl" "$ENVIRONMENT"
 
       - name: Cleanup old artifacts (environment-aware)
         env:

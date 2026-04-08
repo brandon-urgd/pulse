@@ -2,9 +2,10 @@
 set -euo pipefail
 
 # Smoke tests for pulse
-# Usage: ./scripts/smoke.sh <API_BASE_URL>
+# Usage: ./scripts/smoke.sh <API_BASE_URL> [ENVIRONMENT]
 
 BASE_URL="$1"
+ENVIRONMENT="${2:-}"
 fail=0
 warnings=0
 
@@ -117,6 +118,25 @@ check        "S6 GET /api/manage/items/{id}/revisions reachable"          "$BASE
 # S4 billing gate: Stripe webhook (no auth — returns 400 without valid signature) and checkout (auth-gated — 401)
 check_post "S4-billing POST /api/webhooks/stripe reachable"    "$BASE_URL/api/webhooks/stripe"    "400" "{}"
 check_post "S4-billing POST /api/manage/checkout reachable"    "$BASE_URL/api/manage/checkout"    "401" "{}"
+
+# Lambda existence checks (requires ENVIRONMENT to be passed)
+if [ -n "$ENVIRONMENT" ]; then
+  echo ""
+  echo "── Lambda function existence checks ──"
+  REGION="${AWS_REGION:-us-west-2}"
+  LAMBDA_FUNCTIONS=(
+    "urgd-pulse-processRevision-${ENVIRONMENT}"
+  )
+  for fn in "${LAMBDA_FUNCTIONS[@]}"; do
+    echo "Testing Lambda $fn..."
+    if retry_check "Lambda $fn" "aws lambda get-function --function-name '$fn' --region '$REGION'"; then
+      echo "✅ Lambda $fn exists"
+    else
+      echo "❌ Lambda $fn NOT FOUND"
+      fail=1
+    fi
+  done
+fi
 
 # Summary
 echo ""

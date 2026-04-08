@@ -11,8 +11,10 @@ import styles from './ItemRevision.module.css';
 interface Revision {
   revisionId: string;
   revisionNumber: number;
-  generatedAt: string;
+  createdAt: string;
+  completedAt?: string;
   status: 'generating' | 'complete' | 'failed';
+  decisionsApplied?: number;
   documentUrl?: string;
   originalUrl?: string;
 }
@@ -117,6 +119,7 @@ export default function ItemRevision() {
   const [showHistory, setShowHistory] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failureCountRef = useRef(0);
 
   const { data: itemResp } = useAuthedQuery<ItemResponse>(
     ['item', itemId],
@@ -161,17 +164,28 @@ export default function ItemRevision() {
 
   function startPolling() {
     if (pollingRef.current) clearInterval(pollingRef.current);
+    failureCountRef.current = 0;
     pollingRef.current = setInterval(async () => {
-      const result = await refetch();
-      const latest = result.data?.data?.revisions?.[0];
-      if (latest?.status === 'complete') {
-        stopPolling();
-        setGenerating(false);
-        setSelectedRevisionId(latest.revisionId);
-      } else if (latest?.status === 'failed') {
-        stopPolling();
-        setGenerating(false);
-        setGenerateError(labels.revision.generateError);
+      try {
+        const result = await refetch();
+        failureCountRef.current = 0; // reset on success
+        const latest = result.data?.data?.revisions?.[0];
+        if (latest?.status === 'complete') {
+          stopPolling();
+          setGenerating(false);
+          setSelectedRevisionId(latest.revisionId);
+        } else if (latest?.status === 'failed') {
+          stopPolling();
+          setGenerating(false);
+          setGenerateError(labels.revision.generateError);
+        }
+      } catch {
+        failureCountRef.current += 1;
+        if (failureCountRef.current >= 10) {
+          stopPolling();
+          setGenerating(false);
+          setGenerateError(labels.revision.generateError);
+        }
       }
     }, 3000);
   }
@@ -348,7 +362,7 @@ export default function ItemRevision() {
                 {labels.revision.revisionPaneLabel.replace('{number}', String(r.revisionNumber))}
               </span>
               <span className={styles.historyDate}>
-                {new Date(r.generatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                {new Date(r.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
               </span>
               <button
                 type="button"

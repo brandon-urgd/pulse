@@ -276,6 +276,11 @@ Parameters:
     Default: lambda-packages/urgd-pulse-getRevisions/latest.zip
     Description: S3 key for urgd-pulse-getRevisions Lambda ZIP
 
+  ProcessRevisionCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-processRevision/latest.zip
+    Description: S3 key for urgd-pulse-processRevision Lambda ZIP
+
   SendPulseCheckReadyCodeKey:
     Type: String
     Default: lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
@@ -477,6 +482,7 @@ Mappings:
       # Spec 2 — S1 fixes
       GenerateRevision: 3
       GetRevisions: 3
+      ProcessRevision: 3
       SendPulseCheckReady: 3
       PreviewSession: 3
       CreateSelfSession: 3
@@ -547,6 +553,7 @@ Mappings:
       # Spec 2 — S1 fixes
       GenerateRevision: 5
       GetRevisions: 5
+      ProcessRevision: 5
       SendPulseCheckReady: 5
       PreviewSession: 5
       CreateSelfSession: 5
@@ -617,6 +624,7 @@ Mappings:
       # Spec 2 — S1 fixes
       GenerateRevision: 25
       GetRevisions: 10
+      ProcessRevision: 25
       SendPulseCheckReady: 5
       PreviewSession: 10
       CreateSelfSession: 10
@@ -868,6 +876,52 @@ Resources:
           KeyType: HASH
         - AttributeName: itemId
           KeyType: RANGE
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseRevisionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
+    Properties:
+      TableName: !Sub 'urgd-pulse-revisions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: tenantId
+          AttributeType: S
+        - AttributeName: revisionId
+          AttributeType: S
+        - AttributeName: itemId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenantId
+          KeyType: HASH
+        - AttributeName: revisionId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: itemId-index
+          KeySchema:
+            - AttributeName: itemId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       Tags:
         - Key: project
           Value: pulse
@@ -7110,6 +7164,12 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseProcessRevisionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-processRevision-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+
   PulseSendPulseCheckReadyLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -7159,35 +7219,13 @@ Resources:
                   - !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                Resource: !GetAtt PulseItemsTable.Arn
+                Resource: !GetAtt PulseRevisionsTable.Arn
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
-              - Effect: Allow
-                Action:
-                  - bedrock:InvokeModel
-                Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
-              - Effect: Allow
-                Action:
-                  - bedrock:InvokeModel
-                Resource:
-                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
-                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
-                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
-                Condition:
-                  StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                Resource: '*'
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-processRevision-${Environment}'
 
   PulseGetRevisionsFunctionRole:
     Type: AWS::IAM::Role
@@ -7227,6 +7265,79 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseRevisionsTable.Arn
+                  - !Sub '${PulseRevisionsTable.Arn}/index/*'
+
+  PulseProcessRevisionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-processRevision-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ProcessRevisionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulsePulseChecksTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt PulseRevisionsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*/revisions/*'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
 
   PulseSendPulseCheckReadyFunctionRole:
     # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
@@ -7381,8 +7492,8 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref GenerateRevisionCodeKey
-      Timeout: 120
-      MemorySize: 1024
+      Timeout: 10
+      MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateRevision]
       TracingConfig:
         Mode: Active
@@ -7392,7 +7503,8 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          REVISIONS_TABLE: !Ref PulseRevisionsTable
+          PROCESS_FUNCTION_NAME: !Sub 'urgd-pulse-processRevision-${Environment}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -7435,6 +7547,7 @@ Resources:
       Environment:
         Variables:
           DATA_BUCKET: !Ref PulseDataBucket
+          REVISIONS_TABLE: !Ref PulseRevisionsTable
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
       Tags:
         - Key: project
@@ -7457,6 +7570,44 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PulseApiGateway}/*'
+
+  PulseProcessRevisionFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseProcessRevisionLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-processRevision-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 1024
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ProcessRevision]
+      Role: !GetAtt PulseProcessRevisionFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref ProcessRevisionCodeKey
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          REVISIONS_TABLE: !Ref PulseRevisionsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: urgd-studios
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
 
   PulseSendPulseCheckReadyFunction:
     Type: AWS::Lambda::Function

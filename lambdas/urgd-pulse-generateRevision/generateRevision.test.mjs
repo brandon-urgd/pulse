@@ -1,45 +1,31 @@
-// Unit tests for urgd-pulse-generateRevision
-// Requirements: 8.1, 8.2, 8.3, 8.13
+// Unit tests for urgd-pulse-generateRevision (async kick-off pattern)
+// Requirements: 1.1, 1.2, 1.3, 1.4, 1.6
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('PULSE_CHECKS_TABLE', 'urgd-pulse-pulsechecks-dev')
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
 vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
-vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
-vi.stubEnv('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
+vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
+vi.stubEnv('PROCESS_FUNCTION_NAME', 'urgd-pulse-processRevision-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
-const sendSpy = vi.fn()
-const s3SendSpy = vi.fn()
-const bedrockSendSpy = vi.fn()
-const cwSendSpy = vi.fn()
+const dynamoSendSpy = vi.fn()
+const lambdaSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
-  class DynamoDBClient { send(...args) { return sendSpy(...args) } }
-  class GetItemCommand { constructor(input) { this.input = input } }
-  class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, GetItemCommand, UpdateItemCommand }
+  class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
+  class GetItemCommand { constructor(input) { this.input = input; this.name = 'GetItemCommand' } }
+  class PutItemCommand { constructor(input) { this.input = input; this.name = 'PutItemCommand' } }
+  class UpdateItemCommand { constructor(input) { this.input = input; this.name = 'UpdateItemCommand' } }
+  return { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand }
 })
 
-vi.mock('@aws-sdk/client-s3', () => {
-  class S3Client { send(...args) { return s3SendSpy(...args) } }
-  class GetObjectCommand { constructor(input) { this.input = input } }
-  class PutObjectCommand { constructor(input) { this.input = input } }
-  return { S3Client, GetObjectCommand, PutObjectCommand }
-})
-
-vi.mock('@aws-sdk/client-bedrock-runtime', () => {
-  class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
-})
-
-vi.mock('@aws-sdk/client-cloudwatch', () => {
-  class CloudWatchClient { send(...args) { return cwSendSpy(...args) } }
-  class PutMetricDataCommand { constructor(input) { this.input = input } }
-  return { CloudWatchClient, PutMetricDataCommand }
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send(...args) { return lambdaSendSpy(...args) } }
+  class InvokeCommand { constructor(input) { this.input = input; this.name = 'InvokeCommand' } }
+  return { LambdaClient, InvokeCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -56,13 +42,17 @@ function makeEvent(overrides = {}) {
   }
 }
 
-function makeTenantWithFlag(flagValue) {
-  return {
+/** Sets up dynamo mocks for tenant + SYSTEM feature flag lookup */
+function mockFeatureFlag(flagValue) {
+  // First call: tenant record
+  dynamoSendSpy.mockResolvedValueOnce({
     Item: {
       tenantId: { S: 'tenant-123' },
       features: { M: { itemRevisionLoop: { BOOL: flagValue } } },
     },
-  }
+  })
+  // Second call: SYSTEM record (no maintenance flags)
+  dynamoSendSpy.mockResolvedValueOnce({})
 }
 
 function makePulseCheck(status = 'complete') {
@@ -71,66 +61,37 @@ function makePulseCheck(status = 'complete') {
       tenantId: { S: 'tenant-123' },
       itemId: { S: 'item-456' },
       status: { S: status },
-      feedbackPoints: {
-        L: [
-          {
-            M: {
-              feedbackPointId: { S: 'fp-1' },
-              text: { S: 'The introduction is too long' },
-              section: { S: 'Introduction' },
-            },
-          },
-        ],
-      },
       decisions: {
         M: {
-          'fp-1': {
-            M: {
-              action: { S: 'accept' },
-              tenantNote: { S: '' },
-              decidedAt: { S: '2024-01-01T00:00:00.000Z' },
-            },
-          },
+          'rev-1': { M: { action: { S: 'Accept' }, tenantNote: { S: '' } } },
         },
+      },
+      proposedRevisions: {
+        L: [{
+          M: {
+            revisionId: { S: 'rev-1' },
+            proposal: { S: 'Improve clarity' },
+            rationale: { S: 'Reviewers found it unclear' },
+            revisionType: { S: 'line-edit' },
+          },
+        }],
       },
     },
   }
 }
 
-function makeItem() {
-  return {
-    Item: {
-      tenantId: { S: 'tenant-123' },
-      itemId: { S: 'item-456' },
-      itemName: { S: 'My Test Document' },
-    },
-  }
+/** Sets up all mocks for a successful happy path through validation + PutItem + Lambda invoke */
+function mockHappyPath() {
+  mockFeatureFlag(true)
+  dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('complete')) // pulse check
+  dynamoSendSpy.mockResolvedValueOnce({}) // PutItem revision record
 }
 
-function makeS3TextBody(text) {
-  return {
-    Body: (async function* () {
-      yield Buffer.from(text)
-    })(),
-  }
-}
-
-function makeBedrockResponse(text) {
-  return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text }],
-      usage: { input_tokens: 100, output_tokens: 50 },
-    })),
-  }
-}
-
-describe('generateRevision handler', () => {
+describe('generateRevision handler (async kick-off)', () => {
   beforeEach(() => {
-    sendSpy.mockReset()
-    s3SendSpy.mockReset()
-    bedrockSendSpy.mockReset()
-    cwSendSpy.mockReset()
-    cwSendSpy.mockResolvedValue({})
+    dynamoSendSpy.mockReset()
+    lambdaSendSpy.mockReset()
+    lambdaSendSpy.mockResolvedValue({})
   })
 
   it('returns 401 when tenantId is missing', async () => {
@@ -146,188 +107,110 @@ describe('generateRevision handler', () => {
   })
 
   it('returns 403 when itemRevisionLoop flag is false', async () => {
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(false))
+    mockFeatureFlag(false)
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(403)
-    const body = JSON.parse(result.body)
-    expect(body.message).toMatch(/not enabled/i)
   })
 
   it('returns 409 when no completed pulse check exists', async () => {
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce({ Item: null }) // no pulse check
-    const result = await handler(makeEvent())
-    expect(result.statusCode).toBe(409)
-    const body = JSON.parse(result.body)
-    expect(body.message).toMatch(/pulse check must be completed/i)
-  })
-
-  it('returns 409 when pulse check exists but is not complete', async () => {
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('generating'))
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: null })
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(409)
   })
 
-  it('returns 404 when no document found in S3', async () => {
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('complete'))
-    sendSpy.mockResolvedValueOnce(makeItem())
-    // Both S3 GetObject calls fail
-    s3SendSpy.mockRejectedValue(new Error('NoSuchKey'))
+  it('returns 409 when pulse check is not complete', async () => {
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('generating'))
     const result = await handler(makeEvent())
-    expect(result.statusCode).toBe(404)
+    expect(result.statusCode).toBe(409)
   })
 
-  it('generates revision and stores at unique path, original document unchanged', async () => {
-    const originalContent = '# Original Document\n\nThis is the original content.'
-    const revisedContent = '# Revised Document\n\nThis is the revised content.'
-
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('complete'))
-    sendSpy.mockResolvedValueOnce(makeItem())
-    // S3 GetObject for extracted.md (not found), then document.md (found)
-    s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
-    s3SendSpy.mockResolvedValueOnce(makeS3TextBody(originalContent))
-    // Bedrock response
-    bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse(revisedContent))
-    // S3 PutObject for revision
-    s3SendSpy.mockResolvedValueOnce({})
-    // DynamoDB UpdateItem for item status
-    sendSpy.mockResolvedValueOnce({})
-
-    const result = await handler(makeEvent())
-    expect(result.statusCode).toBe(200)
-
-    const body = JSON.parse(result.body)
-    expect(body.data.revisionId).toBeTruthy()
-    expect(body.data.itemId).toBe('item-456')
-    expect(body.data.decisionsApplied).toBe(1)
-
-    // Verify revision stored at unique path (not the original path)
-    const putCall = s3SendSpy.mock.calls.find(call =>
-      call[0].input?.Key?.includes('/revisions/')
-    )
-    expect(putCall).toBeTruthy()
-    const revisionKey = putCall[0].input.Key
-    expect(revisionKey).toMatch(/pulse\/tenant-123\/items\/item-456\/revisions\/.+\/document\.md/)
-
-    // Verify original document path was NOT written to
-    const putCalls = s3SendSpy.mock.calls.filter(call => call[0].constructor?.name === 'PutObjectCommand')
-    for (const call of putCalls) {
-      expect(call[0].input.Key).not.toBe('pulse/tenant-123/items/item-456/document.md')
-      expect(call[0].input.Key).not.toBe('pulse/tenant-123/items/item-456/extracted.md')
-    }
-  })
-
-  it('uses extracted.md when it exists', async () => {
-    const extractedContent = '# Extracted Content'
-    const revisedContent = '# Revised'
-
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('complete'))
-    sendSpy.mockResolvedValueOnce(makeItem())
-    // extracted.md found
-    s3SendSpy.mockResolvedValueOnce(makeS3TextBody(extractedContent))
-    bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse(revisedContent))
-    s3SendSpy.mockResolvedValueOnce({})
-    sendSpy.mockResolvedValueOnce({})
-
-    const result = await handler(makeEvent())
-    expect(result.statusCode).toBe(200)
-
-    // Verify Bedrock was called with extracted content
-    const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-    const payload = JSON.parse(bedrockCall.input.body)
-    expect(payload.messages[0].content).toContain(extractedContent)
-  })
-
-  it('updates item status to "revised" after successful revision', async () => {
-    const originalContent = '# Original'
-    const revisedContent = '# Revised'
-
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('complete'))
-    sendSpy.mockResolvedValueOnce(makeItem())
-    s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
-    s3SendSpy.mockResolvedValueOnce(makeS3TextBody(originalContent))
-    bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse(revisedContent))
-    s3SendSpy.mockResolvedValueOnce({})
-    sendSpy.mockResolvedValueOnce({})
-
-    await handler(makeEvent())
-
-    // Find the UpdateItem call
-    const updateCall = sendSpy.mock.calls.find(call =>
-      call[0].input?.UpdateExpression?.includes('revised')
-    )
-    expect(updateCall).toBeTruthy()
-    expect(updateCall[0].input.ExpressionAttributeValues[':revised'].S).toBe('revised')
-  })
-
-  it('returns 503 on Bedrock unavailability', async () => {
-    const originalContent = '# Original'
-
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(makePulseCheck('complete'))
-    sendSpy.mockResolvedValueOnce(makeItem())
-    s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
-    s3SendSpy.mockResolvedValueOnce(makeS3TextBody(originalContent))
-    const err = new Error('Bedrock unavailable')
-    err.name = 'AccessDeniedException'
-    bedrockSendSpy.mockRejectedValueOnce(err)
-
-    const result = await handler(makeEvent())
-    expect(result.statusCode).toBe(503)
-  })
-
-  it('returns 409 when all decisions are dismissed (no accepted/revised)', async () => {
-    const pulseCheckWithDismissed = {
+  it('returns 409 when no accepted/revised decisions', async () => {
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({
       Item: {
         tenantId: { S: 'tenant-123' },
         itemId: { S: 'item-456' },
         status: { S: 'complete' },
-        feedbackPoints: {
-          L: [
-            {
-              M: {
-                feedbackPointId: { S: 'fp-1' },
-                text: { S: 'Some feedback' },
-                section: { S: 'Introduction' },
-              },
-            },
-          ],
-        },
-        decisions: {
-          M: {
-            'fp-1': {
-              M: {
-                action: { S: 'dismiss' },
-                tenantNote: { S: '' },
-                decidedAt: { S: '2024-01-01T00:00:00.000Z' },
-              },
-            },
-          },
-        },
+        decisions: { M: { 'rev-1': { M: { action: { S: 'Dismiss' } } } } },
+        proposedRevisions: { L: [{ M: { revisionId: { S: 'rev-1' }, proposal: { S: 'x' } } }] },
       },
-    }
-
-    sendSpy.mockResolvedValueOnce(makeTenantWithFlag(true))
-    sendSpy.mockResolvedValueOnce(pulseCheckWithDismissed)
-    sendSpy.mockResolvedValueOnce(makeItem())
-    s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
-    s3SendSpy.mockResolvedValueOnce(makeS3TextBody('# Original'))
-
+    })
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(409)
     const body = JSON.parse(result.body)
     expect(body.message).toMatch(/no accepted or revised decisions/i)
   })
 
-  it('returns 500 on unexpected error', async () => {
-    sendSpy.mockRejectedValueOnce(new Error('Unexpected DynamoDB error'))
+  it('returns 202 with revisionId and status on happy path', async () => {
+    mockHappyPath()
+
+    const result = await handler(makeEvent())
+    expect(result.statusCode).toBe(202)
+
+    const body = JSON.parse(result.body)
+    expect(body.data.revisionId).toBeTruthy()
+    expect(body.data.status).toBe('generating')
+  })
+
+  it('writes revision record to DynamoDB on happy path', async () => {
+    mockHappyPath()
+
+    await handler(makeEvent())
+
+    // Find the PutItem call — it's the 4th dynamo call (tenant, system, pulseCheck, PutItem)
+    const putCall = dynamoSendSpy.mock.calls.find(
+      call => call[0].name === 'PutItemCommand' && call[0].input.TableName === 'urgd-pulse-revisions-dev'
+    )
+    expect(putCall).toBeTruthy()
+    expect(putCall[0].input.Item.status.S).toBe('generating')
+    expect(putCall[0].input.Item.tenantId.S).toBe('tenant-123')
+    expect(putCall[0].input.Item.itemId.S).toBe('item-456')
+    expect(putCall[0].input.Item.decisionsApplied.N).toBe('1')
+  })
+
+  it('invokes processRevision Lambda asynchronously on happy path', async () => {
+    mockHappyPath()
+
+    await handler(makeEvent())
+
+    expect(lambdaSendSpy).toHaveBeenCalledOnce()
+    const invokeCall = lambdaSendSpy.mock.calls[0][0]
+    expect(invokeCall.input.FunctionName).toBe('urgd-pulse-processRevision-dev')
+    expect(invokeCall.input.InvocationType).toBe('Event')
+    const payload = JSON.parse(invokeCall.input.Payload)
+    expect(payload.tenantId).toBe('tenant-123')
+    expect(payload.itemId).toBe('item-456')
+    expect(payload.revisionId).toBeTruthy()
+    expect(payload.startedAt).toBeTruthy()
+  })
+
+  it('returns 500 and marks revision failed when Lambda invocation fails', async () => {
+    mockHappyPath()
+    dynamoSendSpy.mockResolvedValueOnce({}) // UpdateItem to mark failed
+    lambdaSendSpy.mockRejectedValueOnce(new Error('Lambda invocation failed'))
 
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(500)
+
+    // Verify UpdateItem was called to mark revision as failed
+    const updateCall = dynamoSendSpy.mock.calls.find(
+      call => call[0].name === 'UpdateItemCommand' && call[0].input.TableName === 'urgd-pulse-revisions-dev'
+    )
+    expect(updateCall).toBeTruthy()
+    expect(updateCall[0].input.ExpressionAttributeValues[':failed'].S).toBe('failed')
+  })
+
+  it('returns 500 when DynamoDB PutItem fails without invoking worker', async () => {
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('complete')) // pulse check
+    dynamoSendSpy.mockRejectedValueOnce(new Error('DynamoDB PutItem failed')) // PutItem fails
+
+    const result = await handler(makeEvent())
+    expect(result.statusCode).toBe(500)
+
+    // Worker should NOT have been invoked
+    expect(lambdaSendSpy).not.toHaveBeenCalled()
   })
 })

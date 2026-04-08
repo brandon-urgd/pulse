@@ -1,19 +1,32 @@
-// Unit tests for urgd-pulse-getRevisions
-// Requirements: 8.4
+// Unit tests for urgd-pulse-getRevisions (DynamoDB-backed)
+// Requirements: 3.3, 3.4, 3.5
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
 vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
+const dynamoSendSpy = vi.fn()
 const s3SendSpy = vi.fn()
+const getSignedUrlSpy = vi.fn()
+
+vi.mock('@aws-sdk/client-dynamodb', () => {
+  class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
+  class QueryCommand { constructor(input) { this.input = input; this.name = 'QueryCommand' } }
+  return { DynamoDBClient, QueryCommand }
+})
 
 vi.mock('@aws-sdk/client-s3', () => {
   class S3Client { send(...args) { return s3SendSpy(...args) } }
-  class ListObjectsV2Command { constructor(input) { this.input = input } }
-  return { S3Client, ListObjectsV2Command }
+  class GetObjectCommand { constructor(input) { this.input = input } }
+  return { S3Client, GetObjectCommand }
 })
+
+vi.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: (...args) => getSignedUrlSpy(...args),
+}))
 
 const { handler } = await import('./index.mjs')
 
@@ -29,17 +42,25 @@ function makeEvent(overrides = {}) {
   }
 }
 
-function makeS3Object(revisionId, lastModified) {
-  return {
-    Key: `pulse/tenant-123/items/item-456/revisions/${revisionId}/document.md`,
-    LastModified: new Date(lastModified),
-    Size: 1024,
+function makeDynamoRevision(revisionId, status, createdAt, extra = {}) {
+  const item = {
+    tenantId: { S: 'tenant-123' },
+    revisionId: { S: revisionId },
+    itemId: { S: 'item-456' },
+    status: { S: status },
+    createdAt: { S: createdAt },
   }
+  if (extra.completedAt) item.completedAt = { S: extra.completedAt }
+  if (extra.decisionsApplied !== undefined) item.decisionsApplied = { N: String(extra.decisionsApplied) }
+  return item
 }
 
-describe('getRevisions handler', () => {
+describe('getRevisions handler (DynamoDB-backed)', () => {
   beforeEach(() => {
+    dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
+    getSignedUrlSpy.mockReset()
+    getSignedUrlSpy.mockResolvedValue('https://presigned-url.example.com')
   })
 
   it('returns 401 when tenantId is missing', async () => {
@@ -55,103 +76,104 @@ describe('getRevisions handler', () => {
   })
 
   it('returns empty array when no revisions exist', async () => {
-    s3SendSpy.mockResolvedValueOnce({ Contents: [], IsTruncated: false })
+    dynamoSendSpy.mockResolvedValueOnce({ Items: [], LastEvaluatedKey: undefined })
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(200)
     const body = JSON.parse(result.body)
-    expect(body.data).toEqual([])
+    expect(body.data.revisions).toEqual([])
   })
 
-  it('returns revisions sorted by creation date descending', async () => {
-    const rev1 = 'rev-uuid-1'
-    const rev2 = 'rev-uuid-2'
-    const rev3 = 'rev-uuid-3'
-
-    s3SendSpy.mockResolvedValueOnce({
-      Contents: [
-        makeS3Object(rev1, '2024-01-01T10:00:00.000Z'),
-        makeS3Object(rev3, '2024-01-03T10:00:00.000Z'),
-        makeS3Object(rev2, '2024-01-02T10:00:00.000Z'),
+  it('returns revisions sorted newest first with correct revisionNumbers', async () => {
+    dynamoSendSpy.mockResolvedValueOnce({
+      Items: [
+        makeDynamoRevision('rev-1', 'complete', '2024-01-01T10:00:00.000Z', { completedAt: '2024-01-01T10:05:00.000Z', decisionsApplied: 3 }),
+        makeDynamoRevision('rev-2', 'complete', '2024-01-02T10:00:00.000Z', { completedAt: '2024-01-02T10:05:00.000Z', decisionsApplied: 5 }),
+        makeDynamoRevision('rev-3', 'generating', '2024-01-03T10:00:00.000Z'),
       ],
-      IsTruncated: false,
+      LastEvaluatedKey: undefined,
     })
 
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(200)
 
     const body = JSON.parse(result.body)
-    expect(body.data).toHaveLength(3)
-    // Sorted descending — newest first
-    expect(body.data[0].revisionId).toBe(rev3)
-    expect(body.data[1].revisionId).toBe(rev2)
-    expect(body.data[2].revisionId).toBe(rev1)
+    const revisions = body.data.revisions
+    expect(revisions).toHaveLength(3)
+
+    // Newest first in response
+    expect(revisions[0].revisionId).toBe('rev-3')
+    expect(revisions[0].revisionNumber).toBe(3)
+    expect(revisions[1].revisionId).toBe('rev-2')
+    expect(revisions[1].revisionNumber).toBe(2)
+    expect(revisions[2].revisionId).toBe('rev-1')
+    expect(revisions[2].revisionNumber).toBe(1)
   })
 
-  it('assigns revision numbers with newest = highest number', async () => {
-    const rev1 = 'rev-uuid-1'
-    const rev2 = 'rev-uuid-2'
-
-    s3SendSpy.mockResolvedValueOnce({
-      Contents: [
-        makeS3Object(rev1, '2024-01-01T10:00:00.000Z'),
-        makeS3Object(rev2, '2024-01-02T10:00:00.000Z'),
+  it('includes pre-signed URLs only for complete revisions', async () => {
+    dynamoSendSpy.mockResolvedValueOnce({
+      Items: [
+        makeDynamoRevision('rev-1', 'complete', '2024-01-01T10:00:00.000Z', { completedAt: '2024-01-01T10:05:00.000Z' }),
+        makeDynamoRevision('rev-2', 'generating', '2024-01-02T10:00:00.000Z'),
+        makeDynamoRevision('rev-3', 'failed', '2024-01-03T10:00:00.000Z'),
       ],
-      IsTruncated: false,
+      LastEvaluatedKey: undefined,
     })
 
     const result = await handler(makeEvent())
     const body = JSON.parse(result.body)
+    const revisions = body.data.revisions
 
-    // Sorted descending: rev2 first (newer), rev1 second (older)
-    expect(body.data[0].revisionId).toBe(rev2)
-    expect(body.data[0].revisionNumber).toBe(2)
-    expect(body.data[1].revisionId).toBe(rev1)
-    expect(body.data[1].revisionNumber).toBe(1)
+    // rev-3 (failed) — no URLs
+    expect(revisions[0].documentUrl).toBeUndefined()
+    expect(revisions[0].originalUrl).toBeUndefined()
+
+    // rev-2 (generating) — no URLs
+    expect(revisions[1].documentUrl).toBeUndefined()
+    expect(revisions[1].originalUrl).toBeUndefined()
+
+    // rev-1 (complete) — has URLs
+    expect(revisions[2].documentUrl).toBeDefined()
+    expect(revisions[2].originalUrl).toBeDefined()
   })
 
-  it('paginates through multiple S3 pages', async () => {
-    const rev1 = 'rev-uuid-1'
-    const rev2 = 'rev-uuid-2'
+  it('includes completedAt and decisionsApplied when present', async () => {
+    dynamoSendSpy.mockResolvedValueOnce({
+      Items: [
+        makeDynamoRevision('rev-1', 'complete', '2024-01-01T10:00:00.000Z', {
+          completedAt: '2024-01-01T10:05:00.000Z',
+          decisionsApplied: 7,
+        }),
+      ],
+      LastEvaluatedKey: undefined,
+    })
 
-    s3SendSpy
+    const result = await handler(makeEvent())
+    const body = JSON.parse(result.body)
+    const rev = body.data.revisions[0]
+
+    expect(rev.completedAt).toBe('2024-01-01T10:05:00.000Z')
+    expect(rev.decisionsApplied).toBe(7)
+  })
+
+  it('paginates through multiple DynamoDB pages', async () => {
+    dynamoSendSpy
       .mockResolvedValueOnce({
-        Contents: [makeS3Object(rev1, '2024-01-01T10:00:00.000Z')],
-        IsTruncated: true,
-        NextContinuationToken: 'token-1',
+        Items: [makeDynamoRevision('rev-1', 'generating', '2024-01-01T10:00:00.000Z')],
+        LastEvaluatedKey: { tenantId: { S: 'tenant-123' }, revisionId: { S: 'rev-1' } },
       })
       .mockResolvedValueOnce({
-        Contents: [makeS3Object(rev2, '2024-01-02T10:00:00.000Z')],
-        IsTruncated: false,
+        Items: [makeDynamoRevision('rev-2', 'generating', '2024-01-02T10:00:00.000Z')],
+        LastEvaluatedKey: undefined,
       })
 
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(200)
     const body = JSON.parse(result.body)
-    expect(body.data).toHaveLength(2)
+    expect(body.data.revisions).toHaveLength(2)
   })
 
-  it('ignores S3 objects that are not document.md files', async () => {
-    s3SendSpy.mockResolvedValueOnce({
-      Contents: [
-        makeS3Object('rev-uuid-1', '2024-01-01T10:00:00.000Z'),
-        {
-          Key: 'pulse/tenant-123/items/item-456/revisions/rev-uuid-2/metadata.json',
-          LastModified: new Date('2024-01-02T10:00:00.000Z'),
-          Size: 100,
-        },
-      ],
-      IsTruncated: false,
-    })
-
-    const result = await handler(makeEvent())
-    const body = JSON.parse(result.body)
-    // Only the document.md file should be included
-    expect(body.data).toHaveLength(1)
-    expect(body.data[0].revisionId).toBe('rev-uuid-1')
-  })
-
-  it('returns 500 on unexpected S3 error', async () => {
-    s3SendSpy.mockRejectedValueOnce(new Error('S3 error'))
+  it('returns 500 on unexpected DynamoDB error', async () => {
+    dynamoSendSpy.mockRejectedValueOnce(new Error('DynamoDB error'))
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(500)
   })
