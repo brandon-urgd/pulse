@@ -652,6 +652,12 @@ jobs:
           python3 scripts/register-with-shield.py
           echo "✅ Shield registration complete"
 
+      - name: Run smoke tests
+        run: |
+          set -euo pipefail
+          chmod +x scripts/smoke.sh
+          ./scripts/smoke.sh "$CF_ApiBaseUrl" "$ENVIRONMENT"
+
       - name: Configure AWS credentials (us-east-1 for WAF + CloudFront)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -698,12 +704,6 @@ jobs:
             --paths "/*" \
             --region us-east-1 >/dev/null
           echo "✅ CloudFront cache invalidated"
-
-      - name: Run smoke tests
-        run: |
-          set -euo pipefail
-          chmod +x scripts/smoke.sh
-          ./scripts/smoke.sh "$CF_ApiBaseUrl" "$ENVIRONMENT"
 
       - name: Cleanup old artifacts (environment-aware)
         env:
