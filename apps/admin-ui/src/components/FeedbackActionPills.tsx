@@ -65,12 +65,15 @@ export default function FeedbackActionPills({
       </div>
       {showTextarea && (
         <div className={styles.noteContainer}>
+          <p className={styles.noteHelper}>
+            Tell Pulse how to handle this feedback. For example: &ldquo;tone it down&rdquo; or &ldquo;only apply to the intro.&rdquo;
+          </p>
           <textarea
             className={styles.noteTextarea}
             value={noteValue ?? ''}
             onChange={(e) => onNoteChange(e.target.value)}
             maxLength={NOTE_MAX_LENGTH}
-            placeholder="How should this feedback be adjusted?"
+            placeholder="e.g. Keep the core point but soften the language"
             aria-label="Adjustment guidance"
             disabled={disabled}
           />

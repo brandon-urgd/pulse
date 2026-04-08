@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './PulseCheckOverlay.module.css';
 import { labels } from '../config/labels-registry';
 
-// Radar-themed phases that cycle during the wait
-const PHASES: { message: string; targetPct: number; durationMs: number }[] = [
+// Default radar-themed phases that cycle during the wait
+const DEFAULT_PHASES: { message: string; targetPct: number; durationMs: number }[] = [
   { message: labels.pulseCheck.overlayPhase1, targetPct: 18,  durationMs: 2000 },
   { message: labels.pulseCheck.overlayPhase2, targetPct: 35,  durationMs: 4000 },
   { message: labels.pulseCheck.overlayPhase3, targetPct: 52,  durationMs: 5000 },
@@ -19,6 +19,10 @@ interface PulseCheckOverlayProps {
   /** When set, shows error state instead */
   error?: string;
   onErrorDismiss: () => void;
+  /** Custom phase messages and timings (defaults to PulseCheck phases) */
+  phases?: { message: string; targetPct: number; durationMs: number }[];
+  /** Custom notice text below the progress bar */
+  notice?: string;
 }
 
 /**
@@ -31,7 +35,10 @@ export default function PulseCheckOverlay({
   done,
   error,
   onErrorDismiss,
+  phases,
+  notice,
 }: PulseCheckOverlayProps) {
+  const PHASES = phases ?? DEFAULT_PHASES;
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [pct, setPct] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -128,7 +135,7 @@ export default function PulseCheckOverlay({
             </div>
 
             <p className={styles.notice}>
-              {labels.pulseCheck.overlayNotice}
+              {notice ?? labels.pulseCheck.overlayNotice}
             </p>
           </>
         )}

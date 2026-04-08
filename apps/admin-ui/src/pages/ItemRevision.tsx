@@ -4,7 +4,19 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import { downloadRevisionPdf } from '../utils/downloadPdf';
+import PulseCheckOverlay from '../components/PulseCheckOverlay';
 import styles from './ItemRevision.module.css';
+
+// ─── Revision overlay phases ──────────────────────────────────────────────────
+
+const REVISION_PHASES = [
+  { message: labels.revision.overlayPhase1, targetPct: 15,  durationMs: 3000 },
+  { message: labels.revision.overlayPhase2, targetPct: 30,  durationMs: 5000 },
+  { message: labels.revision.overlayPhase3, targetPct: 55,  durationMs: 8000 },
+  { message: labels.revision.overlayPhase4, targetPct: 72,  durationMs: 8000 },
+  { message: labels.revision.overlayPhase5, targetPct: 85,  durationMs: 8000 },
+  { message: labels.revision.overlayPhase6, targetPct: 93,  durationMs: 99999 },
+];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,42 +37,6 @@ interface RevisionsResponse {
 
 interface ItemResponse {
   data: { itemId: string; itemName: string; status: string };
-}
-
-// ─── Generating overlay ───────────────────────────────────────────────────────
-
-const PHASES = [
-  labels.revision.generatingPhase1,
-  labels.revision.generatingPhase2,
-  labels.revision.generatingPhase3,
-  labels.revision.generatingPhase4,
-] as const;
-
-function GeneratingOverlay({ itemName }: { itemName: string }) {
-  const [phaseIndex, setPhaseIndex] = useState(0);
-  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  useEffect(() => {
-    if (prefersReduced) return;
-    const id = setInterval(() => setPhaseIndex(i => (i + 1) % PHASES.length), 4000);
-    return () => clearInterval(id);
-  }, [prefersReduced]);
-
-  return (
-    <div className={styles.generatingOverlay} role="status" aria-label={labels.revision.generatingCaption.replace('{itemName}', itemName)}>
-      <div className={styles.thinkingDots} aria-hidden="true">
-        <span className={styles.dot} />
-        <span className={styles.dot} />
-        <span className={styles.dot} />
-      </div>
-      <p className={styles.generatingPhase} aria-live="polite">
-        {prefersReduced ? `${labels.revision.generatingCaption.replace('{itemName}', itemName)}…` : PHASES[phaseIndex]}
-      </p>
-      <p className={styles.generatingCaption}>
-        {labels.revision.generatingCaption.replace('{itemName}', itemName)}
-      </p>
-    </div>
-  );
 }
 
 // ─── Revision pane content ────────────────────────────────────────────────────
@@ -111,6 +87,9 @@ export default function ItemRevision() {
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayDone, setOverlayDone] = useState(false);
+  const [overlayError, setOverlayError] = useState('');
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [originalContent, setOriginalContent] = useState<string | null>(null);
   const [revisionContent, setRevisionContent] = useState<string | null>(null);
@@ -147,6 +126,9 @@ export default function ItemRevision() {
       onSuccess: () => {
         setGenerating(true);
         setGenerateError('');
+        setOverlayVisible(true);
+        setOverlayDone(false);
+        setOverlayError('');
         startPolling();
       },
       onError: (err) => {
@@ -156,6 +138,7 @@ export default function ItemRevision() {
         } else if (status === 409) {
           setGenerateError(labels.revision.noPulseCheckError);
         } else {
+          setOverlayVisible(false);
           setGenerateError(labels.revision.generateError);
         }
       },
@@ -172,10 +155,12 @@ export default function ItemRevision() {
         const latest = result.data?.data?.revisions?.[0];
         if (latest?.status === 'complete') {
           stopPolling();
+          setOverlayDone(true);
           setGenerating(false);
           setSelectedRevisionId(latest.revisionId);
         } else if (latest?.status === 'failed') {
           stopPolling();
+          setOverlayVisible(false);
           setGenerating(false);
           setGenerateError(labels.revision.generateError);
         }
@@ -183,6 +168,7 @@ export default function ItemRevision() {
         failureCountRef.current += 1;
         if (failureCountRef.current >= 10) {
           stopPolling();
+          setOverlayVisible(false);
           setGenerating(false);
           setGenerateError(labels.revision.generateError);
         }
@@ -296,7 +282,16 @@ export default function ItemRevision() {
       </div>
 
       {/* Generating overlay */}
-      {generating && <GeneratingOverlay itemName={itemName} />}
+      {overlayVisible && (
+        <PulseCheckOverlay
+          itemName={itemName}
+          done={overlayDone}
+          error={overlayError}
+          onErrorDismiss={() => { setOverlayVisible(false); setOverlayError(''); }}
+          phases={REVISION_PHASES}
+          notice={labels.revision.overlayNotice}
+        />
+      )}
 
       {/* Error from generate */}
       {generateError && !generating && (
