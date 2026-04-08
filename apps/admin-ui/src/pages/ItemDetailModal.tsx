@@ -80,11 +80,22 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
 function todayIso(): string {
   // Returns current datetime in "YYYY-MM-DDTHH:MM" format for datetime-local inputs
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+}
+
+/**
+ * Converts a UTC ISO string to a local "YYYY-MM-DDTHH:MM" value
+ * suitable for <input type="datetime-local">.
+ */
+function utcToLocalDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 /**
@@ -221,7 +232,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
       if (isEditMode) {
         setItemName(itemData.itemName);
         setDescription(itemData.description);
-        setCloseDate(itemData.closeDate ? (itemData.closeDate.includes('T') ? itemData.closeDate.slice(0, 16) : `${itemData.closeDate}T00:00`) : '');
+        setCloseDate(itemData.closeDate ? utcToLocalDatetimeLocal(itemData.closeDate) : '');
         setContent(itemData.content ?? '');
       }
       setIsLocked(itemData.status !== 'draft');
