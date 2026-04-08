@@ -156,7 +156,7 @@ export default function ForgotPassword() {
         </div>
 
         {/* Animated card content */}
-        <div className={`pulse-card-inner ${animating ? 'entering' : 'entered'}`} role="main">
+        <div className={`pulse-card-inner ${animating ? 'entering' : 'entered'}`}>
 
           {/* STEP 1 — Email entry */}
           {step === 'email' && (

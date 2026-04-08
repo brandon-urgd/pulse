@@ -119,13 +119,13 @@ export default function EmailOptIn({ sessionId, sessionToken }: Props) {
       </div>
 
       {sendState === 'sent' && (
-        <p style={{ ...styles.status, color: 'var(--color-accent)' }}>
+        <p style={{ ...styles.status, color: 'var(--color-accent)' }} role="status" aria-live="polite">
           ✓ Summary sent — check your inbox.
         </p>
       )}
 
       {sendState === 'error' && (
-        <p style={{ ...styles.status, color: 'var(--color-error)' }}>
+        <p style={{ ...styles.status, color: 'var(--color-error)' }} role="alert" aria-live="assertive">
           Something went wrong.{' '}
           <button
             type="button"

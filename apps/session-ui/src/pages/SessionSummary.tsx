@@ -304,12 +304,14 @@ function SummaryFeedback({ sessionId, sessionToken, existingFeedback }: {
           disabled={submitted}
           onClick={handleUp}
           style={rating === 'up' ? feedbackStyles.selected : submitted ? feedbackStyles.buttonDisabled : feedbackStyles.button}
+          aria-label="Helpful"
         >👍</button>
         <button
           type="button"
           disabled={submitted}
           onClick={handleDown}
           style={rating === 'down' ? feedbackStyles.selected : submitted ? feedbackStyles.buttonDisabled : feedbackStyles.button}
+          aria-label="Not helpful"
         >👎</button>
       </div>
       {showReasons && !submitted && (
@@ -320,7 +322,7 @@ function SummaryFeedback({ sessionId, sessionToken, existingFeedback }: {
           ))}
         </div>
       )}
-      {submitted && <p style={feedbackStyles.thanks}>Thanks</p>}
+      {submitted && <p style={feedbackStyles.thanks} role="status" aria-live="polite">Thanks</p>}
     </div>
   )
 }
@@ -388,6 +390,7 @@ export default function SessionSummary() {
 
   return (
     <div className="page-scrollable" style={styles.page}>
+      <a href="#main-content" className="skip-nav">Skip to main content</a>
       {!prefersReducedMotion && (
         <div style={{
           position: 'absolute',
@@ -412,18 +415,18 @@ export default function SessionSummary() {
         </div>
       </div>
 
-      <div style={styles.content}>
+      <main id="main-content" style={styles.content}>
         {/* Progress line — fully filled */}
         <div style={styles.pulseLineWrapper}>
           <PulseLine current={totalSections} total={totalSections} />
         </div>
 
         {loadState === 'loading' || loadState === 'not-ready' ? (
-          <div style={styles.loadingState}>
+          <div style={styles.loadingState} role="status" aria-busy="true">
             <ScanLineLoader text={loadState === 'not-ready' ? 'Preparing your summary…' : 'Loading…'} />
           </div>
         ) : loadState === 'error' ? (
-          <div style={styles.errorState}>
+          <div style={styles.errorState} role="alert">
             <span>Your summary is taking longer than expected. Try refreshing in a moment.</span>
           </div>
         ) : summary ? (
@@ -437,7 +440,7 @@ export default function SessionSummary() {
                 <ul style={styles.sectionList}>
                   {summary.sections.map((section, i) => (
                     <li key={i} style={styles.sectionItem}>
-                      <span style={styles.checkmark}>✓</span>
+                      <span style={styles.checkmark} aria-hidden="true">✓</span>
                       <span>{section}</span>
                     </li>
                   ))}
@@ -451,7 +454,7 @@ export default function SessionSummary() {
                 <ul style={styles.themeList}>
                   {summary.themes.map((theme, i) => (
                     <li key={i} style={styles.themeItem}>
-                      <span style={styles.themeDot} />
+                      <span style={styles.themeDot} aria-hidden="true" />
                       <span>{theme}</span>
                     </li>
                   ))}
@@ -489,7 +492,7 @@ export default function SessionSummary() {
           )}
         </>
         ) : null}
-      </div>
+      </main>
       <SessionFooter sessionId={sessionId} sessionToken={sessionToken ?? undefined} />
     </div>
   )

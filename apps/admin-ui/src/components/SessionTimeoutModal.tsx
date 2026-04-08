@@ -3,6 +3,7 @@
 
 import { useId } from 'react';
 import { labels } from '../config/labels-registry';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './SessionTimeoutModal.module.css';
 
 export interface SessionTimeoutModalProps {
@@ -18,9 +19,11 @@ export default function SessionTimeoutModal({
 }: SessionTimeoutModalProps) {
   const headingId = useId();
   const t = labels.sessionTimeout;
+  const focusTrapRef = useFocusTrap();
 
   return (
     <div
+      ref={focusTrapRef}
       className={styles.overlay}
       aria-modal="true"
       role="dialog"

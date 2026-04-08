@@ -144,7 +144,6 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem 1rem',
     resize: 'none' as const,
     fontFamily: 'inherit',
-    outline: 'none',
     lineHeight: 1.5,
     boxSizing: 'border-box' as const,
   },
@@ -664,10 +663,11 @@ export default function Chat() {
   if (isDiscarded) {
     return (
       <div style={styles.page}>
+        <a href="#main-content" className="skip-nav">Skip to main content</a>
         <div style={styles.topBar}>
           <span style={styles.wordmark}>pulse</span>
         </div>
-        <div style={styles.discardedPage}>
+        <main id="main-content" style={styles.discardedPage}>
           <div style={styles.discardedWordmark}>pulse</div>
           <h1 style={styles.discardedHeading}>Your session was discarded.</h1>
           <p style={styles.discardedBody}>
@@ -693,7 +693,7 @@ export default function Chat() {
           >
             Start over
           </button>
-        </div>
+        </main>
       </div>
     )
   }
@@ -701,6 +701,7 @@ export default function Chat() {
   // ── Main render ─────────────────────────────────────────────────────────────
   return (
     <div style={styles.page}>
+      <a href="#main-content" className="skip-nav">Skip to main content</a>
       {/* Hide desktop image panel on mobile */}
       <style>{`
         @media (max-width: 768px) {
@@ -823,7 +824,7 @@ export default function Chat() {
         )}
 
         {/* Chat column */}
-        <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0%', overflow: 'hidden', minWidth: 0, maxWidth: '100%', contain: 'inline-size' as const }}>
+        <main id="main-content" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0%', overflow: 'hidden', minWidth: 0, maxWidth: '100%', contain: 'inline-size' as const }}>
           {/* Chat area */}
           <div
             ref={chatAreaRef}
@@ -969,7 +970,7 @@ export default function Chat() {
           </button>
         </div>
       )}
-        </div>{/* end chat column */}
+        </main>{/* end chat column */}
       </div>{/* end split-pane wrapper */}
 
       {/* Exit sheet */}

@@ -18,7 +18,7 @@
   /* Text */
   --color-text-primary: #212529;
   --color-text-secondary: #6c757d;
-  --color-text-muted: #adb5bd;
+  --color-text-muted: #6c757d;
   --color-text-inverse: #ffffff;
 
   /* Interactive — neutral (never use pulse accent for buttons/links) */
@@ -48,9 +48,9 @@
   --color-status-expired-text: #991b1b;
 
   /* Semantic */
-  --color-error: #fa5252;
+  --color-error: #e03131;
   --color-error-bg: #fff1f1;
-  --color-success: #51cf66;
+  --color-success: #2b8a3e;
   --color-success-bg: rgba(74, 124, 89, 0.1);
   --color-warning: #fcc419;
   --color-warning-bg: rgba(251, 191, 36, 0.07);
@@ -111,7 +111,7 @@
 
   --color-text-primary: #f8f9fa;
   --color-text-secondary: #adb5bd;
-  --color-text-muted: #6c757d;
+  --color-text-muted: #9ca3ab;
   --color-text-inverse: #212529;
 
   --color-interactive: #f1f3f5;

@@ -35,7 +35,7 @@ export function ScanLineLoader({
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', gap: 16,
     }}>
-      <svg width={width} height={h} viewBox={`0 0 ${width} ${h}`} fill="none">
+      <svg width={width} height={h} viewBox={`0 0 ${width} ${h}`} fill="none" aria-hidden="true">
         {/* Baseline */}
         <line x1={0} y1={cy} x2={width} y2={cy} stroke={borderColor} strokeWidth={0.5} />
         {/* Animated trace */}

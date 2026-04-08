@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './PulseCheckOverlay.module.css';
 import { labels } from '../config/labels-registry';
 
@@ -42,6 +43,7 @@ export default function PulseCheckOverlay({
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [pct, setPct] = useState(0);
   const [visible, setVisible] = useState(true);
+  const focusTrapRef = useFocusTrap(visible);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
   const phaseStartPct = useRef(0);
@@ -98,6 +100,7 @@ export default function PulseCheckOverlay({
 
   return (
     <div
+      ref={focusTrapRef}
       className={`${styles.backdrop} ${done ? styles.fadeOut : ''}`}
       role="dialog"
       aria-modal="true"

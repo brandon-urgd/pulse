@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './InviteModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ function sessionStatusLabel(status: SessionStatus): string {
 export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSelfReview }: Props) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const focusTrapRef = useFocusTrap();
 
   // ── Reviewer invite state ──
   const [inviteEmails, setInviteEmails] = useState('');
@@ -306,6 +308,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
 
   return (
     <div
+      ref={focusTrapRef}
       className={styles.overlay}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"

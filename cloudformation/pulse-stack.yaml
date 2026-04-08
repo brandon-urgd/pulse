@@ -673,7 +673,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -706,7 +706,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -772,7 +772,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -805,7 +805,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -849,7 +849,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -882,7 +882,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -928,7 +928,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -972,7 +972,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1000,7 +1000,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1152,7 +1152,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1540,7 +1540,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1567,7 +1567,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1589,7 +1589,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1857,7 +1857,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1901,7 +1901,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1943,7 +1943,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -1984,7 +1984,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2432,7 +2432,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2483,7 +2483,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2529,7 +2529,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2573,7 +2573,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2624,7 +2624,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -2669,7 +2669,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3269,7 +3269,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3311,7 +3311,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3357,7 +3357,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3404,7 +3404,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3448,7 +3448,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3491,7 +3491,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -3530,7 +3530,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4273,7 +4273,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4316,7 +4316,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4362,7 +4362,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4405,7 +4405,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4450,7 +4450,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4493,7 +4493,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4535,7 +4535,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4581,7 +4581,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4625,7 +4625,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4667,7 +4667,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -4710,7 +4710,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5147,7 +5147,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5188,7 +5188,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5680,7 +5680,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5720,7 +5720,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5804,7 +5804,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5846,7 +5846,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5889,7 +5889,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5933,7 +5933,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -5976,7 +5976,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -6003,7 +6003,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -6075,7 +6075,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7428,7 +7428,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7473,7 +7473,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7514,7 +7514,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7557,7 +7557,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7603,7 +7603,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7638,7 +7638,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7785,7 +7785,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -7917,7 +7917,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8024,7 +8024,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8127,7 +8127,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8220,7 +8220,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8324,7 +8324,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8388,7 +8388,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8455,7 +8455,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8493,7 +8493,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8658,7 +8658,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8772,7 +8772,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -8880,7 +8880,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -9029,7 +9029,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -9069,7 +9069,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -9139,7 +9139,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name
@@ -9181,7 +9181,7 @@ Resources:
         - Key: brand
           Value: urgd
         - Key: studio
-          Value: urgd-studios
+          Value: orbit
         - Key: environment
           Value: !Ref Environment
         - Key: cfn-stack-name

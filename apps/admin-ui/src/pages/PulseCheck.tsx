@@ -146,7 +146,10 @@ function InlineQuotePreview({ quote }: { quote: string }) {
     <span
       className={styles.quotePreview}
       onClick={() => needsTruncation && setExpanded(!expanded)}
+      onKeyDown={needsTruncation ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } } : undefined}
       role={needsTruncation ? 'button' : undefined}
+      tabIndex={needsTruncation ? 0 : undefined}
+      aria-expanded={needsTruncation ? expanded : undefined}
     >
       {expanded ? quote : preview}
     </span>
@@ -242,8 +245,8 @@ function PulseCheckFeedback({ itemId, existingFeedback }: { itemId: string; exis
     <div className={styles.feedbackPrompt}>
       <p>{labels.feedback.pulseCheckPrompt}</p>
       <div className={styles.feedbackButtons}>
-        <button type="button" disabled={submitted} onClick={handleUp} className={rating === 'up' ? styles.selected : ''}>👍</button>
-        <button type="button" disabled={submitted} onClick={handleDown} className={rating === 'down' ? styles.selected : ''}>👎</button>
+        <button type="button" disabled={submitted} onClick={handleUp} className={rating === 'up' ? styles.selected : ''} aria-label="Helpful">👍</button>
+        <button type="button" disabled={submitted} onClick={handleDown} className={rating === 'down' ? styles.selected : ''} aria-label="Not helpful">👎</button>
       </div>
       {showReasons && !submitted && (
         <div className={styles.reasonPills}>

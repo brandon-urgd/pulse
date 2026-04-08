@@ -4,6 +4,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import SessionTimeoutModal from '../components/SessionTimeoutModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { labels } from '../config/labels-registry';
@@ -38,6 +39,7 @@ export default function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuFocusTrapRef = useFocusTrap(menuOpen);
 
   // ── Session inactivity timer ──────────────────────────────────────────
   const { reset, remainingMs } = useInactivityTimer({
@@ -113,6 +115,41 @@ export default function AdminLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowX: 'hidden', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* Skip navigation link */}
+      <a
+        href="#main-content"
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          top: 'auto',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          zIndex: 1000,
+          padding: 'var(--space-2) var(--space-4)',
+          background: 'var(--color-surface)',
+          color: 'var(--color-text-primary)',
+          textDecoration: 'none',
+          fontSize: 'var(--font-size-sm)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)',
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.position = 'fixed';
+          e.currentTarget.style.left = 'var(--space-4)';
+          e.currentTarget.style.top = 'var(--space-2)';
+          e.currentTarget.style.width = 'auto';
+          e.currentTarget.style.height = 'auto';
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.position = 'absolute';
+          e.currentTarget.style.left = '-9999px';
+          e.currentTarget.style.width = '1px';
+          e.currentTarget.style.height = '1px';
+        }}
+      >
+        Skip to main content
+      </a>
       {/* Top bar */}
       <header
         style={{
@@ -262,6 +299,7 @@ export default function AdminLayout() {
           {/* Dropdown menu */}
           {menuOpen && (
             <div
+              ref={menuFocusTrapRef}
               role="menu"
               style={{
                 position: 'absolute',
@@ -331,7 +369,7 @@ export default function AdminLayout() {
       </header>
 
       {/* Page content */}
-      <main style={{ flex: 1, background: 'var(--color-bg)', minWidth: 0, overflowX: 'hidden' }}>
+      <main id="main-content" style={{ flex: 1, background: 'var(--color-bg)', minWidth: 0, overflowX: 'hidden' }}>
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>

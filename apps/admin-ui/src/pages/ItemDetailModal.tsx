@@ -5,6 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import { useCan } from '../hooks/useCan';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import SectionPanel, { type Section } from '../components/SectionPanel';
@@ -73,6 +74,8 @@ interface DocumentUrlResponse {
 interface Props {
   itemId?: string;       // undefined = create mode
   onClose: () => void;
+  /** Render as a full page instead of a modal overlay (used on mobile) */
+  variant?: 'modal' | 'page';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,8 +121,9 @@ function fileStatusLabel(status: FileUploadStatus): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ItemDetailModal({ itemId, onClose }: Props) {
+export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: Props) {
   const isEditMode = Boolean(itemId);
+  const isPageMode = variant === 'page';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -187,6 +191,9 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const [feedbackSections, setFeedbackSections] = useState<string[]>([]);
   const [sectionDepthPreferences, setSectionDepthPreferences] = useState<Record<string, 'deep' | 'explore' | 'skim'>>({});
   const sectionsInitialized = useRef(false); // Guard: don't overwrite user edits on refetch
+
+  // ── Focus trap for modal mode ───────────────────────────────────────────────
+  const focusTrapRef = useFocusTrap(!isPageMode && !showInviteModal);
 
   // ── Derived upload state ────────────────────────────────────────────────────
   // True while any file is still in-flight (uploading/scanning/extracting)
@@ -277,6 +284,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   // position:fixed (which shifts scroll position). Instead we lock both
   // overflow AND position, then restore the scroll position on cleanup.
   useEffect(() => {
+    if (isPageMode) return; // No scroll lock in page mode
     const scrollY = window.scrollY;
     const prevOverflow = document.body.style.overflow;
     const prevPosition = document.body.style.position;
@@ -301,6 +309,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
   const handleCancelRef = useRef(handleCancel);
   handleCancelRef.current = handleCancel;
   useEffect(() => {
+    if (isPageMode) return; // No Esc-to-close in page mode
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancelRef.current(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -738,13 +747,14 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
 
   return (
     <div
-      className={styles.overlay}
-      onClick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}
-      role="dialog"
-      aria-modal="true"
+      ref={isPageMode ? undefined : focusTrapRef}
+      className={isPageMode ? styles.pageWrapper : styles.overlay}
+      onClick={isPageMode ? undefined : (e) => { if (e.target === e.currentTarget) handleCancel(); }}
+      role={isPageMode ? undefined : 'dialog'}
+      aria-modal={isPageMode ? undefined : true}
       aria-labelledby="item-modal-title"
     >
-      <div className={`${styles.modal} ${(previewData || showSectionsPane) ? styles.modalExpanded : ''}`}>
+      <div className={`${isPageMode ? styles.pageCard : styles.modal} ${(previewData || showSectionsPane) ? styles.modalExpanded : ''}`}>
         {/* Header */}
         <div className={styles.modalHeader}>
           <h2 id="item-modal-title" className={styles.modalTitle}>
@@ -797,14 +807,25 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
               )}
             </>
           )}
-          <button
-            type="button"
-            className={styles.closeButton}
-            onClick={handleCancel}
-            aria-label="Close"
-          >
-            ×
-          </button>
+          {isPageMode ? (
+            <button
+              type="button"
+              className={styles.backButton}
+              onClick={handleCancel}
+              aria-label="Back to items"
+            >
+              ← Back
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={handleCancel}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          )}
         </div>
 
         {/* Session preview inline feedback */}
@@ -845,7 +866,7 @@ export default function ItemDetailModal({ itemId, onClose }: Props) {
             {/* Body */}
             <div className={styles.modalBody}>
               {isEditMode && itemLoading ? (
-                <div className={styles.loading} aria-busy="true" />
+                <div className={styles.loading} aria-busy="true"><span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>Loading item…</span></div>
               ) : (
                 <>
                   {isLocked && (

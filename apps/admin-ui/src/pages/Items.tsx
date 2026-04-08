@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { labels } from '../config/labels-registry';
 import ItemDetailModal from './ItemDetailModal';
 import InviteModal from './InviteModal';
@@ -237,6 +238,7 @@ export default function Items() {
     '/api/manage/items'
   );
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
@@ -261,7 +263,7 @@ export default function Items() {
   // Example item delete protection: allow deletion only when ≥1 real item exists
   const hasRealItems = rawItems.some((item) => !item.isExample);
 
-  if (isLoading) return <div className={styles.container} aria-busy="true" />;
+  if (isLoading) return <div className={styles.container} aria-busy="true"><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>Loading items…</span></div>;
 
   if (isError) {
     return (
@@ -296,7 +298,7 @@ export default function Items() {
             }
           </h1>
         </div>
-        <button type="button" className={styles.newItemButton} onClick={() => setModalTarget('new')}>
+        <button type="button" className={styles.newItemButton} onClick={() => isMobile ? navigate('/admin/items/new') : setModalTarget('new')}>
           {labels.items.newItemButton}
         </button>
       </div>
@@ -325,7 +327,7 @@ export default function Items() {
         <div className={styles.emptyState}>
           <p className={styles.emptyStateHeading}>{labels.items.emptyHeading}</p>
           <p className={styles.emptyStateBody}>{labels.items.emptyBody}</p>
-          <button type="button" className={styles.emptyStateCta} onClick={() => setModalTarget('new')}>
+          <button type="button" className={styles.emptyStateCta} onClick={() => isMobile ? navigate('/admin/items/new') : setModalTarget('new')}>
             {labels.items.emptyCta}
           </button>
         </div>
@@ -335,7 +337,7 @@ export default function Items() {
             <ItemCard
               key={item.itemId}
               item={item}
-              onOpen={() => setModalTarget(item.itemId)}
+              onOpen={() => isMobile ? navigate(`/admin/items/${item.itemId}/edit`) : setModalTarget(item.itemId)}
               onInvite={() => setInviteTarget(item)}
               onPulseCheck={() => navigate(`/admin/pulse-check/${item.itemId}`)}
               onDeleted={() => {}}

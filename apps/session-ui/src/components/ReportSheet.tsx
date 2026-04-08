@@ -4,6 +4,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 type ReportType = 'report-abuse' | 'bug-report'
@@ -160,6 +163,25 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
+  // Focus trap — cycle Tab within the dialog
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Auto-close after success
   useEffect(() => {
     if (!success) return
@@ -229,6 +251,7 @@ export default function ReportSheet({ type, sessionId, sessionToken, onClose }: 
       />
       {/* Sheet */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={TITLES[type]}

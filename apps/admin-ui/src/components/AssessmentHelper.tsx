@@ -140,7 +140,7 @@ export default function AssessmentHelper({
       </div>
 
       {noInputMessage && (
-        <p className={styles.inlineMessage}>{noInputMessage}</p>
+        <p className={styles.inlineMessage} role="alert" aria-live="polite">{noInputMessage}</p>
       )}
 
       {error && (

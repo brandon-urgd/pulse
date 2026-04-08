@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { useAuth } from '../hooks/useAuth';
 import { labels } from '../config/labels-registry';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './ReportModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
 
   const headingId = 'report-modal-heading';
   const firstFocusRef = useRef<HTMLSelectElement>(null);
+  const focusTrapRef = useFocusTrap();
 
   // Lock body scroll while modal is open
   useEffect(() => {
@@ -114,7 +116,7 @@ export default function ReportModal({ type: initialType, prefillName = '', prefi
       : styles.charCount;
 
   return (
-    <div className={styles.overlay} aria-modal="true" role="dialog" aria-labelledby={headingId}>
+    <div className={styles.overlay} aria-modal="true" role="dialog" aria-labelledby={headingId} ref={focusTrapRef}>
       <div className={styles.modal}>
         {/* Title row */}
         <div className={styles.titleRow}>

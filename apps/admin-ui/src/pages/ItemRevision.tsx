@@ -256,7 +256,7 @@ export default function ItemRevision() {
   const hasRevisions = revisions.length > 0;
 
   return (
-    <div className={styles.container} role="main" aria-label={`Revision for ${itemName}`}>
+    <div className={styles.container} aria-label={`Revision for ${itemName}`}>
       {/* Breadcrumb */}
       <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
         {labels.revision.backLink.replace('{itemName}', itemName || 'item')}
@@ -363,6 +363,7 @@ export default function ItemRevision() {
                 type="button"
                 className={styles.historyViewButton}
                 onClick={() => { setSelectedRevisionId(r.revisionId); setShowHistory(false); }}
+                aria-label={`View ${labels.revision.revisionPaneLabel.replace('{number}', String(r.revisionNumber))}`}
               >
                 View
               </button>

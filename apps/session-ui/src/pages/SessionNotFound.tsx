@@ -56,6 +56,8 @@ export default function SessionNotFound() {
         style={styles.link}
         onMouseEnter={e => ((e.target as HTMLAnchorElement).style.borderBottomColor = 'var(--color-accent)')}
         onMouseLeave={e => ((e.target as HTMLAnchorElement).style.borderBottomColor = 'transparent')}
+        onFocus={e => ((e.target as HTMLAnchorElement).style.borderBottomColor = 'var(--color-accent)')}
+        onBlur={e => ((e.target as HTMLAnchorElement).style.borderBottomColor = 'transparent')}
       >
         Back to Pulse
       </a>

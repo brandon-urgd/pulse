@@ -492,7 +492,7 @@ export default function ItemDetail() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   if (isEditMode && itemLoading) {
-    return <div className={styles.container} aria-busy="true" />;
+    return <div className={styles.container} aria-busy="true"><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>Loading item…</span></div>;
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending;

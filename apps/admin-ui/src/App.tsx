@@ -7,6 +7,8 @@ import SplashEntry from './pages/SplashEntry';
 import Welcome from './pages/Welcome';
 import Items from './pages/Items';
 import ItemDetail from './pages/ItemDetail';
+import ItemNewPage from './pages/ItemNewPage';
+import ItemEditPage from './pages/ItemEditPage';
 import ItemRevision from './pages/ItemRevision';
 import SessionReport from './pages/SessionReport';
 import PulseCheck from './pages/PulseCheck';
@@ -58,7 +60,8 @@ export default function App() {
           >
             <Route index element={<Navigate to="/admin/items" replace />} />
             <Route path="items" element={<Items />} />
-            <Route path="items/new" element={<ItemDetail />} />
+            <Route path="items/new" element={<ItemNewPage />} />
+            <Route path="items/:itemId/edit" element={<ItemEditPage />} />
             <Route path="items/:itemId" element={<ItemDetail />} />
             <Route path="items/:itemId/revisions" element={<ItemRevision />} />
             <Route path="items/:itemId/sessions/:sessionId/report" element={<SessionReport />} />

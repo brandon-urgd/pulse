@@ -41,7 +41,7 @@ export default function CoverageIndicator({ sections, coverageMap }: Props) {
         return (
           <div key={section.id} className={styles.row}>
             <span className={styles.sectionName}>{section.title}</span>
-            <div className={styles.bar}>
+            <div className={styles.bar} aria-hidden="true">
               <div
                 className={`${styles.barFill} ${
                   isCovered ? styles.barCovered : styles.barNotCovered

@@ -18,9 +18,7 @@ type EntryState = 'splash' | 'login' | 'register' | 'new-password' | 'registered
 
 export default function SplashEntry() {
   const { user, isLoading, signIn, confirmNewPassword } = useAuth();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const logoUrl = `${window.location.origin}/${isDark ? 'logo.png' : 'logo-light.png'}`;
+  useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const registeredSuccessfully = (location.state as { registered?: boolean } | null)?.registered === true;
@@ -235,24 +233,8 @@ export default function SplashEntry() {
   return (
     <div className="pulse-entry-bg" style={{ padding: '24px' }}>
     <div className="pulse-glass-card" style={{ width: '100%', maxWidth: 480, padding: '48px 32px', textAlign: 'center', overflow: 'hidden' }}>
-        {/* ── Logo + wordmark — always visible ── */}
+        {/* ── Wordmark + tagline + credit — always visible ── */}
         <div style={{ margin: '0 auto 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            role="img"
-            aria-label="ur/gd Studios logo"
-            style={{
-              height: 'clamp(15rem, 28.125vw, 22.5rem)',
-              width: 'clamp(15rem, 28.125vw, 22.5rem)',
-              backgroundImage: `url(${logoUrl})`,
-              backgroundSize: 'contain',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              // Margins scale with the logo so the gap to "pulse" stays proportional.
-              // At max size (22.5rem): -5rem ≈ 22%, -6rem ≈ 26.7% of logo height.
-              marginTop: 'clamp(-3.33rem, -6.25vw, -5rem)',
-              marginBottom: 'clamp(-4rem, -7.5vw, -6rem)',
-            }}
-          />
           <span
             style={{
               display: 'block',
@@ -263,6 +245,30 @@ export default function SplashEntry() {
             }}
           >
             pulse
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 400,
+              letterSpacing: '0.04em',
+              color: 'var(--color-text-secondary)',
+              marginTop: '8px',
+            }}
+          >
+            Quietly Powerful
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 'var(--font-size-xs)',
+              fontWeight: 400,
+              letterSpacing: '0.02em',
+              color: 'var(--color-text-muted)',
+              marginTop: '4px',
+            }}
+          >
+            by ur/gd Studios
           </span>
         </div>
 

@@ -7,6 +7,7 @@ import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { labels } from '../config/labels-registry';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import ReportModal, { type ReportType } from '../components/ReportModal';
 import styles from './Settings.module.css';
 
@@ -65,6 +66,7 @@ function DeleteModal({ email, onConfirm, onCancel, isDeleting, error }: DeleteMo
   const headingId = 'delete-modal-heading';
   const descId = 'delete-modal-desc';
   const firstFocusRef = useRef<HTMLInputElement>(null);
+  const focusTrapRef = useFocusTrap();
 
   useEffect(() => {
     firstFocusRef.current?.focus();
@@ -81,7 +83,7 @@ function DeleteModal({ email, onConfirm, onCancel, isDeleting, error }: DeleteMo
   const canDelete = typed === email;
 
   return (
-    <div className={styles.modalOverlay} aria-modal="true" role="dialog" aria-labelledby={headingId}>
+    <div className={styles.modalOverlay} aria-modal="true" role="dialog" aria-labelledby={headingId} ref={focusTrapRef}>
       <div className={styles.modalCard}>
         <h2 id={headingId} className={styles.modalHeading}>{labels.settings.deleteModalHeading}</h2>
         <p id={descId} className={styles.modalBody}>{labels.settings.deleteModalBody}</p>
