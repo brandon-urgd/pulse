@@ -1106,3 +1106,27 @@
   border: 1px solid var(--color-warning);
   white-space: nowrap;
 }
+
+/* ── Page mode on mobile — sections pane flows inline with form body ─────── */
+
+@media (max-width: 640px) {
+  .pageWrapper .modalInner {
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pageWrapper .modalFormPane {
+    flex: none;
+    max-width: 100%;
+    overflow: visible;
+  }
+  .pageWrapper .modalBody {
+    overflow: visible;
+  }
+  .pageWrapper .sectionsPane {
+    max-height: none;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    overflow: visible;
+  }
+}

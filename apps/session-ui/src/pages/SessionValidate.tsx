@@ -9,6 +9,7 @@ import { validateSession } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
 import { ScanLineTrace } from '../components/ScanLineTrace'
+import ScanScopeTransition from '../components/ScanScopeTransition'
 import WelcomeAnimation from '../components/WelcomeAnimation'
 
 const styles: Record<string, React.CSSProperties> = {
@@ -141,6 +142,8 @@ export default function SessionValidate() {
   const [loading, setLoading] = useState(false)
   const [animationDone, setAnimationDone] = useState(false)
   const [sessionCapReached, setSessionCapReached] = useState(false)
+  const [showTransition, setShowTransition] = useState(false)
+  const [previewSessionId, setPreviewSessionId] = useState<string | null>(null)
 
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -169,8 +172,13 @@ export default function SessionValidate() {
       .then((result) => {
         if (cancelled) return
         setSession(result.sessionToken, result.sessionId, result.item.itemName ?? '', true)
-        // Skip confidentiality in preview mode — go directly to chat
-        navigate(`/s/${result.sessionId}/chat`, { replace: true })
+        // Show "Welcome to Pulse" transition before navigating to chat
+        if (prefersReducedMotion) {
+          navigate(`/s/${result.sessionId}/chat`, { replace: true })
+        } else {
+          setPreviewSessionId(result.sessionId)
+          setShowTransition(true)
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -226,6 +234,16 @@ export default function SessionValidate() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Preview mode transition — show "Welcome to Pulse" animation then navigate to chat
+  if (showTransition && previewSessionId) {
+    return (
+      <ScanScopeTransition
+        playing={true}
+        onComplete={() => navigate(`/s/${previewSessionId}/chat`, { replace: true })}
+      />
+    )
   }
 
   return (
