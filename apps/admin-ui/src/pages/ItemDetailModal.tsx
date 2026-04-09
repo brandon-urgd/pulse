@@ -133,7 +133,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
   }, []);
 
   // ── Esc to close (stable ref avoids listener churn on every render) ────────
-  const handleCancelRef = useRef(form.handleCancel);
+  const handleCancelRef = useRef<() => void | Promise<void>>(form.handleCancel);
   handleCancelRef.current = isPageMode ? handlePageBack : form.handleCancel;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancelRef.current(); };
