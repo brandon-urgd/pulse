@@ -104,7 +104,7 @@ export const handler = async (event) => {
       // TaggingDirective: REPLACE drops the GuardDuty scan tags — they belong
       // on the quarantine object, not the clean copy in the data bucket.
       await s3.send(new CopyObjectCommand({
-        CopySource: `${process.env.QUARANTINE_BUCKET_NAME}/${objectKey}`,
+        CopySource: `${process.env.QUARANTINE_BUCKET_NAME}/${encodeURIComponent(objectKey).replace(/%2F/g, '/')}`,
         Bucket: process.env.DATA_BUCKET_NAME,
         Key: objectKey,
         TaggingDirective: 'REPLACE',
