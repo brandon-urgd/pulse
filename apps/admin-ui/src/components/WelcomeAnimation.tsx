@@ -2,7 +2,8 @@
  * WelcomeAnimation — branded "pulse" splash overlay
  *
  * Sequence: fade-in 800ms → hold 1500ms → fade-out 600ms → onComplete
- * Guards: sessionStorage key prevents replay within same session.
+ * Plays every time it's rendered — the parent (Welcome.tsx) controls
+ * visibility via onboardingComplete, so this only mounts for first-time users.
  * Accessibility: prefers-reduced-motion skips animation entirely.
  * Fallback: setTimeout(3000ms) fires onComplete if animationend never fires.
  *
@@ -15,7 +16,6 @@ interface WelcomeAnimationProps {
   onComplete: () => void;
 }
 
-const SESSION_KEY = 'pulse-welcome-shown';
 const FALLBACK_TIMEOUT = 3000;
 
 export default function WelcomeAnimation({ onComplete }: WelcomeAnimationProps) {
@@ -25,19 +25,10 @@ export default function WelcomeAnimation({ onComplete }: WelcomeAnimationProps) 
   const fireOnce = useCallback(() => {
     if (firedRef.current) return;
     firedRef.current = true;
-    try { sessionStorage.setItem(SESSION_KEY, '1'); } catch { /* private browsing */ }
     onComplete();
   }, [onComplete]);
 
   useEffect(() => {
-    // Guard: already shown this session
-    try {
-      if (sessionStorage.getItem(SESSION_KEY)) {
-        fireOnce();
-        return;
-      }
-    } catch { /* sessionStorage unavailable — play animation */ }
-
     // Reduced motion: skip immediately
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       fireOnce();
@@ -65,11 +56,6 @@ export default function WelcomeAnimation({ onComplete }: WelcomeAnimationProps) 
       clearTimeout(fallback);
     };
   }, [fireOnce]);
-
-  // If already shown or reduced motion, render nothing
-  try {
-    if (sessionStorage.getItem(SESSION_KEY)) return null;
-  } catch { /* proceed */ }
 
   if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     return null;

@@ -163,9 +163,9 @@ export default function Confidentiality() {
         return
       }
 
-      // Mount transition immediately — ScanScopeTransition handles the visual takeover
-      // with its own fade-in, so no need for a sequential card fade first
-      setTransitioning(true)
+      // Fade the agreement card out, then mount the transition animation
+      setFadeOut(true)
+      setTimeout(() => setTransitioning(true), 300)
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
       setLoading(false)
@@ -195,7 +195,7 @@ export default function Confidentiality() {
       style={{
         ...styles.page,
         opacity: fadeOut ? 0 : 1,
-        transition: 'opacity 0.3s ease',
+        transition: prefersReducedMotion ? 'none' : 'opacity 0.3s ease',
       }}
     >
       <div style={styles.card}>

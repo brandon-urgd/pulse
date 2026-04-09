@@ -10,7 +10,6 @@ import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
 import { ScanLineTrace } from '../components/ScanLineTrace'
 import ScanScopeTransition from '../components/ScanScopeTransition'
-import WelcomeAnimation from '../components/WelcomeAnimation'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -140,8 +139,8 @@ export default function SessionValidate() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [animationDone, setAnimationDone] = useState(false)
   const [sessionCapReached, setSessionCapReached] = useState(false)
+  const [fadeOut, setFadeOut] = useState(false)
   const [showTransition, setShowTransition] = useState(false)
   const [previewSessionId, setPreviewSessionId] = useState<string | null>(null)
 
@@ -177,7 +176,9 @@ export default function SessionValidate() {
           navigate(`/s/${result.sessionId}/chat`, { replace: true })
         } else {
           setPreviewSessionId(result.sessionId)
-          setShowTransition(true)
+          // Fade the page content out, then mount the transition animation
+          setFadeOut(true)
+          setTimeout(() => setShowTransition(true), 300)
         }
       })
       .catch((err: unknown) => {
@@ -247,10 +248,11 @@ export default function SessionValidate() {
   }
 
   return (
-    <main style={styles.page}>
-      {!animationDone && (
-        <WelcomeAnimation onComplete={() => setAnimationDone(true)} />
-      )}
+    <main style={{
+      ...styles.page,
+      opacity: fadeOut ? 0 : 1,
+      transition: prefersReducedMotion ? 'none' : 'opacity 0.3s ease',
+    }}>
       {sessionCapReached ? (
         <>
           <div style={styles.card}>
