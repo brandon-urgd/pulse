@@ -9,6 +9,7 @@ import { validateSession } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
 import { ScanLineTrace } from '../components/ScanLineTrace'
+import WelcomeAnimation from '../components/WelcomeAnimation'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -117,6 +118,13 @@ function getErrorMessage(status: number): string {
   return 'Something went wrong. Please try again.'
 }
 
+function getPublicErrorMessage(status: number): string {
+  if (status === 403) return 'This item has reached its feedback limit and is no longer accepting new sessions.'
+  if (status === 410) return 'This session has expired. Contact the person who shared this link for more information.'
+  if (status === 404) return "We couldn't find that session. Check the link you were given."
+  return 'Something went wrong. Please try again.'
+}
+
 export default function SessionValidate() {
   const { sessionId: pathSessionId } = useParams<{ sessionId: string }>()
   const [searchParams] = useSearchParams()
@@ -131,6 +139,8 @@ export default function SessionValidate() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [animationDone, setAnimationDone] = useState(false)
+  const [sessionCapReached, setSessionCapReached] = useState(false)
 
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -208,7 +218,11 @@ export default function SessionValidate() {
       navigate(`/s/${result.sessionId}/confidentiality`, { replace: true })
     } catch (err: unknown) {
       const status = (err as { status?: number }).status ?? 500
-      setError(getErrorMessage(status))
+      if (isPublic && status === 403) {
+        setSessionCapReached(true)
+      } else {
+        setError(isPublic ? getPublicErrorMessage(status) : getErrorMessage(status))
+      }
     } finally {
       setLoading(false)
     }
@@ -216,6 +230,22 @@ export default function SessionValidate() {
 
   return (
     <main style={styles.page}>
+      {!animationDone && (
+        <WelcomeAnimation onComplete={() => setAnimationDone(true)} />
+      )}
+      {sessionCapReached ? (
+        <>
+          <div style={styles.card}>
+            <span style={styles.wordmark} aria-label="Pulse">pulse</span>
+            <h1 style={styles.heading}>Feedback limit reached</h1>
+            <p style={styles.subheading}>
+              This item has reached its feedback limit and is no longer accepting new sessions.
+            </p>
+          </div>
+          <SessionFooter />
+        </>
+      ) : (
+      <>
       {!prefersReducedMotion && (
         <div style={{
           position: 'absolute',
@@ -309,6 +339,8 @@ export default function SessionValidate() {
         </form>
       </div>
       <SessionFooter />
+      </>
+      )}
     </main>
   )
 }

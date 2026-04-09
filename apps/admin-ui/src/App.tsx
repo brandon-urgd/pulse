@@ -61,6 +61,7 @@ export default function App() {
             <Route index element={<Navigate to="/admin/items" replace />} />
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemNewPage />} />
+            <Route path="items/new/edit" element={<ItemNewPage />} />
             <Route path="items/:itemId/edit" element={<ItemEditPage />} />
             <Route path="items/:itemId" element={<ItemDetail />} />
             <Route path="items/:itemId/revisions" element={<ItemRevision />} />

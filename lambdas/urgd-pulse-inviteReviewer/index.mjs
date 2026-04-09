@@ -173,12 +173,16 @@ export const handler = async (event) => {
       return errorResponse(409, 'Item is not accepting new invitations', {}, origin)
     }
 
-    // Get existing session count for this item
+    // Get existing session count for this item (excluding self-review sessions)
     const existingSessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :iid',
-      ExpressionAttributeValues: { ':iid': { S: itemId } },
+      FilterExpression: 'attribute_not_exists(sessionType) OR sessionType <> :selfType',
+      ExpressionAttributeValues: {
+        ':iid': { S: itemId },
+        ':selfType': { S: 'self' },
+      },
       Select: 'COUNT',
     }))
 
@@ -234,7 +238,7 @@ export const handler = async (event) => {
 
     if (existingCount + emails.length > maxSessions) {
       log('warn', 'InviteReviewer: session limit exceeded', { requestId, tenantId, itemId, existingCount, requested: emails.length, maxSessions })
-      return errorResponse(403, 'Session limit reached for this item.', {}, origin)
+      return errorResponse(403, 'This item has reached its feedback limit.', { error: 'session_limit_reached' }, origin)
     }
 
     // Monthly counter enforcement — monthlySessionsTotal (check once for the batch)

@@ -961,6 +961,8 @@
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  /* Page mode fills the layout area */
+  overflow: hidden;
 }
 
 .pageCard {
@@ -971,6 +973,31 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  overflow: hidden;
+}
+
+/* In page mode, header is sticky at top */
+.pageWrapper .modalHeader {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-surface);
+}
+
+/* In page mode, actions footer is sticky at bottom */
+.pageWrapper .actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--color-surface);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+}
+
+/* In page mode, body scrolls between sticky header and footer */
+.pageWrapper .modalBody {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .backButton {
@@ -991,4 +1018,91 @@
 .backButton:hover {
   color: var(--color-text-primary);
   border-color: var(--color-text-secondary);
+}
+
+.backButton:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}
+
+/* ── Unsaved changes confirmation dialog ─────────────────────────────────── */
+
+.discardOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s ease;
+}
+
+.discardModal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-7);
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-modal-confirm);
+}
+
+.discardTitle {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.discardMessage {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-6);
+  line-height: 1.6;
+}
+
+.discardActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* ── Focus indicators for page mode interactive elements ─────────────────── */
+
+.pageWrapper .saveButton:focus-visible,
+.pageWrapper .cancelButton:focus-visible,
+.pageWrapper .deleteButton:focus-visible,
+.pageWrapper .destructiveButton:focus-visible,
+.pageWrapper .headerActionSelfReview:focus-visible,
+.pageWrapper .headerActionPreview:focus-visible,
+.pageWrapper .uploadCtaPreview:focus-visible,
+.pageWrapper .fileLabel:focus-visible,
+.pageWrapper .selfReviewResetConfirm:focus-visible,
+.pageWrapper .selfReviewResetCancel:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}
+
+.pageWrapper .input:focus-visible,
+.pageWrapper .textarea:focus-visible,
+.pageWrapper .contentTextarea:focus-visible,
+.pageWrapper .timeLimitSelect:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 1px;
+}
+
+/* ── Session cap warning badge ───────────────────────────────────────────── */
+
+.sessionCapWarning {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-warning);
+  background: transparent;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-warning);
+  white-space: nowrap;
 }

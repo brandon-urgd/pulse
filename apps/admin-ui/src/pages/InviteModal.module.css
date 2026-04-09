@@ -229,6 +229,15 @@
   margin: 0;
 }
 
+/* ── Retention notice ─────────────────────────────────────────────────────── */
+
+.retentionNotice {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 0;
+  line-height: 1.5;
+}
+
 /* ── Divider / section heading ───────────────────────────────────────────── */
 
 .divider {
@@ -241,6 +250,12 @@
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-primary);
+  margin: 0 0 var(--space-3);
+}
+
+.publicSessionLimitHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
   margin: 0 0 var(--space-3);
 }
 

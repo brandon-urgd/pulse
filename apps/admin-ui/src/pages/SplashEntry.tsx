@@ -25,6 +25,7 @@ export default function SplashEntry() {
 
   const [state, setState] = useState<EntryState>('splash');
   const [animating, setAnimating] = useState(false);
+  const [crossfading, setCrossfading] = useState(false);
   const [termsIsUpdated, setTermsIsUpdated] = useState(false);
   const [termsAccepting, setTermsAccepting] = useState(false);
   const [signupAllowed, setSignupAllowed] = useState(true); // fail-open default
@@ -163,6 +164,18 @@ export default function SplashEntry() {
     }
   }
 
+  /** Navigate with a crossfade-out on the auth surface. */
+  function crossfadeNavigate(path: string) {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      navigate(path, { replace: true });
+      return;
+    }
+    setCrossfading(true);
+    // Allow the CSS transition (400ms) to run, then navigate
+    setTimeout(() => navigate(path, { replace: true }), 400);
+  }
+
   async function redirectAfterLogin() {
     try {
       const { fetchAuthSession } = await import('aws-amplify/auth');
@@ -181,13 +194,13 @@ export default function SplashEntry() {
             return;
           }
           if (data.data?.onboardingComplete === false) {
-            navigate('/admin/welcome', { replace: true });
+            crossfadeNavigate('/admin/welcome');
             return;
           }
         }
       }
     } catch { /* fall through */ }
-    navigate('/admin/items', { replace: true });
+    crossfadeNavigate('/admin/items');
   }
 
   async function handleTermsAccept() {
@@ -209,13 +222,13 @@ export default function SplashEntry() {
         if (res.ok) {
           const data = await res.json() as { data?: { onboardingComplete?: boolean } };
           if (data.data?.onboardingComplete === false) {
-            navigate('/admin/welcome', { replace: true });
+            crossfadeNavigate('/admin/welcome');
             return;
           }
         }
       }
     } catch { /* fall through */ }
-    navigate('/admin/items', { replace: true });
+    crossfadeNavigate('/admin/items');
   }
 
   if (isLoading) return null;
@@ -231,7 +244,7 @@ export default function SplashEntry() {
   }
 
   return (
-    <div className="pulse-entry-bg" style={{ padding: '24px' }}>
+    <div className={`pulse-entry-bg${crossfading ? ' pulse-entry-crossfade-out' : ''}`} style={{ padding: '24px' }}>
     <div className="pulse-glass-card" style={{ width: '100%', maxWidth: 480, padding: '48px 32px', textAlign: 'center', overflow: 'hidden' }}>
         {/* ── Wordmark + tagline + credit — always visible ── */}
         <div style={{ margin: '0 auto 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>

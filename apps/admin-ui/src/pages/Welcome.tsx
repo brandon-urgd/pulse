@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
+import WelcomeAnimation from '../components/WelcomeAnimation';
 import styles from './Welcome.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ interface ItemsResponse {
 export default function Welcome() {
   const navigate = useNavigate();
   const { mutate: updateSettings } = useAuthedMutation('/api/manage/settings', 'PUT');
+  const [animationDone, setAnimationDone] = useState(false);
 
   const { data: settingsResp, isLoading: settingsLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -75,6 +77,11 @@ export default function Welcome() {
   // Don't render while checking onboarding status
   if (settingsLoading) return null;
   if (settingsResp?.data?.onboardingComplete) return null;
+
+  // Show welcome animation before revealing page content
+  if (!animationDone) {
+    return <WelcomeAnimation onComplete={() => setAnimationDone(true)} />;
+  }
 
   return (
     <main className={styles.container}>

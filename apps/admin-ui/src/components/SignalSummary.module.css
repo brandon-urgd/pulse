@@ -1,0 +1,120 @@
+/* ── SignalSummary — Theme cards for 8+ sessions ───────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.themeCard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.themeCardHeader {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.themeName {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-1);
+}
+
+.themeCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+/* Sentiment distribution bar */
+.sentimentBar {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  width: 100%;
+}
+
+.barConviction {
+  background: var(--color-accent-pulse);
+}
+
+.barTension {
+  background: var(--color-warning);
+}
+
+.barUncertainty {
+  background: var(--color-border);
+}
+
+.sentimentLegend {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.legendDotConviction { background: var(--color-accent-pulse); }
+.legendDotTension { background: var(--color-warning); }
+.legendDotUncertainty { background: var(--color-border); }
+
+/* Quotes section */
+.themeCardBody {
+  padding: var(--space-3) var(--space-4);
+}
+
+.quotesHeading {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--space-2);
+}
+
+.quoteList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quoteItem {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  font-style: italic;
+  line-height: 1.5;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border-subtle);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

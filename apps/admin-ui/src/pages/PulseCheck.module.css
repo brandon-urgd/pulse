@@ -506,6 +506,14 @@
   margin-bottom: var(--space-6);
 }
 
+/* ── Retention notice ── */
+.retentionNotice {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-6) 0 0;
+  line-height: 1.5;
+}
+
 .meta {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
@@ -789,7 +797,9 @@
 
 @media (max-width: 639px) {
   .container {
-    padding: var(--space-4);
+    padding-top: var(--space-page-top);
+    padding-bottom: var(--space-page-bottom);
+    padding-inline: var(--space-page-inline);
   }
 
   .generatePrompt {

@@ -13,7 +13,7 @@ export default function ItemEditPage() {
   return (
     <ItemDetailModal
       itemId={itemId}
-      onClose={() => navigate('/admin/items')}
+      onClose={() => navigate('/admin/items', { state: { returnFocusId: itemId } })}
       variant="page"
     />
   );

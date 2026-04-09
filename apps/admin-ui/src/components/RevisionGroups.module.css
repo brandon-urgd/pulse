@@ -1,0 +1,127 @@
+/* ── RevisionGroups — Grouped revisions with collapse/expand ───────────────── */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.groupHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.groupHeader:hover {
+  background: var(--color-bg-hover);
+}
+
+.groupHeader:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.groupHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupCount {
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.toggleIcon {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  transition: transform 200ms ease;
+}
+
+.toggleIconExpanded {
+  transform: rotate(90deg);
+}
+
+/* Batch actions */
+.batchActions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.batchButton {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.batchButton:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.batchButton:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 1px;
+}
+
+/* Revision list */
+.revisionList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.revisionItem {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.revisionItem:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.revisionProposal {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-1);
+}
+
+.revisionRationale {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .toggleIcon {
+    transition: none;
+  }
+}

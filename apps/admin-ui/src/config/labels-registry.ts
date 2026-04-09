@@ -179,6 +179,7 @@ export const labels = {
     selfReviewStartOverCancel: 'Cancel',
     analyzingDocument: 'Analyzing your document\u2026',
     analysisTimeout: 'Analysis is taking longer than expected.',
+    sessionCapWarning: '{used} of {max} sessions used',
   },
 
   // Invitation section (within ItemDetail)
@@ -192,6 +193,7 @@ export const labels = {
     inviteSuccess: 'Invitations sent.',
     inviteError: 'Failed to send invitations. Please try again.',
     inviteLimitError: 'Session limit reached for this item.',
+    publicSessionLimitHint: 'Up to {max} reviewers can participate',
     noSessions: 'No reviewers invited yet.',
     resendButton: 'Resend',
     resending: 'Resending…',
@@ -387,12 +389,12 @@ export const labels = {
     emptyCta: 'Generate Revision',
     noPulseCheckBody: 'Run a Pulse Check first to generate decisions, then come back here.',
     noPulseCheckLink: 'Go to Pulse Check →',
-    overlayPhase1: 'Reading your decisions…',
-    overlayPhase2: 'Analyzing the original document…',
-    overlayPhase3: 'Drafting the revision…',
-    overlayPhase4: 'Reviewing the changes…',
-    overlayPhase5: 'Polishing the final draft…',
-    overlayPhase6: 'Almost done…',
+    overlayPhase1: 'Calibrating signal…',
+    overlayPhase2: 'Scanning the original…',
+    overlayPhase3: 'Tracing new signal…',
+    overlayPhase4: 'Verifying returns…',
+    overlayPhase5: 'Locking signal…',
+    overlayPhase6: 'Finalizing…',
     overlayNotice: 'This usually takes 30–60 seconds. Don\u2019t close this tab.',
     originalPaneLabel: 'Original',
     revisionPaneLabel: 'Revision {number}',
@@ -500,6 +502,7 @@ export const labels = {
     confidenceMulti: 'Based on {count} reviewers',
     scaleSolo: 'Solo',
     scaleSmallGroup: 'Small Group',
+    scaleMediumGroup: 'Medium Group',
     revisionWeight: '{count} of {total} reviewers flagged this',
     revisionWeightSolo: '1 reviewer flagged this',
     batchAcceptAll: 'Accept All',
@@ -550,8 +553,8 @@ export const labels = {
 
   // Error boundary
   errorBoundary: {
-    heading: 'Something went wrong',
-    body: 'An unexpected error occurred. You can try reloading the page or go back to the items list.',
+    heading: 'Signal lost',
+    body: 'Something unexpected happened. You can try reloading the page or go back to the items list.',
     reloadButton: 'Reload',
     goHomeLink: 'Go Home',
   },
@@ -594,16 +597,23 @@ export const labels = {
     hintNoDocNoInput: 'Upload your document above, then describe what kind of feedback you\u2019re looking for. Pulse will use both to craft a focused request.',
     hintDocNoInput: 'What aspect of your work do you want feedback on? Even a rough note helps Pulse tailor the suggestion.',
     hintInputNoDoc: 'For the best results, upload your document too \u2014 Pulse reads it to ground the suggestion in your actual content.',
+    generating: 'Generating…',
     errorMessage: 'Couldn\u2019t generate a suggestion. Try writing it yourself, or try again.',
     staticExamplesDocument: [
       'I\u2019d like feedback from a potential user on whether the value proposition is clear.',
       'From a non-technical perspective, is the structure logical and easy to follow?',
       'As a stakeholder, what\u2019s your honest reaction to the tone and approach?',
+      'Does the argument build convincingly, or are there gaps that weaken the conclusion?',
+      'If you had to summarize the key takeaway in one sentence, what would it be?',
+      'Are the recommendations specific enough to act on, or do they feel vague?',
     ],
     staticExamplesImage: [
       'From a client\u2019s perspective, what\u2019s your first impression of this space?',
       'As someone seeing this for the first time, does the composition draw you in?',
       'From a buyer\u2019s point of view, is there anything that feels off or out of place?',
+      'Does this align with the brand identity you\u2019d expect, or does it feel disconnected?',
+      'What emotional response does this evoke, and is that the right one for the audience?',
+      'If this were competing for attention alongside similar work, what would make it stand out?',
     ],
   },
 
@@ -616,7 +626,7 @@ export const labels = {
 
   // Completion
   completion: {
-    cardTitle: 'Thanks — your feedback has been captured.',
+    cardTitle: 'Your signal has been received. Thanks for sharing your perspective.',
     emailCta: 'Get a copy of your session summary',
   },
 
@@ -625,5 +635,29 @@ export const labels = {
     viewPhoto: '📷 View Photo',
     expandLabel: 'Expand photo',
     collapseLabel: 'Collapse photo',
+  },
+
+  // Data retention disclosure
+  retention: {
+    notice: 'Session transcripts are automatically deleted 30 days after a Pulse Check is generated. Reports, pulse checks, and your uploaded documents are retained until you delete the item or your account.',
+    shortNotice: 'Transcripts are deleted 30 days after the Pulse Check is generated.',
+    settingsHeading: 'Data Retention',
+  },
+
+  // About Pulse
+  about: {
+    button: 'About Pulse',
+    version: 'Version {version}',
+    descriptionP1: 'Pulse is a feedback tool. You upload your work, invite people to review it, and Pulse guides each conversation so you get structured, thoughtful feedback \u2014 not just \u201clooks good.\u201d',
+    descriptionP2: 'When your reviewers are done, Pulse consolidates everything into a single view called a Pulse Check. It shows you what landed, where things struggled, and what to do next \u2014 so you can make decisions, not just collect opinions.',
+    attribution: 'Quietly Powerful, by',
+    attributionStudio: 'ur/gd Studios',
+    attributionLocation: 'Seattle, WA',
+    attributionUrl: 'https://urgdstudios.com',
+    privacyLink: 'Privacy Policy',
+    privacyUrl: 'https://urgdstudios.com/privacy',
+    termsLink: 'Terms of Use',
+    termsUrl: 'https://urgdstudios.com/terms',
+    closeButton: 'Close',
   },
 } as const;

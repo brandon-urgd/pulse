@@ -357,6 +357,15 @@
   margin: 0;
 }
 
+/* ── Data retention ──────────────────────────────────────────────────────── */
+
+.retentionBody {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.6;
+}
+
 /* ── Danger zone ─────────────────────────────────────────────────────────── */
 
 .dangerHeading {
@@ -517,7 +526,9 @@
 
 @media (max-width: 639px) {
   .container {
-    padding: var(--space-4);
+    padding-top: var(--space-page-top);
+    padding-bottom: var(--space-page-bottom);
+    padding-inline: var(--space-page-inline);
   }
 
   /* Stack label/value vertically instead of side-by-side grid */

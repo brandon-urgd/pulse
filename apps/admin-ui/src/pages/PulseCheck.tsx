@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
-import { useNavigate } from 'react-router-dom';
 import { labels } from '../config/labels-registry';
 import { downloadPulseCheckPdf } from '../utils/downloadPdf';
 import SignalBadge, { type EnergyLevel } from '../components/SignalBadge';
 import SignalMatrix, { type ThemeRow, type ReviewerColumn } from '../components/SignalMatrix';
+import SignalSummary from '../components/SignalSummary';
+import ReviewerOverview from '../components/ReviewerOverview';
+import RevisionGroups from '../components/RevisionGroups';
 import FeedbackActionPills, { type FeedbackAction } from '../components/FeedbackActionPills';
 import PulseCheckOverlay from '../components/PulseCheckOverlay';
 import SectionCoveragePanel from '../components/SectionCoveragePanel';
@@ -88,6 +90,15 @@ interface ItemResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Scale tier detection — determines rendering strategy based on session count */
+export type ScaleTier = 'solo' | 'small' | 'medium';
+
+export function getScaleTier(sessionCount: number): ScaleTier {
+  if (sessionCount <= 1) return 'solo';
+  if (sessionCount <= 7) return 'small';
+  return 'medium'; // 8-20
+}
+
 /** Shallow-compare two Record<string, string | null> objects (avoids JSON.stringify in render) */
 function shallowRecordEqual(a: Record<string, string | null>, b: Record<string, string | null>): boolean {
   const keysA = Object.keys(a);
@@ -133,7 +144,12 @@ function ConfidenceIndicator({ sessionCount }: { sessionCount: number }) {
 }
 
 function ScaleTierLabel({ sessionCount }: { sessionCount: number }) {
-  const label = sessionCount === 1 ? labels.pulseCheck.scaleSolo : labels.pulseCheck.scaleSmallGroup;
+  const tier = getScaleTier(sessionCount);
+  const label = tier === 'solo'
+    ? labels.pulseCheck.scaleSolo
+    : tier === 'small'
+      ? labels.pulseCheck.scaleSmallGroup
+      : labels.pulseCheck.scaleMediumGroup;
   return <span className={styles.scaleTier}>{label}</span>;
 }
 
@@ -788,6 +804,7 @@ export default function PulseCheck() {
             )}
           </section>
           <PulseCheckFeedback itemId={itemId!} existingFeedback={(pc as unknown as { pulseCheckFeedback?: { rating?: string; reason?: string } }).pulseCheckFeedback} />
+          <p className={styles.retentionNotice}>{labels.retention.shortNotice}</p>
           <p className={styles.meta}>
             {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
           </p>
@@ -873,11 +890,22 @@ export default function PulseCheck() {
 
         {themeRows.length > 0 && reviewerCols.length > 0 && (
           <section className={styles.matrixSection} aria-labelledby="matrix-heading">
-            <h2 id="matrix-heading" className={styles.matrixHeading}>{labels.pulseCheck.matrixHeading}</h2>
-            <div className={styles.matrixScroll}>
-              <SignalMatrix themes={themeRows} reviewers={reviewerCols} ariaLabel={labels.pulseCheck.matrixAriaLabel} />
-            </div>
+            <h2 id="matrix-heading" className={styles.matrixHeading}>
+              {getScaleTier(pc.sessionCount) === 'medium' ? 'Signal Summary' : labels.pulseCheck.matrixHeading}
+            </h2>
+            {getScaleTier(pc.sessionCount) === 'medium' ? (
+              <SignalSummary themes={themeRows} reviewers={reviewerCols} sessionCount={pc.sessionCount} />
+            ) : (
+              <div className={styles.matrixScroll}>
+                <SignalMatrix themes={themeRows} reviewers={reviewerCols} ariaLabel={labels.pulseCheck.matrixAriaLabel} />
+              </div>
+            )}
           </section>
+        )}
+
+        {/* Reviewer Overview — shown for Tier 2 (8+ sessions) */}
+        {getScaleTier(pc.sessionCount) === 'medium' && reviewerCols.length > 0 && (
+          <ReviewerOverview reviewers={reviewerCols} sessionCount={pc.sessionCount} />
         )}
 
         <section className={styles.synthesisSection} aria-labelledby="synthesis-heading">
@@ -926,7 +954,7 @@ export default function PulseCheck() {
           </section>
         </section>
 
-        {/* Proposed Revisions — grouped by type */}
+        {/* Proposed Revisions — grouped by type when sessionCount > 10, flat list otherwise */}
         <section aria-labelledby="decisions-heading" className={styles.decisionsSection}>
           <h2 id="decisions-heading" className={styles.synthesisHeading}>{labels.pulseCheck.decisionsHeading}</h2>
           <p className={styles.decisionsHint}>{labels.pulseCheck.decisionsHint}</p>
@@ -934,55 +962,72 @@ export default function PulseCheck() {
             <p className={styles.emptySection}>{labels.pulseCheck.noProposedRevisions}</p>
           ) : (
             <>
-              {(['structural', 'conceptual', 'feature', 'line-edit'] as const).map((type) => {
-                const group = proposedRevisions.filter(r => r.revisionType === type);
-                if (group.length === 0) return null;
-                return (
-                  <div key={type} className={styles.revisionGroup}>
-                    <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
-                    <BatchActionControls
-                      revisionType={type}
-                      revisionIds={group.map(r => r.revisionId)}
-                      onBatchAccept={handleBatchAccept}
-                      onBatchDismiss={handleBatchDismiss}
-                      onUndo={handleBatchUndo}
-                    />
-                    <ul className={styles.themeDecisionList}>
-                      {group.map((revision) => {
-                        const decided = decisions[revision.revisionId] ?? null;
-                        const sourceCount = revision.sourceThemeIds?.length ?? 1;
-                        return (
-                          <li
-                            key={revision.revisionId}
-                            className={styles.themeDecisionRow}
-                            data-decided={decided ?? undefined}
-                          >
-                            <div className={styles.themeDecisionHeader}>
-                              <p className={styles.themeDecisionText}>{revision.proposal}</p>
-                              <RevisionWeightIndicator count={sourceCount} total={pc.sessionCount} />
-                              <div className={styles.themeDecisionBody}>
-                                <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
-                                <FeedbackActionPills
-                                  value={decided}
-                                  onChange={(action) => {
-                                    setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }));
-                                    if (action !== 'adjust') {
-                                      setTenantNotes((prev) => { const next = { ...prev }; delete next[revision.revisionId]; return next; });
-                                    }
-                                  }}
-                                  ariaLabel={`Decision for: ${revision.proposal}`}
-                                  noteValue={tenantNotes[revision.revisionId] ?? ''}
-                                  onNoteChange={(note) => setTenantNotes((prev) => ({ ...prev, [revision.revisionId]: note }))}
-                                />
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
+              {pc.sessionCount > 10 ? (
+                <RevisionGroups
+                  revisions={proposedRevisions}
+                  decisions={decisions}
+                  onDecisionChange={(revisionId, action) => {
+                    setDecisions((prev) => ({ ...prev, [revisionId]: action as FeedbackAction }));
+                    if (action !== 'adjust') {
+                      setTenantNotes((prev) => { const next = { ...prev }; delete next[revisionId]; return next; });
+                    }
+                  }}
+                  onBatchAccept={handleBatchAccept}
+                  onBatchDismiss={handleBatchDismiss}
+                />
+              ) : (
+                <>
+                  {(['structural', 'conceptual', 'feature', 'line-edit'] as const).map((type) => {
+                    const group = proposedRevisions.filter(r => r.revisionType === type);
+                    if (group.length === 0) return null;
+                    return (
+                      <div key={type} className={styles.revisionGroup}>
+                        <p className={styles.revisionGroupLabel}>{labels.pulseCheck.revisionTypeLabels[type]}</p>
+                        <BatchActionControls
+                          revisionType={type}
+                          revisionIds={group.map(r => r.revisionId)}
+                          onBatchAccept={handleBatchAccept}
+                          onBatchDismiss={handleBatchDismiss}
+                          onUndo={handleBatchUndo}
+                        />
+                        <ul className={styles.themeDecisionList}>
+                          {group.map((revision) => {
+                            const decided = decisions[revision.revisionId] ?? null;
+                            const sourceCount = revision.sourceThemeIds?.length ?? 1;
+                            return (
+                              <li
+                                key={revision.revisionId}
+                                className={styles.themeDecisionRow}
+                                data-decided={decided ?? undefined}
+                              >
+                                <div className={styles.themeDecisionHeader}>
+                                  <p className={styles.themeDecisionText}>{revision.proposal}</p>
+                                  <RevisionWeightIndicator count={sourceCount} total={pc.sessionCount} />
+                                  <div className={styles.themeDecisionBody}>
+                                    <p className={styles.themeDecisionMeta}>{revision.rationale}</p>
+                                    <FeedbackActionPills
+                                      value={decided}
+                                      onChange={(action) => {
+                                        setDecisions((prev) => ({ ...prev, [revision.revisionId]: action }));
+                                        if (action !== 'adjust') {
+                                          setTenantNotes((prev) => { const next = { ...prev }; delete next[revision.revisionId]; return next; });
+                                        }
+                                      }}
+                                      ariaLabel={`Decision for: ${revision.proposal}`}
+                                      noteValue={tenantNotes[revision.revisionId] ?? ''}
+                                      onNoteChange={(note) => setTenantNotes((prev) => ({ ...prev, [revision.revisionId]: note }))}
+                                    />
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
 
               <div className={styles.saveRow}>
                 <button
@@ -1014,6 +1059,7 @@ export default function PulseCheck() {
 
         <PulseCheckFeedback itemId={itemId!} existingFeedback={(pc as unknown as { pulseCheckFeedback?: { rating?: string; reason?: string } }).pulseCheckFeedback} />
 
+        <p className={styles.retentionNotice}>{labels.retention.shortNotice}</p>
         <p className={styles.meta}>
           {labels.pulseCheck.generatedAt.replace('{date}', new Date(pc.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}
         </p>

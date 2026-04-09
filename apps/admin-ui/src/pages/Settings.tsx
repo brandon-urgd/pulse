@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme';
 import { labels } from '../config/labels-registry';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import ReportModal, { type ReportType } from '../components/ReportModal';
+import AboutModal from '../components/AboutModal';
 import styles from './Settings.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -165,6 +166,9 @@ export default function Settings() {
 
   // Report modal
   const [reportModalType, setReportModalType] = useState<ReportType | null>(null);
+
+  // About modal
+  const [showAbout, setShowAbout] = useState(false);
 
   const { data, isLoading } = useAuthedQuery<SettingsResponse>(
     ['settings'],
@@ -438,6 +442,23 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Data Retention ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>{labels.retention.settingsHeading}</h2>
+        <p className={styles.retentionBody}>{labels.retention.notice}</p>
+      </section>
+
+      {/* ── About Pulse ── */}
+      <section className={styles.section}>
+        <button
+          type="button"
+          className={styles.signOutButton}
+          onClick={() => setShowAbout(true)}
+        >
+          {labels.about.button}
+        </button>
+      </section>
+
       {/* ── Danger Zone ── */}
       <section className={styles.section}>
         <h2 className={`${styles.sectionHeading} ${styles.dangerHeading}`}>{labels.settings.dangerZoneHeading}</h2>
@@ -474,6 +495,9 @@ export default function Settings() {
           onClose={() => setReportModalType(null)}
         />
       )}
+
+      {/* ── About modal ── */}
+      <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   );
 }

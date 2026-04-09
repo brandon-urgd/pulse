@@ -131,6 +131,197 @@ function Footer() {
   );
 }
 
+// ─── Revision Grouping (matches in-browser RevisionGroups) ────────────────────
+
+const REVISION_TYPE_LABELS: Record<string, string> = {
+  structural: 'Structural',
+  'line-edit': 'Line Edits',
+  conceptual: 'Conceptual',
+  feature: 'Features',
+  other: 'Other',
+};
+
+const REVISION_GROUP_ORDER: string[] = ['structural', 'conceptual', 'feature', 'line-edit', 'other'];
+
+function groupRevisionsByType(revisions: PulseCheckPdfData['proposedRevisions']) {
+  const groups: Record<string, PulseCheckPdfData['proposedRevisions']> = {};
+  for (const rev of revisions) {
+    const type = rev.revisionType || 'other';
+    const key = REVISION_GROUP_ORDER.includes(type) ? type : 'other';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(rev);
+  }
+  return groups;
+}
+
+// ─── Signal Summary PDF Component (8+ sessions) ──────────────────────────────
+
+function PdfSignalSummary({ data }: { data: PulseCheckPdfData }) {
+  const reviewerCount = data.reviewerVerdicts.length || data.sessionCount;
+
+  return (
+    <View>
+      <Text style={s.sectionHeader}>Signal Summary</Text>
+      {data.themes.map((theme) => {
+        // Aggregate signal counts
+        let conviction = 0;
+        let tension = 0;
+        let uncertainty = 0;
+        for (const sig of theme.reviewerSignals) {
+          if (sig.signalType === 'conviction') conviction++;
+          else if (sig.signalType === 'tension') tension++;
+          else uncertainty++;
+        }
+        const flaggedCount = theme.reviewerSignals.length;
+        const total = reviewerCount || 1;
+        const convPct = (conviction / total) * 100;
+        const tenPct = (tension / total) * 100;
+        const uncPct = (uncertainty / total) * 100;
+        const topQuotes = theme.reviewerSignals
+          .map((sig) => sig.quote)
+          .filter(Boolean)
+          .slice(0, 3);
+
+        return (
+          <View key={theme.themeId} style={summaryStyles.themeCard} wrap={false}>
+            <Text style={summaryStyles.themeName}>{theme.label}</Text>
+            <Text style={summaryStyles.themeCount}>
+              {flaggedCount} of {data.sessionCount} reviewers flagged this
+            </Text>
+            {/* Sentiment distribution bar — colored rectangles */}
+            <View style={summaryStyles.sentimentRow}>
+              {convPct > 0 && (
+                <View style={[summaryStyles.barSegment, { width: `${convPct}%`, backgroundColor: '#7a9e87' }]} />
+              )}
+              {tenPct > 0 && (
+                <View style={[summaryStyles.barSegment, { width: `${tenPct}%`, backgroundColor: '#d4a843' }]} />
+              )}
+              {uncPct > 0 && (
+                <View style={[summaryStyles.barSegment, { width: `${uncPct}%`, backgroundColor: '#5b8db8' }]} />
+              )}
+            </View>
+            <View style={summaryStyles.sentimentLegend}>
+              {conviction > 0 && <Text style={summaryStyles.legendText}>● Conviction: {conviction}</Text>}
+              {tension > 0 && <Text style={summaryStyles.legendText}>● Tension: {tension}</Text>}
+              {uncertainty > 0 && <Text style={summaryStyles.legendText}>● Uncertainty: {uncertainty}</Text>}
+            </View>
+            {/* Top 3 quotes */}
+            {topQuotes.length > 0 && (
+              <View style={summaryStyles.quotesSection}>
+                <Text style={summaryStyles.quotesHeading}>Top quotes</Text>
+                {topQuotes.map((quote, i) => (
+                  <Text key={i} style={summaryStyles.quoteText}>"{quote}"</Text>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function PdfGroupedRevisions({ revisions }: { revisions: PulseCheckPdfData['proposedRevisions'] }) {
+  const groups = groupRevisionsByType(revisions);
+
+  return (
+    <View>
+      <Text style={s.sectionHeader}>Proposed Revisions</Text>
+      {REVISION_GROUP_ORDER.map((type) => {
+        const group = groups[type];
+        if (!group || group.length === 0) return null;
+        const label = REVISION_TYPE_LABELS[type] ?? type;
+        return (
+          <View key={type} style={summaryStyles.revisionGroup}>
+            <Text style={summaryStyles.revisionGroupHeader}>{label} ({group.length})</Text>
+            {group.map((rev, i) => (
+              <View
+                key={i}
+                style={i < group.length - 1 ? s.revisionBlock : s.revisionBlockLast}
+                wrap={false}
+              >
+                <Text style={s.revisionProposal}>{rev.proposal}</Text>
+                <Text style={s.revisionRationale}>{rev.rationale}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const summaryStyles = StyleSheet.create({
+  themeCard: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: PDF_COLORS.accent,
+  },
+  themeName: {
+    fontSize: 13,
+    fontFamily: PDF_FONTS.heading,
+    fontWeight: 700,
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  themeCount: {
+    fontSize: 10,
+    color: PDF_COLORS.textMuted,
+    marginBottom: 8,
+  },
+  sentimentRow: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  barSegment: {
+    height: 8,
+  },
+  sentimentLegend: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  legendText: {
+    fontSize: 8,
+    color: PDF_COLORS.textMuted,
+  },
+  quotesSection: {
+    marginTop: 4,
+  },
+  quotesHeading: {
+    fontSize: 9,
+    color: PDF_COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  quoteText: {
+    fontSize: 10,
+    color: PDF_COLORS.textSecondary,
+    marginBottom: 3,
+    paddingLeft: 8,
+  },
+  revisionGroup: {
+    marginBottom: 16,
+  },
+  revisionGroupHeader: {
+    fontSize: 12,
+    fontFamily: PDF_FONTS.heading,
+    fontWeight: 700,
+    color: PDF_COLORS.accent,
+    marginBottom: 8,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: PDF_COLORS.border,
+  },
+});
+
 // ─── Signal Matrix Component ──────────────────────────────────────────────────
 
 function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
@@ -211,7 +402,8 @@ function PdfSignalMatrix({ data }: { data: PulseCheckPdfData }) {
 export function PulseCheckPdf({ data, itemName }: Props) {
   const energy = data.reviewerVerdicts?.[0]?.energy ?? 'neutral';
   const reviewerCount = data.reviewerVerdicts.length;
-  const useLandscapeMatrix = reviewerCount >= 4;
+  const useSignalSummary = data.sessionCount >= 8;
+  const useLandscapeMatrix = !useSignalSummary && reviewerCount >= 4;
 
   return (
     <Document>
@@ -234,8 +426,15 @@ export function PulseCheckPdf({ data, itemName }: Props) {
         <SignalSection type="tension" items={data.repeatedTension} />
         <SignalSection type="uncertainty" items={data.openQuestions} />
 
-        {/* Themes */}
-        {data.themes.length > 0 && (
+        {/* Tier 2 (8+ sessions): Signal Summary format */}
+        {useSignalSummary && data.themes.length > 0 && (
+          <View break>
+            <PdfSignalSummary data={data} />
+          </View>
+        )}
+
+        {/* Tier 1 (<8 sessions): Full theme list */}
+        {!useSignalSummary && data.themes.length > 0 && (
           <View break>
             <Text style={s.sectionHeader}>{labels.pulseCheck.synthesisHeading}</Text>
             {data.themes.map((theme) => (
@@ -258,15 +457,22 @@ export function PulseCheckPdf({ data, itemName }: Props) {
           </View>
         )}
 
-        {/* Signal Matrix — inline for < 4 reviewers (portrait) */}
-        {!useLandscapeMatrix && data.sessionCount >= 2 && data.themes.length > 0 && (
+        {/* Signal Matrix — inline for < 4 reviewers, < 8 sessions (portrait) */}
+        {!useSignalSummary && !useLandscapeMatrix && data.sessionCount >= 2 && data.themes.length > 0 && (
           <View break>
             <PdfSignalMatrix data={data} />
           </View>
         )}
 
-        {/* Proposed Revisions */}
-        {data.proposedRevisions.length > 0 && (
+        {/* Tier 2 (8+ sessions): Grouped revisions by type */}
+        {useSignalSummary && data.proposedRevisions.length > 0 && (
+          <View break>
+            <PdfGroupedRevisions revisions={data.proposedRevisions} />
+          </View>
+        )}
+
+        {/* Tier 1 (<8 sessions): Flat revision list */}
+        {!useSignalSummary && data.proposedRevisions.length > 0 && (
           <View break>
             <Text style={s.sectionHeader}>Proposed Revisions</Text>
             {data.proposedRevisions.map((rev, i) => (
@@ -286,7 +492,7 @@ export function PulseCheckPdf({ data, itemName }: Props) {
         <Footer />
       </Page>
 
-      {/* Signal Matrix — separate landscape page for 4+ reviewers */}
+      {/* Signal Matrix — separate landscape page for 4-7 reviewers only */}
       {useLandscapeMatrix && data.sessionCount >= 2 && data.themes.length > 0 && (
         <Page size="A4" orientation="landscape" style={s.page}>
           <PdfSignalMatrix data={data} />

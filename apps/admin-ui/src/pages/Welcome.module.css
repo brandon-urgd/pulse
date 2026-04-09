@@ -60,5 +60,5 @@
 }
 
 @media (max-width: 639px) {
-  .container { margin: var(--space-8) auto; padding: 0 var(--space-4); }
+  .container { margin: var(--space-8) auto; padding: 0 var(--space-page-inline); }
 }

@@ -97,6 +97,12 @@
   /* Layout */
   --topbar-height: 56px;
   --sidebar-width: 220px;
+
+  /* Page spacing — consumed by each page's .container */
+  --space-page-top: var(--space-8);
+  --space-page-bottom: var(--space-8);
+  --space-card-gap: var(--space-3);
+  --space-page-inline: var(--space-8);
 }
 
 /* Dark theme */
@@ -160,6 +166,16 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-interactive);
   outline-offset: 2px;
+}
+
+/* ── Mobile spacing overrides ──────────────────────────────────────────── */
+@media (max-width: 639px) {
+  :root {
+    --space-page-top: var(--space-4);      /* 16px */
+    --space-page-bottom: var(--space-6);   /* 24px */
+    --space-card-gap: var(--space-3);      /* 12px */
+    --space-page-inline: var(--space-4);   /* 16px */
+  }
 }
 
 /* ── Responsive nav — hamburger on mobile, tabs on desktop ─────────────── */

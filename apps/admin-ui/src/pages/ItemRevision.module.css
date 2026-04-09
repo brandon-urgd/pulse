@@ -433,5 +433,9 @@
 }
 
 @media (max-width: 639px) {
-  .container { padding: var(--space-4); }
+  .container {
+    padding-top: var(--space-page-top);
+    padding-bottom: var(--space-page-bottom);
+    padding-inline: var(--space-page-inline);
+  }
 }

@@ -604,12 +604,16 @@ jobs:
               --cache-control "public, max-age=31536000, immutable" \
               --region ${{ env.AWS_REGION }}
           fi
-          if [ -f assets/favicon.svg ]; then
-            aws s3 cp assets/favicon.svg \
-              "s3://${CF_FrontendBucketName}/favicon.svg" \
-              --cache-control "public, max-age=31536000, immutable" \
-              --region ${{ env.AWS_REGION }}
-          fi
+          # Upload new icon SVG assets
+          for svg in favicon-32.svg favicon-16.svg icon-180.svg icon-192.svg icon-512.svg pulse-avatar.svg; do
+            if [ -f "assets/$svg" ]; then
+              aws s3 cp "assets/$svg" \
+                "s3://${CF_FrontendBucketName}/assets/$svg" \
+                --content-type "image/svg+xml" \
+                --cache-control "public, max-age=31536000, immutable" \
+                --region ${{ env.AWS_REGION }}
+            fi
+          done
 
           DIST_DIR=apps/session-ui/dist S3_PREFIX=s \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"

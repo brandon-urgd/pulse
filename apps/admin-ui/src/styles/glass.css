@@ -177,3 +177,19 @@
     padding-top: var(--space-8);
   }
 }
+
+/* Auth crossfade — fades out the auth surface on successful login */
+.pulse-entry-bg {
+  transition: opacity 400ms ease-out;
+}
+
+.pulse-entry-crossfade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-entry-bg {
+    transition: none;
+  }
+}

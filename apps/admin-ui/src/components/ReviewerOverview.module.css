@@ -1,0 +1,112 @@
+/* ── ReviewerOverview — Collapsible reviewer panel ─────────────────────────── */
+
+.panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.toggleButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.toggleButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.toggleButton:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.toggleIcon {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  transition: transform 200ms ease;
+}
+
+.toggleIconExpanded {
+  transform: rotate(90deg);
+}
+
+.reviewerList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.reviewerRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.reviewerRow:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.reviewerName {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.reviewerStatus {
+  color: var(--color-text-muted);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.reviewerDate {
+  color: var(--color-text-muted);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.reviewerVerdict {
+  color: var(--color-text-secondary);
+  font-style: italic;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .toggleIcon {
+    transition: none;
+  }
+}
+
+/* ── Mobile ────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+  .reviewerRow {
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .reviewerVerdict {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+}

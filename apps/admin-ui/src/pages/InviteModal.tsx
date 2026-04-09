@@ -5,6 +5,7 @@ import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useCan } from '../hooks/useCan';
 import styles from './InviteModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -97,6 +98,9 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
   // ── End public session state ──
   const [endingSessionId, setEndingSessionId] = useState<string | null>(null);
   const [endSessionMessages, setEndSessionMessages] = useState<Record<string, string>>({});
+
+  // ── Session cap limit ──
+  const { limit: maxSessionsPerItem } = useCan('maxSessionsPerItem');
 
   const { data: sessionsData, refetch: refetchSessions } = useAuthedQuery<{ data: Session[] }>(
     ['sessions', itemId],
@@ -409,10 +413,17 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
             </ul>
           )}
 
+          <p className={styles.retentionNotice}>{labels.retention.shortNotice}</p>
+
           <hr className={styles.divider} />
 
           {/* ── Section 2: Public Sessions ── */}
           <h3 className={styles.subHeading}>{labels.invitation.publicSessionSectionTitle}</h3>
+          {maxSessionsPerItem !== null && (
+            <p className={styles.publicSessionLimitHint}>
+              {labels.invitation.publicSessionLimitHint.replace('{max}', String(maxSessionsPerItem))}
+            </p>
+          )}
 
           {/* Create public session form — always visible */}
           <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>

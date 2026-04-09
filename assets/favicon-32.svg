@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Favicon 32×32 — Cursive P into pulse spike, all #7a9e87 -->
+  <rect width="32" height="32" rx="4" fill="#0a0f14"/>
+  <rect x="1" y="1" width="30" height="30" rx="3.5" fill="none" stroke="#7a9e87" stroke-opacity="0.3" stroke-width="0.75"/>
+  <!-- P stem -->
+  <line x1="5" y1="6" x2="5" y2="26" stroke="#7a9e87" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- P bowl -->
+  <path d="M 5 6 L 12 6 C 15 6 17 8.5 17 13 C 17 17.5 15 20 12 20 L 5 20" fill="none" stroke="#7a9e87" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Pulse spike from bottom of bowl -->
+  <path d="M 12 20 L 17 20 L 19 16 L 22 24 L 25 14 L 27 20 L 31 20" fill="none" stroke="#7a9e87" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

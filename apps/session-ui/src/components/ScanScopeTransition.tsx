@@ -129,7 +129,7 @@ export function ScanScopeTransition({ playing, onComplete }: Props) {
         transition: phase === 'out' ? 'opacity 1.2s ease-out' : 'opacity 0.4s ease-in',
       }}
       aria-live="polite"
-      aria-label="Loading Pulse"
+      aria-label="Scanning for signal…"
     >
       <FullWidthTrace animate={showTrace} />
 

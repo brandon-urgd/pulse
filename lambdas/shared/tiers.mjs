@@ -63,7 +63,7 @@ export const TIERS = {
   },
   pro: {
     maxActiveItems: 10,
-    maxSessionsPerItem: 25,
+    maxSessionsPerItem: 20,
     sessionTimeLimitMinutes: 45,
     maxUploadSizeMb: 25,
     maxPhotoSizeMb: 15,
@@ -82,7 +82,7 @@ export const TIERS = {
   },
   enterprise: {
     maxActiveItems: 100,
-    maxSessionsPerItem: 100,
+    maxSessionsPerItem: 20,
     sessionTimeLimitMinutes: 60,
     maxUploadSizeMb: 50,
     maxPhotoSizeMb: 25,

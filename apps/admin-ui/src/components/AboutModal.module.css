@@ -1,0 +1,131 @@
+/* AboutModal — dark surface modal */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.card {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8) var(--space-7);
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.wordmark {
+  font-size: 1.75rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: var(--color-accent-pulse);
+  margin: 0;
+}
+
+.version {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 320px;
+}
+
+.attribution {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.attributionLink {
+  color: var(--color-interactive);
+  text-decoration: underline;
+}
+
+.attributionLink:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.legalLinks {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.legalLink {
+  font-size: var(--font-size-xs);
+  color: var(--color-interactive);
+  text-decoration: none;
+}
+
+.legalLink:hover {
+  text-decoration: underline;
+}
+
+.legalLink:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.legalSeparator {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.closeButton {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin-top: var(--space-2);
+}
+
+.closeButton:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-text-secondary);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}
+
+/* Mobile */
+@media (max-width: 639px) {
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .card {
+    max-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, var(--space-8));
+  }
+}

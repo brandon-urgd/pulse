@@ -474,6 +474,10 @@ export default function SessionSummary() {
               </p>
             )}
 
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0', lineHeight: 1.5 }}>
+              Your conversation transcript will be automatically deleted 30 days after the Pulse Check is generated.
+            </p>
+
             {sessionToken && (
               <>
                 <hr style={styles.divider} />

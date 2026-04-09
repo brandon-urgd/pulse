@@ -2,7 +2,7 @@
 // POST /api/manage/items/{itemId}/public-session
 // Creates a single walk-in / QR session with no email requirement
 
-import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
@@ -174,6 +174,25 @@ export const handler = async (event) => {
 
     // Check session count against maxSessionsPerItem
     const maxSessions = maxSessionsResult.limit ?? 5
+
+    // Query existing session count excluding self-review sessions
+    const existingSessionsResult = await dynamo.send(new QueryCommand({
+      TableName: process.env.SESSIONS_TABLE,
+      IndexName: 'item-index',
+      KeyConditionExpression: 'itemId = :iid',
+      FilterExpression: 'attribute_not_exists(sessionType) OR sessionType <> :selfType',
+      ExpressionAttributeValues: {
+        ':iid': { S: itemId },
+        ':selfType': { S: 'self' },
+      },
+      Select: 'COUNT',
+    }))
+
+    const existingCount = existingSessionsResult.Count ?? 0
+    if (existingCount >= maxSessions) {
+      log('warn', 'CreatePublicSession: session limit reached', { requestId, tenantId, itemId, existingCount, maxSessions })
+      return errorResponse(403, 'This item has reached its feedback limit.', { error: 'session_limit_reached' }, origin)
+    }
 
     // Monthly counter enforcement — monthlyPublicSessionsTotal
     const publicCounterResult = await checkAndIncrement({

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
@@ -117,9 +117,10 @@ interface ItemCardProps {
   onPulseCheck: () => void;
   onDeleted: () => void;
   canDeleteExample: boolean;
+  cardContentRef?: React.Ref<HTMLButtonElement>;
 }
 
-function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteExample }: ItemCardProps) {
+function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteExample, cardContentRef }: ItemCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
@@ -144,6 +145,7 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteEx
       {/* Content area — clickable to edit */}
       <button
         type="button"
+        ref={cardContentRef}
         className={styles.cardContent}
         onClick={onOpen}
         aria-label={`Edit ${item.itemName}`}
@@ -238,10 +240,32 @@ export default function Items() {
     '/api/manage/items'
   );
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
 
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
+
+  // ── Focus restoration: when returning from mobile edit page ──────────────
+  const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const focusRestoredRef = useRef(false);
+
+  useEffect(() => {
+    const returnItemId = (location.state as { returnFocusId?: string } | null)?.returnFocusId;
+    if (returnItemId && !focusRestoredRef.current) {
+      focusRestoredRef.current = true;
+      // Use requestAnimationFrame to wait for cards to render
+      requestAnimationFrame(() => {
+        const el = cardRefs.current.get(returnItemId);
+        if (el) el.focus();
+      });
+    }
+  }, [location.state]);
+
+  const setCardRef = (itemId: string) => (el: HTMLButtonElement | null) => {
+    if (el) cardRefs.current.set(itemId, el);
+    else cardRefs.current.delete(itemId);
+  };
 
   const [sortField, setSortField] = useState<SortField>(() => loadSort().field);
   const [sortDir, setSortDir] = useState<SortDir>(() => loadSort().dir);
@@ -298,7 +322,7 @@ export default function Items() {
             }
           </h1>
         </div>
-        <button type="button" className={styles.newItemButton} onClick={() => isMobile ? navigate('/admin/items/new') : setModalTarget('new')}>
+        <button type="button" className={styles.newItemButton} onClick={() => isMobile ? navigate('/admin/items/new/edit') : setModalTarget('new')}>
           {labels.items.newItemButton}
         </button>
       </div>
@@ -327,7 +351,7 @@ export default function Items() {
         <div className={styles.emptyState}>
           <p className={styles.emptyStateHeading}>{labels.items.emptyHeading}</p>
           <p className={styles.emptyStateBody}>{labels.items.emptyBody}</p>
-          <button type="button" className={styles.emptyStateCta} onClick={() => isMobile ? navigate('/admin/items/new') : setModalTarget('new')}>
+          <button type="button" className={styles.emptyStateCta} onClick={() => isMobile ? navigate('/admin/items/new/edit') : setModalTarget('new')}>
             {labels.items.emptyCta}
           </button>
         </div>
@@ -342,6 +366,7 @@ export default function Items() {
               onPulseCheck={() => navigate(`/admin/pulse-check/${item.itemId}`)}
               onDeleted={() => {}}
               canDeleteExample={hasRealItems}
+              cardContentRef={setCardRef(item.itemId)}
             />
           ))}
         </ul>

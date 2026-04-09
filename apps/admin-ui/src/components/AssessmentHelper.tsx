@@ -35,10 +35,19 @@ export default function AssessmentHelper({
   const [error, setError] = useState('');
   const [noInputMessage, setNoInputMessage] = useState('');
 
-  const staticExamples =
-    itemType === 'image'
-      ? labels.assessmentHelper.staticExamplesImage
-      : labels.assessmentHelper.staticExamplesDocument;
+  const [shuffledExamples] = useState(() => {
+    const examples = [
+      ...(itemType === 'image'
+        ? labels.assessmentHelper.staticExamplesImage
+        : labels.assessmentHelper.staticExamplesDocument),
+    ];
+    // Fisher-Yates shuffle — randomized per page load, stable during lifecycle
+    for (let i = examples.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [examples[i], examples[j]] = [examples[j], examples[i]];
+    }
+    return examples;
+  });
 
   const generateDisabled = !itemId || isGenerating;
 
@@ -116,7 +125,7 @@ export default function AssessmentHelper({
         <p className={styles.contextualHint}>{contextualHint}</p>
       )}
       <p className={styles.examplesHeading}>Examples</p>
-      {staticExamples.map((example, i) => (
+      {shuffledExamples.map((example, i) => (
         <button
           key={i}
           type="button"
@@ -135,7 +144,7 @@ export default function AssessmentHelper({
           disabled={generateDisabled}
           title={!itemId ? labels.assessmentHelper.generateDisabledTooltip : undefined}
         >
-          {isGenerating ? 'Generating…' : labels.assessmentHelper.generateButton}
+          {isGenerating ? labels.assessmentHelper.generating : labels.assessmentHelper.generateButton}
         </button>
       </div>
 

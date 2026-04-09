@@ -1,75 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuthedQuery } from '../hooks/useAuthedQuery';
-import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
-import { labels } from '../config/labels-registry';
-import { useCan } from '../hooks/useCan';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useItemForm, fileStatusLabel, todayIso } from '../hooks/useItemForm';
+import { useCan } from '../hooks/useCan';
+import { labels } from '../config/labels-registry';
 import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
-import SectionPanel, { type Section } from '../components/SectionPanel';
+import SectionPanel from '../components/SectionPanel';
 import CoverageIndicator from '../components/CoverageIndicator';
 import { ScanLineLoader } from '../components/ScanLineLoader';
 import AssessmentHelper from '../components/AssessmentHelper';
+import { authedMutate } from '../hooks/useAuthedMutation';
 import styles from './ItemDetailModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type ItemStatus = 'draft' | 'active' | 'closed' | 'revised';
-type DocumentStatus = 'none' | 'scanning' | 'extracting' | 'ready' | 'rejected' | 'extraction_failed';
-type FileUploadStatus = 'uploading' | 'scanning' | 'extracting' | 'ready' | 'rejected' | 'extraction_failed' | 'error';
-
-interface FileUploadState {
-  status: FileUploadStatus;
-  error?: string;
-}
-
-interface Item {
-  itemId: string;
-  itemName: string;
-  description: string;
-  status: ItemStatus;
-  closeDate: string;
-  content?: string;
-  documentStatus?: DocumentStatus;
-  documentKey?: string;
-  sessionCount: number;
-  updatedAt: string;
-  recommendedTimeLimitMinutes?: number;
-  itemType?: 'document' | 'image';
-  isExample?: boolean;
-  sectionMap?: {
-    sections: Section[];
-    totalSubstantiveSections: number;
-    analyzedAt: string;
-  };
-  feedbackSections?: string[];
-  sectionDepthPreferences?: Record<string, 'deep' | 'explore' | 'skim'>;
-  coverageMap?: Record<string, { sessionCount: number; avgDepth?: string; reviewerIds?: string[] }>;
-}
-
-interface CreateItemPayload {
-  itemName: string;
-  description: string;
-  closeDate: string;
-  content?: string;
-}
-
-interface UpdateItemPayload {
-  itemName: string;
-  description: string;
-  closeDate: string;
-  content?: string;
-}
-
-interface UploadUrlResponse {
-  data: { uploadUrl: string; key: string };
-}
-
-interface DocumentUrlResponse {
-  data: { url: string; contentType: string; filename: string; originalUrl?: string };
-}
 
 interface Props {
   itemId?: string;       // undefined = create mode
@@ -78,224 +21,97 @@ interface Props {
   variant?: 'modal' | 'page';
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Dirty tracking helper ────────────────────────────────────────────────────
 
-const pad2 = (n: number) => String(n).padStart(2, '0');
+/** Returns true when any form field has been touched relative to the loaded item. */
+function useIsDirty(form: ReturnType<typeof useItemForm>, isEditMode: boolean): boolean {
+  const initial = useRef<{ name: string; desc: string; close: string; content: string } | null>(null);
 
-function todayIso(): string {
-  // Returns current datetime in "YYYY-MM-DDTHH:MM" format for datetime-local inputs
-  const now = new Date();
-  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-}
+  useEffect(() => {
+    if (isEditMode && form.itemData) {
+      initial.current = {
+        name: form.itemData.itemName,
+        desc: form.itemData.description,
+        close: form.itemData.closeDate ?? '',
+        content: form.itemData.content ?? '',
+      };
+    }
+  }, [form.itemData, isEditMode]);
 
-/**
- * Converts a UTC ISO string to a local "YYYY-MM-DDTHH:MM" value
- * suitable for <input type="datetime-local">.
- */
-function utcToLocalDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-/**
- * Appends the user's local timezone offset to a datetime-local value.
- * e.g. "2026-04-03T20:30" → "2026-04-03T20:30:00-07:00"
- */
-function appendTimezoneOffset(dateStr: string): string {
-  if (!dateStr) return dateStr;
-  // If it already has an offset or Z, return as-is
-  if (/[Z+-]\d{2}:\d{2}$/.test(dateStr) || dateStr.endsWith('Z')) return dateStr;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  const offset = -d.getTimezoneOffset();
-  const sign = offset >= 0 ? '+' : '-';
-  const absOffset = Math.abs(offset);
-  const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
-  const minutes = String(absOffset % 60).padStart(2, '0');
-  // Ensure seconds are present
-  const base = dateStr.length === 16 ? `${dateStr}:00` : dateStr;
-  return `${base}${sign}${hours}:${minutes}`;
-}
-
-function fileStatusLabel(status: FileUploadStatus): string {
-  switch (status) {
-    case 'uploading':         return labels.itemDetail.uploadStatusUploading;
-    case 'scanning':          return labels.itemDetail.uploadStatusScanning;
-    case 'extracting':        return labels.itemDetail.uploadStatusExtracting;
-    case 'ready':             return labels.itemDetail.uploadStatusReady;
-    case 'rejected':          return labels.itemDetail.uploadStatusRejected;
-    case 'extraction_failed': return labels.itemDetail.uploadStatusExtractionFailed;
-    case 'error':             return labels.itemDetail.uploadStatusError;
+  // For create mode, dirty = any field has content
+  if (!isEditMode) {
+    return !!(form.itemName.trim() || form.description.trim() || form.content.trim());
   }
+
+  // For edit mode, dirty = any field differs from loaded values
+  if (!initial.current) return false;
+  return (
+    form.itemName !== initial.current.name ||
+    form.description !== initial.current.desc ||
+    form.content !== initial.current.content
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: Props) {
-  const isEditMode = Boolean(itemId);
   const isPageMode = variant === 'page';
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  // Form state
-  const [itemName, setItemName]       = useState('');
-  const [description, setDescription] = useState('');
-  const [closeDate, setCloseDate]     = useState('');
-  const [content, setContent]         = useState('');
+  const form = useItemForm({ itemId, onClose });
+  const isDirty = useIsDirty(form, form.isEditMode);
 
-  // UI state
-  const [formError, setFormError]         = useState('');
-  const [isLocked, setIsLocked]           = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteError, setDeleteError]     = useState('');
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [savedItem, setSavedItem]         = useState<{ itemId: string; itemName: string } | null>(null);
-  // Upload state
-  const [fileStatuses, setFileStatuses] = useState<Record<string, FileUploadState>>({});
-  const [isUploading, setIsUploading]   = useState(false);
-  const fileInputRef  = useRef<HTMLInputElement>(null);
-  const mountedRef    = useRef(true);
-  const savedItemId   = useRef<string | null>(itemId ?? null);
-  const [savedItemIdState, setSavedItemIdState] = useState<string | null>(itemId ?? null);
-  const autoSaved     = useRef(false);
-  const uploadingCreate = useRef(false);
+  // ── Session cap warning ─────────────────────────────────────────────────────
+  const { limit: maxSessionsPerItem } = useCan('maxSessionsPerItem');
+  const sessionCount = form.itemData?.sessionCount ?? 0;
+  const showSessionCapWarning = maxSessionsPerItem !== null
+    && sessionCount >= maxSessionsPerItem - 3
+    && sessionCount < maxSessionsPerItem;
 
-  // Document preview state (file viewer panel)
-  interface PreviewData { url: string; contentType: string; filename: string; originalUrl?: string }
-  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
-  const [loadingPreviewFile, setLoadingPreviewFile] = useState<string | null>(null);
-  const previewTriggerRef = useRef<HTMLElement | null>(null);
+  // ── Unsaved changes confirmation (page mode only) ───────────────────────────
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const discardResolveRef = useRef<((discard: boolean) => void) | null>(null);
 
-  // Session preview state
-  const [isSessionPreviewLoading, setIsSessionPreviewLoading] = useState(false);
-  const [sessionPreviewError, setSessionPreviewError] = useState('');
-  const [sessionPreviewPopupBlocked, setSessionPreviewPopupBlocked] = useState(false);
+  const handlePageBack = useCallback(() => {
+    if (isDirty) {
+      setShowDiscardDialog(true);
+    } else {
+      onClose();
+    }
+  }, [isDirty, onClose]);
 
-  // Self-review state
-  const [isSelfReviewLoading, setIsSelfReviewLoading] = useState(false);
+  function handleDiscardConfirm() {
+    setShowDiscardDialog(false);
+    discardResolveRef.current = null;
+    onClose();
+  }
 
-  // Section analysis polling timeout
-  const [sectionAnalysisTimedOut, setSectionAnalysisTimedOut] = useState(false);
-  const [selfReviewError, setSelfReviewError] = useState('');
+  function handleDiscardCancel() {
+    setShowDiscardDialog(false);
+    discardResolveRef.current = null;
+  }
 
-  // Time limit state (for session preview / self-review)
-  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
-  const { limit: sessionTimeLimit } = useCan('sessionTimeLimitMinutes');
-  const { limit: maxUploadMb } = useCan('maxUploadSizeMb');
-
-  // Monthly item creation limit awareness
-  const { limit: monthlyItemsLimit } = useCan('monthlyItemsCreated');
-  const settingsCache = queryClient.getQueryData<{ data: { usageCounters?: Record<string, { count: number; periodStart?: string }> } }>(['settings']);
-  const monthlyItemsCount = settingsCache?.data?.usageCounters?.monthlyItemsCreated?.count ?? 0;
-  const monthlyItemsPeriodStart = settingsCache?.data?.usageCounters?.monthlyItemsCreated?.periodStart;
-  const monthlyItemsAtLimit = monthlyItemsLimit !== null && monthlyItemsCount >= monthlyItemsLimit;
-  const monthlyItemsNearLimit = monthlyItemsLimit !== null && !monthlyItemsAtLimit && (monthlyItemsLimit - monthlyItemsCount) <= 1;
-  const monthlyItemsResetDate = monthlyItemsPeriodStart
-    ? (() => { const d = new Date(monthlyItemsPeriodStart); const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)); return next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()
-    : '';
-
-  // Self-review "start over" confirm state
-  const [selfReviewExistingId, setSelfReviewExistingId] = useState<string | null>(null);
-
-  // Section preferences state
-  const [feedbackSections, setFeedbackSections] = useState<string[]>([]);
-  const [sectionDepthPreferences, setSectionDepthPreferences] = useState<Record<string, 'deep' | 'explore' | 'skim'>>({});
-  const sectionsInitialized = useRef(false); // Guard: don't overwrite user edits on refetch
+  // Warn on browser back / tab close when dirty in page mode
+  useEffect(() => {
+    if (!isPageMode || !isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isPageMode, isDirty]);
 
   // ── Focus trap for modal mode ───────────────────────────────────────────────
-  const focusTrapRef = useFocusTrap(!isPageMode && !showInviteModal);
+  const focusTrapRef = useFocusTrap(!isPageMode && !form.showInviteModal);
 
-  // ── Derived upload state ────────────────────────────────────────────────────
-  // True while any file is still in-flight (uploading/scanning/extracting)
-  const isAnyFileInFlight = Object.values(fileStatuses).some(
-    (s) => s.status === 'uploading' || s.status === 'scanning' || s.status === 'extracting'
-  );
-
-  // Per-file time limits accumulate as each file resolves to ready.
-  // We track them in a ref so pollFileStatus can update without re-renders.
-  const perFileTimeLimits = useRef<Record<string, number>>({});
-  const activeItemId = itemId ?? savedItemIdState;
-  const { data: itemResp, isLoading: itemLoading } = useAuthedQuery<{ data: Item }>(
-    ['item', activeItemId],
-    `/api/manage/items/${activeItemId}`,
-    { enabled: !!activeItemId }
-  );
-  const itemData = itemResp?.data;
-
+  // ── Page mode: focus header on mount ────────────────────────────────────────
+  const headerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (itemData) {
-      // In edit mode, always populate form fields from server data.
-      // In create mode, only populate fields the user hasn't touched yet
-      // (the auto-create sends placeholder values like "(no description)" that
-      // would overwrite what the user is typing).
-      if (isEditMode) {
-        setItemName(itemData.itemName);
-        setDescription(itemData.description);
-        setCloseDate(itemData.closeDate ? utcToLocalDatetimeLocal(itemData.closeDate) : '');
-        setContent(itemData.content ?? '');
-      }
-      setIsLocked(itemData.status !== 'draft');
-      if (itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null) {
-        // Snap to nearest bracket midpoint
-        const brackets = labels.itemDetail.timeLimitBrackets
-          .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
-        const raw = itemData.recommendedTimeLimitMinutes;
-        const snapped = brackets.reduce((best, b) =>
-          Math.abs(b.value - raw) < Math.abs(best.value - raw) ? b : best
-        ).value;
-        setTimeLimitMinutes(snapped);
-      } else if (!itemData.recommendedTimeLimitMinutes && timeLimitMinutes === null && itemData.content) {
-        // Pasted content — no extractText ran, so estimate from word count
-        // ~130 wpm reading speed, clamp 5–60 min, snap to bracket
-        const words = itemData.content.trim().split(/\s+/).length;
-        const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
-        const brackets = labels.itemDetail.timeLimitBrackets
-          .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
-        const snapped = brackets.reduce((best, b) =>
-          Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
-        ).value;
-        setTimeLimitMinutes(snapped);
-      }
-      if (itemData.documentStatus && itemData.documentStatus !== 'none') {
-        const fileName = itemData.documentKey
-          ? itemData.documentKey.split('/').pop() ?? '_loaded'
-          : '_loaded';
-        setFileStatuses({ [fileName]: { status: itemData.documentStatus as FileUploadStatus } });
-      }
-      // Populate section preferences from item data (only on first load, not on refetch)
-      if (itemData.sectionMap?.sections && !sectionsInitialized.current) {
-        sectionsInitialized.current = true;
-        const defaultIncluded = itemData.feedbackSections
-          ?? itemData.sectionMap.sections
-              .filter((s) => s.classification === 'substantive')
-              .map((s) => s.id);
-        setFeedbackSections(defaultIncluded);
-
-        const defaultDepths = itemData.sectionDepthPreferences
-          ?? Object.fromEntries(
-              itemData.sectionMap.sections.map((s) => [
-                s.id,
-                s.classification === 'substantive' ? 'explore' as const : 'skim' as const,
-              ])
-            );
-        setSectionDepthPreferences(defaultDepths);
-      }
+    if (isPageMode && headerRef.current) {
+      headerRef.current.focus();
     }
-  }, [itemData]);
-
-  // ── Mount / unmount tracking ────────────────────────────────────────────────
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+  }, [isPageMode]);
 
   // ── Lock body scroll while modal is open ────────────────────────────────────
-  // iOS Safari ignores overflow:hidden on <body> unless the body is also
-  // position:fixed (which shifts scroll position). Instead we lock both
-  // overflow AND position, then restore the scroll position on cleanup.
   useEffect(() => {
-    if (isPageMode) return; // No scroll lock in page mode
+    if (isPageMode) return;
     const scrollY = window.scrollY;
     const prevOverflow = document.body.style.overflow;
     const prevPosition = document.body.style.position;
@@ -317,463 +133,45 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
   }, []);
 
   // ── Esc to close (stable ref avoids listener churn on every render) ────────
-  const handleCancelRef = useRef(handleCancel);
-  handleCancelRef.current = handleCancel;
+  const handleCancelRef = useRef(form.handleCancel);
+  handleCancelRef.current = isPageMode ? handlePageBack : form.handleCancel;
   useEffect(() => {
-    if (isPageMode) return; // No Esc-to-close in page mode
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancelRef.current(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // ── Mutations ───────────────────────────────────────────────────────────────
-  const createMutation = useAuthedMutation<{ data: Item }, CreateItemPayload>(
-    '/api/manage/items',
-    'POST',
-    {
-      onSuccess: (resp) => {
-        savedItemId.current = resp.data.itemId;
-        setSavedItemIdState(resp.data.itemId);
-        autoSaved.current = true;
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-        if (!uploadingCreate.current) {
-          // After creating a new item, prompt to invite reviewers
-          setSavedItem({ itemId: resp.data.itemId, itemName: resp.data.itemName });
-          setShowInviteModal(true);
-        }
-      },
-      onError: (err) => {
-        setFormError(labels.itemDetail.saveError);
-        const status = (err as Error & { status?: number }).status;
-        if (status === 409) setIsLocked(true);
-      },
-    }
-  );
-
-  const updateMutation = useAuthedMutation<Item, UpdateItemPayload>(
-    `/api/manage/items/${itemId}`,
-    'PUT',
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-        queryClient.invalidateQueries({ queryKey: ['item', itemId] });
-        onClose();
-      },
-      onError: (err) => {
-        const status = (err as Error & { status?: number }).status;
-        if (status === 409) {
-          setIsLocked(true);
-          setFormError(labels.itemDetail.lockedError);
-        } else {
-          setFormError(labels.itemDetail.saveError);
-        }
-      },
-    }
-  );
-
-  const deleteMutation = useAuthedMutation<null, undefined>(
-    `/api/manage/items/${itemId}`,
-    'DELETE',
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-        onClose();
-      },
-      onError: () => setDeleteError(labels.itemDetail.deleteError),
-    }
-  );
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError('');
-
-    if (!itemName.trim() || itemName.length > 200) {
-      setFormError('Item name is required (1–200 characters).');
-      return;
-    }
-    if (!description.trim() || description.length > 2000) {
-      setFormError('Description is required (1–2000 characters).');
-      return;
-    }
-    if (!closeDate || new Date(closeDate).getTime() <= Date.now()) {
-      setFormError('Close date must be a future date and time.');
-      return;
-    }
-
-    const payload = {
-      itemName: itemName.trim(),
-      description: description.trim(),
-      closeDate: appendTimezoneOffset(closeDate),
-      ...(content.trim() ? { content: content.trim() } : {}),
-      ...(feedbackSections.length > 0 ? { feedbackSections } : {}),
-      ...(Object.keys(sectionDepthPreferences).length > 0 ? { sectionDepthPreferences } : {}),
-      ...(timeLimitMinutes != null ? { recommendedTimeLimitMinutes: timeLimitMinutes } : {}),
-    };
-
-    if (isEditMode) {
-      updateMutation.mutate(payload);
-    } else if (savedItemId.current) {
-      // Item was auto-created during file upload or first paste save — update and close
-      const targetId = savedItemId.current;
-      authedMutate(`/api/manage/items/${targetId}`, 'PUT', payload, navigate)
-        .then((resp) => {
-          queryClient.invalidateQueries({ queryKey: ['items'] });
-          queryClient.invalidateQueries({ queryKey: ['item', targetId] });
-          const updated = (resp as { data: Item }).data;
-          setSavedItem({ itemId: targetId, itemName: updated?.itemName ?? payload.itemName });
-          setShowInviteModal(true);
-        })
-        .catch(() => setFormError(labels.itemDetail.saveError));
-    } else {
-      // First save — create the item
-      // If pasted content with no file upload, stay open to show time estimate
-      const hasPastedContent = content.trim().length > 0 && !Object.keys(fileStatuses).length;
-      if (hasPastedContent) {
-        uploadingCreate.current = true;
-        createMutation.mutate(payload, {
-          onSuccess: () => {
-            uploadingCreate.current = false;
-            // Estimate time from word count, show bracket selector
-            const words = content.trim().split(/\s+/).length;
-            const rawMinutes = Math.max(5, Math.min(60, Math.round(words / 130)));
-            const brackets = labels.itemDetail.timeLimitBrackets
-              .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
-            const snapped = brackets.reduce((best, b) =>
-              Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
-            ).value;
-            setTimeLimitMinutes(snapped);
-            setFormError('');
-            // Poll for sectionMap — analyzeDocument runs async after createItem
-            if (savedItemId.current) {
-              pollForSectionMap(savedItemId.current);
-            }
-          },
-        });
-      } else {
-        createMutation.mutate(payload);
-      }
-    }
-  }
-
-  async function handleCancel() {
-    if (!isEditMode && autoSaved.current && savedItemId.current) {
-      try {
-        await authedMutate(`/api/manage/items/${savedItemId.current}`, 'DELETE', undefined, navigate);
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-      } catch { /* best-effort */ }
-    }
-    onClose();
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-
-    setFormError('');
-    setIsUploading(true);
-    setFileStatuses((prev) => {
-      const next = { ...prev };
-      for (const f of files) next[f.name] = { status: 'uploading' };
-      return next;
-    });
-
-    try {
-      let targetItemId = savedItemId.current;
-      if (!targetItemId) {
-        uploadingCreate.current = true;
-        const createdResp = await createMutation.mutateAsync({
-          itemName: itemName.trim() || 'Untitled',
-          description: description.trim() || '(no description)',
-          closeDate: appendTimezoneOffset(closeDate) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          ...(content.trim() ? { content: content.trim() } : {}),
-        });
-        uploadingCreate.current = false;
-        targetItemId = createdResp.data.itemId;
-      }
-
-      for (const file of files) {
-        try {
-          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'uploading' } }));
-
-          const urlResp = await authedMutate(
-            `/api/manage/items/${targetItemId}/upload-url`,
-            'POST',
-            { fileName: file.name, fileSize: file.size },
-            navigate
-          ) as UploadUrlResponse;
-
-          const putRes = await fetch(urlResp.data.uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
-          });
-          if (!putRes.ok) throw new Error('Upload failed');
-
-          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'scanning' } }));
-          await pollFileStatus(targetItemId, file.name);
-        } catch {
-          setFileStatuses((prev) => ({ ...prev, [file.name]: { status: 'error' } }));
-        }
-      }
-    } catch {
-      uploadingCreate.current = false;
-      setFormError(labels.itemDetail.saveError);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }
-
-  async function pollFileStatus(targetItemId: string, fileName: string): Promise<void> {
-    return new Promise((resolve) => {
-      async function poll() {
-        if (!mountedRef.current) { resolve(); return; }
-        try {
-          // Fetch directly — in create mode the React Query cache has no entry for this item yet
-          const resp = await authedMutate(`/api/manage/items/${targetItemId}`, 'GET', undefined, navigate) as { data: Item };
-          const refreshed = resp?.data;
-          const status = (refreshed?.documentStatus ?? 'none') as DocumentStatus;
-          if (!mountedRef.current) { resolve(); return; }
-          if (status === 'ready' || status === 'rejected' || status === 'extraction_failed') {
-            setFileStatuses((prev) => ({ ...prev, [fileName]: { status: status as FileUploadStatus } }));
-            // Accumulate per-file time limits and sum them (capped at 60 min)
-            if (status === 'ready' && refreshed?.recommendedTimeLimitMinutes) {
-              perFileTimeLimits.current[fileName] = refreshed.recommendedTimeLimitMinutes;
-              const total = Object.values(perFileTimeLimits.current).reduce((a, b) => a + b, 0);
-              // Snap to nearest bracket midpoint
-              const brackets = labels.itemDetail.timeLimitBrackets
-                .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit);
-              const snapped = brackets.reduce((best, b) =>
-                Math.abs(b.value - total) < Math.abs(best.value - total) ? b : best
-              ).value;
-              setTimeLimitMinutes(snapped);
-            }
-            // Also update the query cache so edit mode picks it up immediately
-            queryClient.setQueryData(['item', targetItemId], { data: refreshed });
-            resolve();
-
-            // analyzeDocument runs async after documentStatus=ready — poll for sectionMap
-            if (status === 'ready' && !refreshed?.sectionMap) {
-              pollForSectionMap(targetItemId);
-            }
-            return;
-          }
-          if (status === 'extracting') {
-            setFileStatuses((prev) => ({ ...prev, [fileName]: { status: 'extracting' } }));
-          }
-        } catch { /* keep polling */ }
-        if (mountedRef.current) setTimeout(poll, 2000);
-        else resolve();
-      }
-      setTimeout(poll, 2000);
-    });
-  }
-
-  // Poll for sectionMap after analyzeDocument completes (runs async after document is ready)
-  function pollForSectionMap(targetItemId: string) {
-    let attempts = 0
-    const maxAttempts = 15 // ~30 seconds at 2s intervals
-    setSectionAnalysisTimedOut(false)
-    async function poll() {
-      if (!mountedRef.current) return
-      if (attempts >= maxAttempts) {
-        if (mountedRef.current) setSectionAnalysisTimedOut(true)
-        return
-      }
-      attempts++
-      try {
-        const resp = await authedMutate(`/api/manage/items/${targetItemId}`, 'GET', undefined, navigate) as { data: Item }
-        if (resp?.data?.sectionMap?.sections) {
-          queryClient.setQueryData(['item', targetItemId], { data: resp.data })
-          queryClient.invalidateQueries({ queryKey: ['item', targetItemId] })
-          return
-        }
-      } catch { /* keep polling */ }
-      if (mountedRef.current) setTimeout(poll, 2000)
-    }
-    setTimeout(poll, 3000) // initial delay — give analyzeDocument a head start
-  }
-
-  // ── Recalculate time from section selection ──────────────────────────────────
-  function recalcTimeFromSections(
-    included: string[],
-    depths: Record<string, 'deep' | 'explore' | 'skim'>
-  ) {
-    if (!itemData?.sectionMap?.sections || !itemData.recommendedTimeLimitMinutes) return
-    const allSections = itemData.sectionMap.sections
-    const totalWeight = allSections.reduce((sum, s) => sum + (s.classification === 'substantive' ? 2 : 1), 0)
-    if (totalWeight === 0) return
-
-    const depthMultiplier: Record<string, number> = { deep: 1.5, explore: 1, skim: 0.5 }
-    const includedWeight = allSections
-      .filter((s) => included.includes(s.id))
-      .reduce((sum, s) => {
-        const base = s.classification === 'substantive' ? 2 : 1
-        const mult = depthMultiplier[depths[s.id] ?? 'explore'] ?? 1
-        return sum + base * mult
-      }, 0)
-
-    const ratio = includedWeight / totalWeight
-    const rawMinutes = Math.max(5, Math.round(itemData.recommendedTimeLimitMinutes * ratio))
-    const brackets = labels.itemDetail.timeLimitBrackets
-      .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
-    const snapped = brackets.reduce((best, b) =>
-      Math.abs(b.value - rawMinutes) < Math.abs(best.value - rawMinutes) ? b : best
-    ).value
-    setTimeLimitMinutes(snapped)
-  }
-
-  // ── Remove document handler ─────────────────────────────────────────────────
-  async function handleRemoveFile() {
-    const targetItemId = savedItemId.current ?? itemId;
-    if (!targetItemId || isAnyFileInFlight) return;
-    try {
-      await authedMutate(`/api/manage/items/${targetItemId}/document`, 'DELETE', undefined, navigate);
-      setFileStatuses({});
-      perFileTimeLimits.current = {};
-      setTimeLimitMinutes(null);
-      queryClient.invalidateQueries({ queryKey: ['item', targetItemId] });
-    } catch {
-      setFormError('Failed to remove document. Please try again.');
-    }
-  }
-
-  // ── Preview handler ─────────────────────────────────────────────────────────
-  async function handlePreviewClick(fileName: string, e: React.MouseEvent | React.KeyboardEvent) {
-    const targetItemId = savedItemId.current ?? itemId;
-    if (!targetItemId) return;
-    setLoadingPreviewFile(fileName);
-    previewTriggerRef.current = e.currentTarget as HTMLElement;
-    try {
-      const resp = await authedMutate(
-        `/api/manage/items/${targetItemId}/document-url`,
-        'GET',
-        undefined,
-        navigate
-      ) as DocumentUrlResponse;
-      setPreviewData({
-        url: resp.data.url,
-        contentType: resp.data.contentType,
-        filename: resp.data.filename,
-        originalUrl: resp.data.originalUrl,
-      });
-    } catch { /* silently fail */ }
-    finally {
-      setLoadingPreviewFile(null);
-    }
-  }
-
-  // ── Session preview handler ─────────────────────────────────────────────────
-  async function handleSessionPreview() {
-    const targetItemId = savedItemId.current ?? itemId;
-    if (!targetItemId || isSessionPreviewLoading) return;
-    setIsSessionPreviewLoading(true);
-    setSessionPreviewError('');
-    setSessionPreviewPopupBlocked(false);
-
-    // Open window synchronously inside the gesture so mobile browsers don't block it
-    const newTab = window.open('', '_blank');
-    if (!newTab) {
-      setSessionPreviewPopupBlocked(true);
-      setIsSessionPreviewLoading(false);
-      return;
-    }
-
-    try {
-      const resp = await authedMutate(
-        `/api/manage/items/${targetItemId}/preview-session`,
-        'GET',
-        timeLimitMinutes != null ? { timeLimitMinutes } : undefined,
-        navigate
-      ) as { data: { previewUrl: string } };
-      newTab.location.href = resp.data.previewUrl;
-    } catch {
-      newTab.close();
-      setSessionPreviewError(labels.itemDetail.previewSessionError);
-    } finally {
-      setIsSessionPreviewLoading(false);
-    }
-  }
-
-  // ── Self-review handler ──────────────────────────────────────────────────────
-  async function handleSelfReview(forceSessionId?: string) {
-    const targetItemId = savedItemId.current ?? itemId;
-    if (!targetItemId || isSelfReviewLoading) return;
-    setIsSelfReviewLoading(true);
-    setSelfReviewError('');
-    setSelfReviewExistingId(null);
-
-    // Open window synchronously inside the gesture so mobile browsers don't block it
-    const newTab = window.open('', '_blank');
-    if (!newTab) {
-      setSelfReviewError(labels.itemDetail.selfReviewError);
-      setIsSelfReviewLoading(false);
-      return;
-    }
-
-    try {
-      // If starting over, delete the existing session first
-      if (forceSessionId) {
-        await authedMutate(
-          `/api/manage/items/${targetItemId}/sessions/${forceSessionId}`,
-          'DELETE',
-          undefined,
-          navigate
-        );
-      }
-      const resp = await authedMutate(
-        `/api/manage/items/${targetItemId}/self-review`,
-        'POST',
-        { ...(timeLimitMinutes != null ? { timeLimitMinutes } : {}) },
-        navigate
-      ) as { data: { sessionId: string; sessionUrl: string } };
-      newTab.location.href = resp.data.sessionUrl;
-    } catch (err: unknown) {
-      newTab.close();
-      const status = (err as { status?: number }).status ?? 500;
-      const body = (err as { body?: { existingSessionId?: string } }).body;
-      if (status === 409 && body?.existingSessionId) {
-        setSelfReviewExistingId(body.existingSessionId);
-      } else if (status === 403) {
-        setSelfReviewError(labels.itemDetail.selfReviewLimitError);
-      } else {
-        setSelfReviewError(labels.itemDetail.selfReviewError);
-      }
-    } finally {
-      setIsSelfReviewLoading(false);
-    }
-  }
-
   // ── Render ──────────────────────────────────────────────────────────────────
-  const isSaving  = createMutation.isPending || updateMutation.isPending;
-  const isDeleting = deleteMutation.isPending;
-  const isExampleItem = Boolean(itemData?.isExample);
-
-  // Show the right-side sections pane when sectionMap exists or item has been saved with content
-  const hasSections = !!(itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0);
-  const hasFileReady = Object.values(fileStatuses).some(s => s.status === 'ready');
-  const hasSavedContent = !!(savedItemId.current && content.trim().length > 0 && timeLimitMinutes != null);
-  const showSectionsPane = hasSections || hasFileReady || hasSavedContent;
-
   return (
     <div
       ref={isPageMode ? undefined : focusTrapRef}
       className={isPageMode ? styles.pageWrapper : styles.overlay}
-      onClick={isPageMode ? undefined : (e) => { if (e.target === e.currentTarget) handleCancel(); }}
+      onClick={isPageMode ? undefined : (e) => { if (e.target === e.currentTarget) form.handleCancel(); }}
       role={isPageMode ? undefined : 'dialog'}
       aria-modal={isPageMode ? undefined : true}
       aria-labelledby="item-modal-title"
     >
-      <div className={`${isPageMode ? styles.pageCard : styles.modal} ${(previewData || showSectionsPane) ? styles.modalExpanded : ''}`}>
+      <div className={`${isPageMode ? styles.pageCard : styles.modal} ${(form.previewData || form.showSectionsPane) ? styles.modalExpanded : ''}`}>
         {/* Header */}
-        <div className={styles.modalHeader}>
+        <div
+          className={styles.modalHeader}
+          ref={isPageMode ? headerRef : undefined}
+          tabIndex={isPageMode ? -1 : undefined}
+          aria-label={isPageMode ? (form.isEditMode ? form.itemName || 'Edit item' : 'New item') : undefined}
+        >
           <h2 id="item-modal-title" className={styles.modalTitle}>
-            {isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
+            {form.isEditMode ? labels.itemDetail.editHeading : labels.itemDetail.newHeading}
           </h2>
-          {(isEditMode || savedItemId.current) && !showSectionsPane && (
+          {showSessionCapWarning && (
+            <span className={styles.sessionCapWarning} role="status" aria-live="polite">
+              {labels.itemDetail.sessionCapWarning
+                .replace('{used}', String(sessionCount))
+                .replace('{max}', String(maxSessionsPerItem))}
+            </span>
+          )}
+          {(form.isEditMode || form.savedItemId.current) && !form.showSectionsPane && (
             <>
-              {timeLimitMinutes != null && (isEditMode || !Object.values(fileStatuses).some(s => s.status === 'ready')) && (
+              {form.timeLimitMinutes != null && (form.isEditMode || !Object.values(form.fileStatuses).some(s => s.status === 'ready')) && (
                 <div className={styles.headerTimeLimitWrapper}>
                   <div className={styles.headerTimeLimitRow}>
                     <label htmlFor="headerTimeLimitSelect" className={styles.headerTimeLimitLabel}>
@@ -782,11 +180,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                     <select
                       id="headerTimeLimitSelect"
                       className={styles.timeLimitSelect}
-                      value={timeLimitMinutes}
-                      onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                      value={form.timeLimitMinutes}
+                      onChange={(e) => form.setTimeLimitMinutes(Number(e.target.value))}
                     >
                       {labels.itemDetail.timeLimitBrackets
-                        .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                        .filter((b) => form.sessionTimeLimit === null || b.value <= form.sessionTimeLimit)
                         .map((b) => (
                         <option key={b.value} value={b.value}>{b.label}</option>
                       ))}
@@ -795,25 +193,25 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                   <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                 </div>
               )}
-              {(itemData?.status === 'draft' || itemData?.status === 'active') && !isExampleItem && (
+              {(form.itemData?.status === 'draft' || form.itemData?.status === 'active') && !form.isExampleItem && (
                 <button
                   type="button"
                   className={styles.headerActionSelfReview}
-                  onClick={() => handleSelfReview()}
-                  disabled={isSelfReviewLoading}
+                  onClick={() => form.handleSelfReview()}
+                  disabled={form.isSelfReviewLoading}
                   title={labels.itemDetail.selfReviewTooltip}
                 >
-                  {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
+                  {form.isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
                 </button>
               )}
-              {!isExampleItem && (
+              {!form.isExampleItem && (
                 <button
                   type="button"
                   className={styles.headerActionPreview}
-                  onClick={handleSessionPreview}
-                  disabled={isSessionPreviewLoading}
+                  onClick={form.handleSessionPreview}
+                  disabled={form.isSessionPreviewLoading}
                 >
-                  {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                  {form.isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
                 </button>
               )}
             </>
@@ -822,7 +220,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
             <button
               type="button"
               className={styles.backButton}
-              onClick={handleCancel}
+              onClick={handlePageBack}
               aria-label="Back to items"
             >
               ← Back
@@ -831,7 +229,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
             <button
               type="button"
               className={styles.closeButton}
-              onClick={handleCancel}
+              onClick={form.handleCancel}
               aria-label="Close"
             >
               ×
@@ -840,30 +238,30 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
         </div>
 
         {/* Session preview inline feedback */}
-        {sessionPreviewError && (
-          <p className={styles.formError} role="alert" aria-live="polite">{sessionPreviewError}</p>
+        {form.sessionPreviewError && (
+          <p className={styles.formError} role="alert" aria-live="polite">{form.sessionPreviewError}</p>
         )}
-        {sessionPreviewPopupBlocked && (
+        {form.sessionPreviewPopupBlocked && (
           <p className={styles.previewNotice} aria-live="polite">{labels.itemDetail.previewSessionPopupBlocked}</p>
         )}
-        {selfReviewError && (
-          <p className={styles.formError} role="alert" aria-live="polite">{selfReviewError}</p>
+        {form.selfReviewError && (
+          <p className={styles.formError} role="alert" aria-live="polite">{form.selfReviewError}</p>
         )}
-        {selfReviewExistingId && (
+        {form.selfReviewExistingId && (
           <div className={styles.selfReviewResetBanner} role="alert">
             <span>{labels.itemDetail.selfReviewExistsNotice}</span>
             <button
               type="button"
               className={styles.selfReviewResetConfirm}
-              onClick={() => handleSelfReview(selfReviewExistingId)}
-              disabled={isSelfReviewLoading}
+              onClick={() => form.handleSelfReview(form.selfReviewExistingId!)}
+              disabled={form.isSelfReviewLoading}
             >
               {labels.itemDetail.selfReviewStartOver}
             </button>
             <button
               type="button"
               className={styles.selfReviewResetCancel}
-              onClick={() => setSelfReviewExistingId(null)}
+              onClick={() => form.setSelfReviewExistingId(null)}
             >
               {labels.itemDetail.selfReviewStartOverCancel}
             </button>
@@ -871,22 +269,22 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
         )}
 
         {/* Inner layout — flex row when right pane is open */}
-        <div className={(previewData || showSectionsPane) ? styles.modalInner : styles.modalSinglePane}>
+        <div className={(form.previewData || form.showSectionsPane) ? styles.modalInner : styles.modalSinglePane}>
           {/* Form pane */}
-          <div className={(previewData || showSectionsPane) ? styles.modalFormPane : styles.modalFormSingle}>
+          <div className={(form.previewData || form.showSectionsPane) ? styles.modalFormPane : styles.modalFormSingle}>
             {/* Body */}
             <div className={styles.modalBody}>
-              {isEditMode && itemLoading ? (
+              {form.isEditMode && form.itemLoading ? (
                 <div className={styles.loading} aria-busy="true"><span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>Loading item…</span></div>
               ) : (
                 <>
-                  {isLocked && (
+                  {form.isLocked && (
                     <p className={styles.lockedNotice} role="status">
                       🔒 {labels.itemDetail.readOnlyNotice}
                     </p>
                   )}
 
-                  {isExampleItem && (
+                  {form.isExampleItem && (
                     <div className={styles.exampleCallout} role="status">
                       <p className={styles.exampleCalloutText}>
                         {labels.itemDetail.exampleCallout}
@@ -894,7 +292,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                     </div>
                   )}
 
-                  <form id="item-detail-form" onSubmit={handleSubmit} noValidate className={styles.form}>
+                  <form id="item-detail-form" onSubmit={form.handleSubmit} noValidate className={styles.form}>
                     <div className={styles.field}>
                       <label htmlFor="itemName" className={styles.label}>
                         {labels.itemDetail.fieldName} <span className={styles.required} aria-hidden="true">*</span>
@@ -903,11 +301,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                         id="itemName"
                         type="text"
                         className={styles.input}
-                        value={itemName}
-                        onChange={(e) => setItemName(e.target.value)}
+                        value={form.itemName}
+                        onChange={(e) => form.setItemName(e.target.value)}
                         maxLength={200}
                         required
-                        disabled={isLocked}
+                        disabled={form.isLocked}
                         placeholder={labels.itemDetail.fieldNamePlaceholder}
                       />
                     </div>
@@ -920,11 +318,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                         id="closeDate"
                         type="datetime-local"
                         className={styles.input}
-                        value={closeDate}
-                        onChange={(e) => setCloseDate(e.target.value)}
+                        value={form.closeDate}
+                        onChange={(e) => form.setCloseDate(e.target.value)}
                         min={todayIso()}
                         required
-                        disabled={isLocked}
+                        disabled={form.isLocked}
                       />
                     </div>
 
@@ -938,39 +336,39 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                       <textarea
                         id="content"
                         className={styles.contentTextarea}
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
+                        value={form.content}
+                        onChange={(e) => form.setContent(e.target.value)}
                         rows={8}
-                        disabled={isLocked}
+                        disabled={form.isLocked}
                         placeholder={labels.itemDetail.fieldContentPlaceholder}
                       />
 
                       <label className={styles.subLabel}>{labels.itemDetail.contentUploadLabel}</label>
                       <div className={styles.uploadArea}>
                         <p className={styles.uploadHint}>
-                          {`Accepts .md, .txt, .pdf, .docx, or images (.jpg, .png, .webp, .gif) — max ${maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
+                          {`Accepts .md, .txt, .pdf, .docx, or images (.jpg, .png, .webp, .gif) — max ${form.maxUploadMb ?? 10} MB. Uploading a new file replaces the previous one.`}
                         </p>
                         <input
-                          ref={fileInputRef}
+                          ref={form.fileInputRef}
                           type="file"
                           id="fileUpload"
                           className={styles.fileInput}
                           accept=".md,.txt,.pdf,.docx,.jpg,.jpeg,.png,.webp,.gif"
-                          onChange={handleFileChange}
-                          disabled={isUploading || isLocked}
+                          onChange={form.handleFileChange}
+                          disabled={form.isUploading || form.isLocked}
                           aria-label={labels.itemDetail.uploadChooseFile}
                         />
                         <label
                           htmlFor="fileUpload"
-                          className={`${styles.fileLabel} ${(isUploading || isLocked) ? styles.fileLabelDisabled : ''}`}
+                          className={`${styles.fileLabel} ${(form.isUploading || form.isLocked) ? styles.fileLabelDisabled : ''}`}
                         >
-                          {isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
+                          {form.isUploading ? labels.itemDetail.uploadStatusUploading : labels.itemDetail.uploadChooseFile}
                         </label>
 
-                        {Object.entries(fileStatuses).map(([name, state]) => {
+                        {Object.entries(form.fileStatuses).map(([name, state]) => {
                           const isReady = state.status === 'ready';
                           const isInFlight = state.status === 'uploading' || state.status === 'scanning' || state.status === 'extracting';
-                          const isLoadingThis = loadingPreviewFile === name;
+                          const isLoadingThis = form.loadingPreviewFile === name;
                           return (
                             <div
                               key={name}
@@ -979,11 +377,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                               role={isReady ? 'button' : undefined}
                               tabIndex={isReady ? 0 : undefined}
                               aria-label={isReady ? labels.itemDetail.previewAriaLabel.replace('{filename}', name) : undefined}
-                              onClick={isReady ? (e) => handlePreviewClick(name, e) : undefined}
+                              onClick={isReady ? (e) => form.handlePreviewClick(name, e) : undefined}
                               onKeyDown={isReady ? (e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
-                                  handlePreviewClick(name, e);
+                                  form.handlePreviewClick(name, e);
                                 }
                               } : undefined}
                             >
@@ -1000,11 +398,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                                   {isLoadingThis ? '…' : labels.itemDetail.previewLink}
                                 </span>
                               )}
-                              {!isInFlight && !isLocked && (
+                              {!isInFlight && !form.isLocked && (
                                 <button
                                   type="button"
                                   className={styles.fileRemoveButton}
-                                  onClick={(e) => { e.stopPropagation(); handleRemoveFile(); }}
+                                  onClick={(e) => { e.stopPropagation(); form.handleRemoveFile(); }}
                                   aria-label={`Remove ${name}`}
                                 >×</button>
                               )}
@@ -1013,7 +411,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                         })}
 
                         {/* Time limit + preview CTA — moved to sections pane when visible */}
-                        {!showSectionsPane && !isEditMode && Object.values(fileStatuses).some(s => s.status === 'ready') && (
+                        {!form.showSectionsPane && !form.isEditMode && Object.values(form.fileStatuses).some(s => s.status === 'ready') && (
                           <div className={styles.uploadReadyCtas}>
                             <div className={styles.timeLimitRow}>
                               <label htmlFor="timeLimitSelect" className={styles.timeLimitLabel}>
@@ -1022,11 +420,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                               <select
                                 id="timeLimitSelect"
                                 className={styles.timeLimitSelect}
-                                value={timeLimitMinutes ?? 17}
-                                onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                                value={form.timeLimitMinutes ?? 17}
+                                onChange={(e) => form.setTimeLimitMinutes(Number(e.target.value))}
                               >
                                 {labels.itemDetail.timeLimitBrackets
-                                  .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                                  .filter((b) => form.sessionTimeLimit === null || b.value <= form.sessionTimeLimit)
                                   .map((b) => (
                                   <option key={b.value} value={b.value}>{b.label}</option>
                                 ))}
@@ -1036,10 +434,10 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                             <button
                               type="button"
                               className={styles.uploadCtaPreview}
-                              onClick={handleSessionPreview}
-                              disabled={isSessionPreviewLoading}
+                              onClick={form.handleSessionPreview}
+                              disabled={form.isSessionPreviewLoading}
                             >
-                              {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                              {form.isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
                             </button>
                           </div>
                         )}
@@ -1054,37 +452,37 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                       <textarea
                         id="description"
                         className={styles.textarea}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
+                        value={form.description}
+                        onChange={(e) => form.setDescription(e.target.value)}
                         maxLength={2000}
                         rows={8}
                         required
-                        disabled={isLocked}
+                        disabled={form.isLocked}
                         placeholder={labels.itemDetail.fieldDescriptionPlaceholder}
                       />
-                      <span className={styles.charCount}>{description.length}/2,000</span>
+                      <span className={styles.charCount}>{form.description.length}/2,000</span>
                       <AssessmentHelper
-                        itemId={savedItemId.current ?? itemId ?? null}
-                        itemType={itemData?.itemType ?? 'document'}
-                        description={description}
-                        hasDocument={Object.values(fileStatuses).some((s) => s.status === 'ready')}
-                        onUseSuggestion={(text) => setDescription(text)}
+                        itemId={form.savedItemId.current ?? itemId ?? null}
+                        itemType={form.itemData?.itemType ?? 'document'}
+                        description={form.description}
+                        hasDocument={Object.values(form.fileStatuses).some((s) => s.status === 'ready')}
+                        onUseSuggestion={(text) => form.setDescription(text)}
                         onEditSuggestion={(text) => {
-                          setDescription(text);
+                          form.setDescription(text);
                           setTimeout(() => {
                             const el = document.getElementById('description') as HTMLTextAreaElement | null;
                             el?.focus();
                           }, 50);
                         }}
                         onAppendExample={(text) => {
-                          setDescription((prev) => prev ? `${prev}\n${text}` : text);
+                          form.setDescription((prev) => prev ? `${prev}\n${text}` : text);
                         }}
                       />
                     </div>
 
-                    {formError && (
+                    {form.formError && (
                       <p className={styles.formError} role="alert" aria-live="polite">
-                        {formError}
+                        {form.formError}
                       </p>
                     )}
                   </form>
@@ -1093,14 +491,14 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
             </div>
 
             {/* Actions — pinned footer outside scrollable body */}
-            {!(isEditMode && itemLoading) && (
+            {!(form.isEditMode && form.itemLoading) && (
               <div className={styles.actions}>
-                {isEditMode && !isExampleItem && (
+                {form.isEditMode && !form.isExampleItem && (
                   <button
                     type="button"
                     className={styles.deleteButton}
-                    onClick={() => setShowDeleteModal(true)}
-                    disabled={isDeleting}
+                    onClick={() => form.setShowDeleteModal(true)}
+                    disabled={form.isDeleting}
                   >
                     {labels.itemDetail.deleteButton}
                   </button>
@@ -1109,34 +507,34 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                 <button
                   type="button"
                   className={styles.cancelButton}
-                  onClick={handleCancel}
-                  disabled={isSaving}
+                  onClick={form.handleCancel}
+                  disabled={form.isSaving}
                 >
                   {labels.itemDetail.cancelButton}
                 </button>
-                {!isLocked && !isExampleItem && (
+                {!form.isLocked && !form.isExampleItem && (
                   <button
                     type="submit"
                     form="item-detail-form"
                     className={styles.saveButton}
-                    disabled={isSaving || isAnyFileInFlight || (!isEditMode && monthlyItemsAtLimit)}
-                    title={isAnyFileInFlight ? 'Waiting for document to finish processing…' : (!isEditMode && monthlyItemsAtLimit) ? labels.plan.monthlyLimitReached.replace('{resetDate}', monthlyItemsResetDate) : undefined}
+                    disabled={form.isSaving || form.isAnyFileInFlight || (!form.isEditMode && form.monthlyItemsAtLimit)}
+                    title={form.isAnyFileInFlight ? 'Waiting for document to finish processing…' : (!form.isEditMode && form.monthlyItemsAtLimit) ? labels.plan.monthlyLimitReached.replace('{resetDate}', form.monthlyItemsResetDate) : undefined}
                   >
-                    {isSaving ? '…' : isAnyFileInFlight ? 'Processing…'
-                      : (!isEditMode && !savedItemId.current && content.trim().length > 0) ? 'Next'
+                    {form.isSaving ? '…' : form.isAnyFileInFlight ? 'Processing…'
+                      : (!form.isEditMode && !form.savedItemId.current && form.content.trim().length > 0) ? 'Next'
                       : labels.itemDetail.saveButton}
                   </button>
                 )}
-                {!isEditMode && monthlyItemsAtLimit && (
+                {!form.isEditMode && form.monthlyItemsAtLimit && (
                   <p className={styles.formError} role="status">
-                    {labels.plan.monthlyLimitReached.replace('{resetDate}', monthlyItemsResetDate)}
+                    {labels.plan.monthlyLimitReached.replace('{resetDate}', form.monthlyItemsResetDate)}
                   </p>
                 )}
-                {!isEditMode && monthlyItemsNearLimit && !monthlyItemsAtLimit && (
+                {!form.isEditMode && form.monthlyItemsNearLimit && !form.monthlyItemsAtLimit && (
                   <p className={styles.limitNotice} role="status">
                     {labels.plan.monthlyLimitNear
-                      .replace('{remaining}', String(monthlyItemsLimit! - monthlyItemsCount))
-                      .replace('{resetDate}', monthlyItemsResetDate)}
+                      .replace('{remaining}', String(form.monthlyItemsLimit! - form.monthlyItemsCount))
+                      .replace('{resetDate}', form.monthlyItemsResetDate)}
                   </p>
                 )}
               </div>
@@ -1144,22 +542,22 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
           </div>
 
           {/* Preview pane — takes priority over sections pane */}
-          {previewData && (
+          {form.previewData && (
             <DocumentPreviewPanel
-              url={previewData.url}
-              contentType={previewData.contentType}
-              filename={previewData.filename}
-              originalUrl={previewData.originalUrl}
-              onClose={() => setPreviewData(null)}
-              triggerRef={previewTriggerRef as React.RefObject<HTMLElement | null>}
+              url={form.previewData.url}
+              contentType={form.previewData.contentType}
+              filename={form.previewData.filename}
+              originalUrl={form.previewData.originalUrl}
+              onClose={() => form.setPreviewData(null)}
+              triggerRef={form.previewTriggerRef as React.RefObject<HTMLElement | null>}
             />
           )}
 
           {/* Sections pane — shown when sectionMap or file ready, hidden when preview is open */}
-          {!previewData && showSectionsPane && (
+          {!form.previewData && form.showSectionsPane && (
             <div className={styles.sectionsPane} role="region" aria-label="Document analysis">
               {/* Time selector */}
-              {timeLimitMinutes != null && (
+              {form.timeLimitMinutes != null && (
                 <div className={styles.sectionsPaneBlock}>
                   <div className={styles.timeLimitRow}>
                     <label htmlFor="sectionsPaneTimeSelect" className={styles.timeLimitLabel}>
@@ -1168,11 +566,11 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                     <select
                       id="sectionsPaneTimeSelect"
                       className={styles.timeLimitSelect}
-                      value={timeLimitMinutes}
-                      onChange={(e) => setTimeLimitMinutes(Number(e.target.value))}
+                      value={form.timeLimitMinutes}
+                      onChange={(e) => form.setTimeLimitMinutes(Number(e.target.value))}
                     >
                       {labels.itemDetail.timeLimitBrackets
-                        .filter((b) => sessionTimeLimit === null || b.value <= sessionTimeLimit)
+                        .filter((b) => form.sessionTimeLimit === null || b.value <= form.sessionTimeLimit)
                         .map((b) => (
                         <option key={b.value} value={b.value}>{b.label}</option>
                       ))}
@@ -1184,52 +582,42 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
 
               {/* Preview + Self-review buttons */}
               <div className={styles.sectionsPaneActions}>
-                {!isExampleItem && (
+                {!form.isExampleItem && (
                   <button
                     type="button"
                     className={styles.uploadCtaPreview}
-                    onClick={handleSessionPreview}
-                    disabled={isSessionPreviewLoading}
+                    onClick={form.handleSessionPreview}
+                    disabled={form.isSessionPreviewLoading}
                   >
-                    {isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
+                    {form.isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
                   </button>
                 )}
-                {(itemData?.status === 'draft' || itemData?.status === 'active') && !isExampleItem && (
+                {(form.itemData?.status === 'draft' || form.itemData?.status === 'active') && !form.isExampleItem && (
                   <button
                     type="button"
                     className={styles.headerActionSelfReview}
-                    onClick={() => handleSelfReview()}
-                    disabled={isSelfReviewLoading}
+                    onClick={() => form.handleSelfReview()}
+                    disabled={form.isSelfReviewLoading}
                     title={labels.itemDetail.selfReviewTooltip}
                   >
-                    {isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
+                    {form.isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
                   </button>
                 )}
               </div>
 
               {/* Section panel — or loading indicator while analyzing */}
-              {hasSections ? (
+              {form.hasSections ? (
                 <SectionPanel
-                  sections={itemData!.sectionMap!.sections}
-                  feedbackSections={feedbackSections}
-                  sectionDepthPreferences={sectionDepthPreferences}
-                  onToggleSection={(sectionId, included) => {
-                    const next = included
-                      ? [...feedbackSections, sectionId]
-                      : feedbackSections.filter((id) => id !== sectionId);
-                    setFeedbackSections(next);
-                    recalcTimeFromSections(next, sectionDepthPreferences);
-                  }}
-                  onChangeDepth={(sectionId, depth) => {
-                    const next = { ...sectionDepthPreferences, [sectionId]: depth };
-                    setSectionDepthPreferences(next);
-                    recalcTimeFromSections(feedbackSections, next);
-                  }}
-                  disabled={isLocked}
+                  sections={form.itemData!.sectionMap!.sections}
+                  feedbackSections={form.feedbackSections}
+                  sectionDepthPreferences={form.sectionDepthPreferences}
+                  onToggleSection={form.handleToggleSection}
+                  onChangeDepth={form.handleChangeDepth}
+                  disabled={form.isLocked}
                 />
               ) : (
                 <div className={styles.sectionsPaneBlock}>
-                  {sectionAnalysisTimedOut ? (
+                  {form.sectionAnalysisTimedOut ? (
                     <p className={styles.timeLimitHint}>{labels.itemDetail.analysisTimeout}</p>
                   ) : (
                     <ScanLineLoader text={labels.itemDetail.analyzingDocument} />
@@ -1238,12 +626,12 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
               )}
 
               {/* Coverage indicator */}
-              {itemData?.coverageMap && itemData?.sectionMap?.sections && itemData.sessionCount > 0 && (
+              {form.itemData?.coverageMap && form.itemData?.sectionMap?.sections && form.itemData.sessionCount > 0 && (
                 <CoverageIndicator
-                  sections={itemData.sectionMap.sections
-                    .filter((s) => feedbackSections.includes(s.id))
+                  sections={form.itemData.sectionMap.sections
+                    .filter((s) => form.feedbackSections.includes(s.id))
                     .map((s) => ({ id: s.id, title: s.title }))}
-                  coverageMap={itemData.coverageMap}
+                  coverageMap={form.itemData.coverageMap}
                 />
               )}
             </div>
@@ -1252,7 +640,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
       </div>
 
       {/* Delete confirmation */}
-      {showDeleteModal && (
+      {form.showDeleteModal && (
         <div
           className={styles.confirmOverlay}
           role="dialog"
@@ -1264,25 +652,25 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
               {labels.itemDetail.deleteConfirmTitle}
             </h3>
             <p className={styles.confirmMessage}>
-              {labels.itemDetail.deleteConfirmMessage.replace('{itemName}', itemName)}
+              {labels.itemDetail.deleteConfirmMessage.replace('{itemName}', form.itemName)}
             </p>
-            {deleteError && (
-              <p className={styles.formError} role="alert">{deleteError}</p>
+            {form.deleteError && (
+              <p className={styles.formError} role="alert">{form.deleteError}</p>
             )}
             <div className={styles.confirmActions}>
               <button
                 type="button"
                 className={styles.cancelButton}
-                onClick={() => { setShowDeleteModal(false); setDeleteError(''); }}
-                disabled={isDeleting}
+                onClick={() => { form.setShowDeleteModal(false); form.setDeleteError(''); }}
+                disabled={form.isDeleting}
               >
                 {labels.itemDetail.deleteConfirmCancel}
               </button>
               <button
                 type="button"
                 className={styles.destructiveButton}
-                onClick={() => { setDeleteError(''); deleteMutation.mutate(undefined); }}
-                disabled={isDeleting}
+                onClick={() => { form.setDeleteError(''); form.deleteMutation.mutate(undefined); }}
+                disabled={form.isDeleting}
               >
                 {labels.itemDetail.deleteConfirmDelete}
               </button>
@@ -1292,18 +680,16 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
       )}
 
       {/* Post-save invite flow — shown after creating a new item */}
-      {showInviteModal && savedItem && (
+      {form.showInviteModal && form.savedItem && (
         <InviteModal
-          itemId={savedItem.itemId}
-          itemName={savedItem.itemName}
-          onClose={() => { setShowInviteModal(false); onClose(); }}
+          itemId={form.savedItem.itemId}
+          itemName={form.savedItem.itemName}
+          onClose={() => { form.setShowInviteModal(false); onClose(); }}
           skipLabel="Skip for now"
           onSelfReview={async () => {
-            // Open window synchronously in the click gesture BEFORE any state updates
-            // — browsers block popups that aren't in the direct user gesture context
             const newTab = window.open('', '_blank');
-            setShowInviteModal(false);
-            const targetItemId = savedItemId.current ?? itemId;
+            form.setShowInviteModal(false);
+            const targetItemId = form.savedItemId.current ?? itemId;
             if (!targetItemId || !newTab) {
               if (newTab) newTab.close();
               onClose();
@@ -1313,8 +699,8 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
               const resp = await authedMutate(
                 `/api/manage/items/${targetItemId}/self-review`,
                 'POST',
-                { ...(timeLimitMinutes != null ? { timeLimitMinutes } : {}) },
-                navigate
+                { ...(form.timeLimitMinutes != null ? { timeLimitMinutes: form.timeLimitMinutes } : {}) },
+                form.navigate
               ) as { data: { sessionId: string; sessionUrl: string } };
               newTab.location.href = resp.data.sessionUrl;
             } catch {
@@ -1323,6 +709,42 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
             onClose();
           }}
         />
+      )}
+
+      {/* Unsaved changes confirmation — page mode only */}
+      {showDiscardDialog && (
+        <div
+          className={styles.discardOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="discard-dialog-title"
+        >
+          <div className={styles.discardModal}>
+            <h3 id="discard-dialog-title" className={styles.discardTitle}>
+              Discard changes?
+            </h3>
+            <p className={styles.discardMessage}>
+              You have unsaved changes. Are you sure you want to leave?
+            </p>
+            <div className={styles.discardActions}>
+              <button
+                type="button"
+                className={styles.cancelButton}
+                onClick={handleDiscardCancel}
+                autoFocus
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                className={styles.destructiveButton}
+                onClick={handleDiscardConfirm}
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

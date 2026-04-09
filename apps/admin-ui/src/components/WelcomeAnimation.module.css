@@ -1,0 +1,55 @@
+/* WelcomeAnimation — full-screen branded splash overlay
+   Plays once per session (sessionStorage guard), then fires onComplete.
+   Total: fade-in 800ms + hold 1500ms + fade-out 600ms = 2900ms */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: hsl(225, 25%, 10%);
+  animation: welcomeFadeIn 800ms ease-in forwards,
+             welcomeFadeOut 600ms ease-out 2300ms forwards;
+}
+
+.wordmark {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 400;
+  text-transform: lowercase;
+  color: hsl(220, 14%, 96%);
+  font-size: clamp(1.5rem, 1.143rem + 1.786vw, 2.25rem);
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.accentLine {
+  width: 60px;
+  height: 2px;
+  background: #7a9e87;
+  margin-top: 12px;
+  border: none;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────── */
+
+@keyframes welcomeFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes welcomeFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ── Reduced motion — skip animation entirely ──────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay {
+    animation: none;
+    display: none;
+  }
+}

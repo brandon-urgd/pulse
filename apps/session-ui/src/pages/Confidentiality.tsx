@@ -222,7 +222,8 @@ export default function Confidentiality() {
           <p style={styles.paragraph}>
             Your feedback will be collected and processed by Pulse on behalf of the person who
             invited you. Your responses, including the conversation transcript, may be reviewed
-            by the item owner.
+            by the item owner. Conversation transcripts are automatically deleted 30 days after
+            the item's Pulse Check is generated.
           </p>
           <p style={styles.paragraph}>
             By clicking "I Accept" you agree to our Terms of Use and acknowledge our Privacy Policy.
