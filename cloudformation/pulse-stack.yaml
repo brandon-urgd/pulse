@@ -3233,6 +3233,10 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*/items/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S2: Lambda Functions
@@ -3485,6 +3489,7 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
+          ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
       Tags:
         - Key: project
           Value: pulse

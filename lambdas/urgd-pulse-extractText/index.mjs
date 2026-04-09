@@ -3,6 +3,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
@@ -11,6 +12,7 @@ requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 function unmarshalFeatures(m) {
   if (!m) return {}
@@ -175,6 +177,20 @@ export const handler = async (event) => {
     })
 
     log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })
+
+    // Invoke analyzeDocument async to generate section map
+    if (process.env.ANALYZE_DOCUMENT_FUNCTION_ARN) {
+      try {
+        await lambdaClient.send(new InvokeCommand({
+          FunctionName: process.env.ANALYZE_DOCUMENT_FUNCTION_ARN,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ itemId, tenantId }),
+        }))
+        log('info', 'ExtractText: analyzeDocument invoked async', { tenantId, itemId })
+      } catch (invokeErr) {
+        log('warn', 'ExtractText: failed to invoke analyzeDocument', { tenantId, itemId, errorName: invokeErr.name })
+      }
+    }
   } catch (err) {
     log('error', 'ExtractText: extraction failed', { tenantId, itemId, errorName: err.name })
 
