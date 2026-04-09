@@ -615,6 +615,17 @@ jobs:
             fi
           done
 
+          # Upload PNG icon assets (required for iOS home screen, web manifest)
+          for png in favicon-32.png favicon-16.png icon-120.png icon-180.png icon-192.png icon-512.png; do
+            if [ -f "assets/$png" ]; then
+              aws s3 cp "assets/$png" \
+                "s3://${CF_FrontendBucketName}/assets/$png" \
+                --content-type "image/png" \
+                --cache-control "public, max-age=31536000, immutable" \
+                --region ${{ env.AWS_REGION }}
+            fi
+          done
+
           DIST_DIR=apps/session-ui/dist S3_PREFIX=s \
             ./scripts/deploy-frontend.sh "$CF_FrontendBucketName"
 
