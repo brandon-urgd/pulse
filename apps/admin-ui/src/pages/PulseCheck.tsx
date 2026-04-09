@@ -785,6 +785,11 @@ export default function PulseCheck() {
                   >
                     {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                   </button>
+                  {hasPersistedActionableDecision && (
+                    <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
+                      {labels.pulseCheck.viewRevisions}
+                    </Link>
+                  )}
                   {saveStatus === 'saved' && (
                     <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
                   )}
@@ -792,14 +797,6 @@ export default function PulseCheck() {
                     <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
                   )}
                 </div>
-
-                {hasPersistedActionableDecision && (
-                  <div className={styles.revisionCtaRow}>
-                    <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
-                      {labels.pulseCheck.viewRevisions}
-                    </Link>
-                  </div>
-                )}
               </>
             )}
           </section>
@@ -1038,6 +1035,11 @@ export default function PulseCheck() {
                 >
                   {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                 </button>
+                {hasPersistedActionableDecision && (
+                  <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
+                    {labels.pulseCheck.viewRevisions}
+                  </Link>
+                )}
                 {saveStatus === 'saved' && (
                   <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
                 )}
@@ -1045,14 +1047,6 @@ export default function PulseCheck() {
                   <span className={styles.saveError} role="alert" aria-live="polite">{saveErrorMsg}</span>
                 )}
               </div>
-
-              {hasPersistedActionableDecision && (
-                <div className={styles.revisionCtaRow}>
-                  <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
-                    {labels.pulseCheck.viewRevisions}
-                  </Link>
-                </div>
-              )}
             </>
           )}
         </section>
