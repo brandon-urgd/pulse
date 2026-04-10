@@ -173,8 +173,8 @@
 
 @media (max-width: 639px) {
   .pulse-entry-bg {
-    align-items: flex-start;
-    padding-top: var(--space-8);
+    align-items: center;
+    padding-top: 0;
   }
 }
 

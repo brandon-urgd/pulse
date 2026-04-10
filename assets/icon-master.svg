@@ -1,74 +1,186 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!--
     Pulse App Icon — "Cursive P into pulse line"
-    Master SVG at 1024×1024
+    Master SVG at 1024×1024 — BOLD with depth
 
     Concept: Capital "P" on the left. The pulse line (EKG spike) extends
     from the BOTTOM of the bowl — where lowercase "-ulse" would connect
-    in cursive handwriting. The tail curves out from the bowl's base and
-    becomes the EKG spike pattern flowing rightward.
+    in cursive handwriting. Bold, confident strokes.
 
-    Everything is one color: #7a9e87 (Pulse Green). The "P" and the pulse
-    line are the same stroke color — they feel like one continuous mark.
+    FIXED: Bowl now occupies top ~48% of letter height (y=190 to y=490),
+    clearly reading as a capital P. Bowl is wider (out to x=650) to feel
+    open and generous. Pulse line exits from bowl-stem junction at y=490.
 
-    Colors:
-    - Background: #0a0f14 (deep black)
-    - Everything: #7a9e87 (Pulse Green)
+    Depth effects:
+    - Inner shadow/glow on the strokes gives them a pressed/embossed feel
+    - Subtle outer glow creates a soft luminance against the dark background
+    - The border has a very faint inner glow to suggest depth in the frame
   -->
+
+  <defs>
+    <!-- Soft outer glow — makes the mark feel like it's emitting light -->
+    <filter id="markGlow" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Emboss/depth effect — creates a pressed-in look -->
+    <filter id="emboss" x="-5%" y="-5%" width="110%" height="110%">
+      <!-- Dark shadow below/right -->
+      <feOffset in="SourceAlpha" dx="2" dy="3" result="shadowOffset"/>
+      <feGaussianBlur in="shadowOffset" stdDeviation="3" result="shadowBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.4" result="shadowColor"/>
+      <feComposite in="shadowColor" in2="shadowBlur" operator="in" result="shadow"/>
+      <!-- Light highlight above/left -->
+      <feOffset in="SourceAlpha" dx="-1" dy="-1" result="highlightOffset"/>
+      <feGaussianBlur in="highlightOffset" stdDeviation="2" result="highlightBlur"/>
+      <feFlood flood-color="#b8d4c2" flood-opacity="0.25" result="highlightColor"/>
+      <feComposite in="highlightColor" in2="highlightBlur" operator="in" result="highlight"/>
+      <!-- Combine: shadow + highlight + original -->
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="highlight"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Subtle inner border glow -->
+    <filter id="borderGlow" x="-2%" y="-2%" width="104%" height="104%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Radial gradient for background depth -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7a9e87"/>
+      <stop offset="100%" stop-color="#0a0f14"/>
+    </radialGradient>
+  </defs>
 
   <!-- Dark background -->
   <rect width="1024" height="1024" fill="#0a0f14"/>
 
-  <!-- Light border outline -->
-  <rect x="16" y="16" width="992" height="992" rx="80" fill="none" stroke="#7a9e87" stroke-opacity="0.3" stroke-width="4"/>
+  <!-- Subtle radial gradient behind the mark — gives depth to the background -->
+  <circle cx="400" cy="440" r="400" fill="url(#bgGrad)" opacity="0.08"/>
 
-  <!-- P stem — vertical stroke, left side -->
-  <line
-    x1="200" y1="220"
-    x2="200" y2="790"
-    stroke="#7a9e87"
-    stroke-width="14"
-    stroke-linecap="round"
-  />
-
-  <!-- P bowl — curves from top of stem, arcs right, returns to lowercase baseline -->
-  <path
-    d="M 200 220
-       L 370 220
-       C 430 220 475 245 500 285
-       C 525 325 535 370 535 410
-       C 535 450 525 495 500 535
-       C 475 575 430 600 370 600
-       L 200 600"
-    fill="none"
-    stroke="#7a9e87"
-    stroke-width="14"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <!-- Border with glow -->
+  <rect x="20" y="20" width="984" height="984" rx="72" fill="none"
+    stroke="#7a9e87" stroke-opacity="0.2" stroke-width="2.5"
+    filter="url(#borderGlow)"/>
 
   <!--
-    Pulse line — exits from the bottom of the bowl (600 y-level)
-    and flows rightward. This is where lowercase "-ulse" would start
-    in cursive. The line curves out gently then hits the EKG spikes.
-    Same color as the P — one continuous visual mark.
+    THE MARK — P + pulse line, with emboss depth effect
+
+    Letter anatomy:
+    - Stem: x=195, from y=190 to y=810 (620px full height)
+    - Bowl: y=190 to y=490 (300px = 48% of stem height — upper half)
+    - Bowl width: extends to x=650 at widest (open, generous)
+    - Pulse line: exits bowl-stem junction at y=490, flows right with EKG spikes
   -->
-  <path
-    d="M 370 600
-       C 420 600 460 600 500 600
-       L 560 600
-       L 590 620
-       L 630 500
-       L 670 680
-       L 710 440
-       L 750 660
-       L 780 570
-       L 810 600
-       L 960 600"
-    fill="none"
-    stroke="#7a9e87"
-    stroke-width="10"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <g filter="url(#emboss)">
+
+    <!-- P stem — full height, bold -->
+    <line
+      x1="195" y1="190"
+      x2="195" y2="810"
+      stroke="#7a9e87"
+      stroke-width="42"
+      stroke-linecap="round"
+    />
+
+    <!--
+      P bowl — smooth arc from top of stem, out right, and back to stem at y=490
+      Uses a single large arc for a clean, confident shape.
+      Top: y=190, rightmost extent: ~x=650 at y=340 (vertical center of bowl)
+      Bottom: returns to stem at y=490
+    -->
+    <path
+      d="M 195 190
+         L 380 190
+         C 520 190, 650 230, 650 340
+         C 650 450, 520 490, 380 490
+         L 195 490"
+      fill="none"
+      stroke="#7a9e87"
+      stroke-width="42"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!--
+      Pulse line — exits from bottom of bowl at y=490
+      Flows rightward with EKG spikes:
+      - Baseline at y=490
+      - Spike amplitudes: ±160-180px from baseline
+      - Extends to x=960 (near right edge)
+    -->
+    <path
+      d="M 380 490
+         L 500 490
+         L 545 525
+         L 600 310
+         L 660 670
+         L 720 320
+         L 775 660
+         L 820 430
+         L 855 490
+         L 960 490"
+      fill="none"
+      stroke="#7a9e87"
+      stroke-width="30"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <!-- Soft glow layer on top — gives the mark luminance -->
+  <g opacity="0.15" filter="url(#markGlow)">
+    <!-- Glow: P stem -->
+    <line
+      x1="195" y1="190"
+      x2="195" y2="810"
+      stroke="#a3c4af"
+      stroke-width="42"
+      stroke-linecap="round"
+    />
+
+    <!-- Glow: P bowl -->
+    <path
+      d="M 195 190
+         L 380 190
+         C 520 190, 650 230, 650 340
+         C 650 450, 520 490, 380 490
+         L 195 490"
+      fill="none"
+      stroke="#a3c4af"
+      stroke-width="42"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Glow: Pulse line -->
+    <path
+      d="M 380 490
+         L 500 490
+         L 545 525
+         L 600 310
+         L 660 670
+         L 720 320
+         L 775 660
+         L 820 430
+         L 855 490
+         L 960 490"
+      fill="none"
+      stroke="#a3c4af"
+      stroke-width="30"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
 </svg>

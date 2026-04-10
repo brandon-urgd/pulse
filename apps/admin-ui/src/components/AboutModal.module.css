@@ -119,13 +119,13 @@
 /* Mobile */
 @media (max-width: 639px) {
   .overlay {
-    align-items: flex-end;
-    padding: 0;
+    align-items: center;
+    padding: var(--space-4);
   }
 
   .card {
     max-width: 100%;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    padding-bottom: env(safe-area-inset-bottom, var(--space-8));
+    border-radius: var(--radius-xl);
+    padding-bottom: var(--space-8);
   }
 }

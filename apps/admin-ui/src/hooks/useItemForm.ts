@@ -682,7 +682,8 @@ export function useItemForm({ itemId, onClose }: UseItemFormOptions) {
   const hasSections = !!(itemData?.sectionMap?.sections && itemData.sectionMap.sections.length > 0);
   const hasFileReady = Object.values(fileStatuses).some(s => s.status === 'ready');
   const hasSavedContent = !!(savedItemId.current && content.trim().length > 0 && timeLimitMinutes != null);
-  const showSectionsPane = hasSections || hasFileReady || hasSavedContent;
+  const isImageItem = itemData?.itemType === 'image';
+  const showSectionsPane = !isImageItem && (hasSections || hasFileReady || hasSavedContent);
 
   return {
     // Identity
