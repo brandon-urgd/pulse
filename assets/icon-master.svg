@@ -1,24 +1,88 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!--
     Pulse App Icon — "Cursive P into pulse line"
-    Master SVG at 1024×1024 — BOLD with depth
+    Master SVG at 1024×1024
+    v3 — Refined pulse line position + distinctive visual traits
 
-    Concept: Capital "P" on the left. The pulse line (EKG spike) extends
-    from the BOTTOM of the bowl — where lowercase "-ulse" would connect
-    in cursive handwriting. Bold, confident strokes.
+    ═══════════════════════════════════════════════════════════════
+    DESIGN CONCEPT
+    ═══════════════════════════════════════════════════════════════
 
-    FIXED: Bowl now occupies top ~48% of letter height (y=190 to y=490),
-    clearly reading as a capital P. Bowl is wider (out to x=650) to feel
-    open and generous. Pulse line exits from bowl-stem junction at y=490.
+    Capital "P" with a pulse/EKG line that flows from the stem as if
+    written in cursive — "P" then continuing to write "-ulse".
 
-    Depth effects:
-    - Inner shadow/glow on the strokes gives them a pressed/embossed feel
-    - Subtle outer glow creates a soft luminance against the dark background
-    - The border has a very faint inner glow to suggest depth in the frame
+    In cursive handwriting, after completing the bowl of a capital P,
+    the pen returns down the stem and then sweeps right at the
+    LOWERCASE BASELINE — not at the bowl junction. This baseline sits
+    at roughly 2/3 down the stem height (~y=650), well below where
+    the bowl reconnects at y=490.
+
+    The pulse line now exits the stem at y=650, creating a natural
+    cursive flow that reads as handwritten continuity rather than
+    a mechanical attachment to the bowl.
+
+    ═══════════════════════════════════════════════════════════════
+    DISTINCTIVE VISUAL TRAITS
+    ═══════════════════════════════════════════════════════════════
+
+    The mark (P + pulse) is the hero. These traits SUPPORT it:
+
+    1. RADIAL GRADIENT BACKGROUND — Very subtle dark-to-slightly-less-dark
+       radial gradient centered on the mark. Gives the background depth
+       like looking into an instrument scope. Barely perceptible but
+       prevents the dead-flat feeling of pure black.
+
+    2. DOUBLE-LINE BORDER (BEZEL) — Thin outer stroke + thicker inner
+       stroke with a gap between them. Evokes a premium instrument bezel
+       or watch case. The outer line is fainter, the inner line slightly
+       brighter — creates a sense of machined precision.
+
+    3. SCOPE RING — A subtle circular ring inside the border, centered
+       on the mark. Like a radar scope or instrument reticle. Very faint
+       (~6% opacity) so it's felt more than seen. Frames the mark and
+       gives the icon a "looking through an instrument" quality.
+
+    4. CROSSHAIR GRID — Faint vertical + horizontal lines through the
+       center, plus a second concentric ring. At 3-4% opacity, these
+       create a technical/instrument substrate. Like the grid lines on
+       an oscilloscope or radar display.
+
+    5. NOISE TEXTURE — SVG turbulence filter overlaid at very low opacity
+       (~3%). Gives the background a tactile, almost film-grain quality.
+       Prevents the sterile digital feel. Think: the texture of a matte
+       instrument panel or the grain of a Leica viewfinder.
+
+    ═══════════════════════════════════════════════════════════════
+    LETTER ANATOMY
+    ═══════════════════════════════════════════════════════════════
+
+    - Stem: x=195, from y=190 to y=810 (620px full height)
+    - Bowl: y=190 to y=490 (300px = 48% of stem height — upper half)
+    - Bowl width: extends to x=650 at widest (open, generous)
+    - Pulse line: exits STEM at y=650 (lowercase baseline, ~2/3 down)
+      and flows right with EKG spikes to near the right edge
+
+    ═══════════════════════════════════════════════════════════════
+    COLOR PALETTE
+    ═══════════════════════════════════════════════════════════════
+
+    - Pulse Green (mark): #7a9e87
+    - Highlight (emboss): #b8d4c2
+    - Glow layer: #a3c4af at 15% opacity
+    - Background: #0a0f14 (deep black)
+    - Background gradient center: #111820 (barely lighter)
   -->
 
   <defs>
-    <!-- Soft outer glow — makes the mark feel like it's emitting light -->
+    <!--
+      ═══════════════════════════════════════════════════════════
+      FILTERS
+      ═══════════════════════════════════════════════════════════
+    -->
+
+    <!-- Soft outer glow — makes the mark feel like it's emitting light.
+         The mark appears to have a soft luminance halo, like an
+         instrument readout glowing against a dark panel. -->
     <filter id="markGlow" x="-15%" y="-15%" width="130%" height="130%">
       <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="glow"/>
       <feMerge>
@@ -27,7 +91,9 @@
       </feMerge>
     </filter>
 
-    <!-- Emboss/depth effect — creates a pressed-in look -->
+    <!-- Emboss/depth effect — creates a pressed-in, machined look.
+         Dark shadow below-right + light highlight above-left gives
+         the strokes a dimensional quality, like engraved metal. -->
     <filter id="emboss" x="-5%" y="-5%" width="110%" height="110%">
       <!-- Dark shadow below/right -->
       <feOffset in="SourceAlpha" dx="2" dy="3" result="shadowOffset"/>
@@ -47,45 +113,208 @@
       </feMerge>
     </filter>
 
-    <!-- Subtle inner border glow -->
+    <!-- Border glow — subtle luminance on the bezel lines.
+         Makes the border feel like it has a faint backlight,
+         like the bezel ring on a dive watch. -->
     <filter id="borderGlow" x="-2%" y="-2%" width="104%" height="104%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="glow"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="glow"/>
       <feMerge>
         <feMergeNode in="glow"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
 
-    <!-- Radial gradient for background depth -->
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+    <!-- Noise/grain texture — SVG turbulence creates organic noise.
+         Overlaid at very low opacity to give the background a tactile,
+         almost photographic quality. Like matte-finish instrument panels
+         or the grain you see in a high-end camera viewfinder. -->
+    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.65"
+        numOctaves="4"
+        stitchTiles="stitch"
+        result="noise"
+      />
+      <feColorMatrix
+        type="saturate"
+        values="0"
+        in="noise"
+        result="monoNoise"
+      />
+    </filter>
+
+    <!--
+      ═══════════════════════════════════════════════════════════
+      GRADIENTS
+      ═══════════════════════════════════════════════════════════
+    -->
+
+    <!-- Background radial gradient — centered slightly left and above
+         center (where the mark's visual weight sits). Creates a very
+         subtle vignette effect: slightly lighter behind the mark,
+         darker at the edges. Like looking into a scope or instrument
+         housing. The difference is barely perceptible — felt, not seen. -->
+    <radialGradient id="bgRadial" cx="42%" cy="46%" r="55%">
+      <stop offset="0%" stop-color="#151c24"/>
+      <stop offset="60%" stop-color="#0f1419"/>
+      <stop offset="100%" stop-color="#0a0f14"/>
+    </radialGradient>
+
+    <!-- Mark ambient glow — a soft green radial behind the mark.
+         Very faint, creates a sense that the mark is the light source.
+         Like the phosphor glow of a CRT instrument display. -->
+    <radialGradient id="markAmbient" cx="40%" cy="48%" r="38%">
       <stop offset="0%" stop-color="#7a9e87"/>
       <stop offset="100%" stop-color="#0a0f14"/>
     </radialGradient>
+
   </defs>
 
-  <!-- Dark background -->
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 1: BACKGROUND
+    Deep black with subtle radial gradient for depth
+    ═══════════════════════════════════════════════════════════════
+  -->
   <rect width="1024" height="1024" fill="#0a0f14"/>
 
-  <!-- Subtle radial gradient behind the mark — gives depth to the background -->
-  <circle cx="400" cy="440" r="400" fill="url(#bgGrad)" opacity="0.08"/>
-
-  <!-- Border with glow -->
-  <rect x="20" y="20" width="984" height="984" rx="72" fill="none"
-    stroke="#7a9e87" stroke-opacity="0.2" stroke-width="2.5"
-    filter="url(#borderGlow)"/>
+  <!-- Radial gradient overlay — adds depth to the background.
+       Centered on the mark's visual center of gravity. -->
+  <rect width="1024" height="1024" fill="url(#bgRadial)"/>
 
   <!--
-    THE MARK — P + pulse line, with emboss depth effect
+    ═══════════════════════════════════════════════════════════════
+    LAYER 2: NOISE TEXTURE
+    Organic grain overlaid on the background at ~3% opacity.
+    Gives the surface a tactile quality — like brushed metal or
+    matte-finish instrument panels. Prevents sterile digital feel.
+    ═══════════════════════════════════════════════════════════════
+  -->
+  <rect width="1024" height="1024" filter="url(#noiseFilter)" opacity="0.03"/>
 
-    Letter anatomy:
-    - Stem: x=195, from y=190 to y=810 (620px full height)
-    - Bowl: y=190 to y=490 (300px = 48% of stem height — upper half)
-    - Bowl width: extends to x=650 at widest (open, generous)
-    - Pulse line: exits bowl-stem junction at y=490, flows right with EKG spikes
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 3: AMBIENT MARK GLOW
+    Soft green radial behind the mark — the mark is the light source.
+    Very subtle (~6%), creates depth without competing with the mark.
+    ═══════════════════════════════════════════════════════════════
+  -->
+  <circle cx="410" cy="480" r="380" fill="url(#markAmbient)" opacity="0.06"/>
+
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 4: CROSSHAIR GRID
+    Technical instrument substrate — like an oscilloscope or radar
+    display grid. Very faint (3-4% opacity) so it's felt as texture,
+    not read as content. Centered on the icon.
+
+    Elements:
+    - Vertical line through center
+    - Horizontal line through center
+    - Inner concentric ring (~60% of scope ring radius)
+    These create a subtle "instrument reticle" feel.
+    ═══════════════════════════════════════════════════════════════
+  -->
+  <g opacity="0.11" stroke="#7a9e87" fill="none">
+    <!-- Vertical crosshair — full height within the scope area -->
+    <line x1="512" y1="120" x2="512" y2="904" stroke-width="0.75"/>
+    <!-- Horizontal crosshair — full width within the scope area -->
+    <line x1="120" y1="512" x2="904" y2="512" stroke-width="0.75"/>
+    <!-- Inner concentric ring — ~60% of scope ring radius.
+         Creates depth like range rings on a radar display. -->
+    <circle cx="512" cy="512" r="230" stroke-width="0.75"/>
+  </g>
+
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 5: SCOPE RING
+    A circular ring inside the border that frames the mark like a
+    radar scope or instrument reticle. Slightly brighter than the
+    crosshair grid (~6% opacity) so it reads as a containing shape.
+
+    Radius chosen so the mark sits comfortably inside with breathing
+    room, and the ring sits well inside the border bezel.
+    ═══════════════════════════════════════════════════════════════
+  -->
+  <circle
+    cx="512" cy="512" r="385"
+    fill="none"
+    stroke="#7a9e87"
+    stroke-opacity="0.06"
+    stroke-width="1.25"
+  />
+
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 6: DOUBLE-LINE BORDER (BEZEL)
+    Premium instrument bezel treatment. Two concentric rounded
+    rectangles with a gap between them:
+
+    - OUTER LINE: Thinner (1.5px), fainter (12% opacity). This is
+      the edge of the "case" — like the outer rim of a watch bezel.
+    - INNER LINE: Slightly thicker (2.5px), brighter (20% opacity).
+      This is the main bezel ring — the primary frame of the icon.
+    - GAP: ~14px between them creates the bezel channel.
+
+    The inner line gets the borderGlow filter for a subtle backlit
+    quality. Together they create a machined, premium feel — like
+    the bezel of a Leica lens or a luxury watch case.
+    ═══════════════════════════════════════════════════════════════
+  -->
+
+  <!-- Outer bezel line — faint, thin, the case edge -->
+  <rect
+    x="16" y="16" width="992" height="992" rx="76"
+    fill="none"
+    stroke="#7a9e87"
+    stroke-opacity="0.12"
+    stroke-width="1.5"
+  />
+
+  <!-- Inner bezel line — brighter, thicker, the main frame -->
+  <rect
+    x="30" y="30" width="964" height="964" rx="64"
+    fill="none"
+    stroke="#7a9e87"
+    stroke-opacity="0.20"
+    stroke-width="2.5"
+    filter="url(#borderGlow)"
+  />
+
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 7: THE MARK — P + Pulse Line
+    The hero of the icon. Everything else supports this.
+
+    Emboss filter gives the strokes dimensional quality — like
+    engraved or machined letterforms on an instrument face.
+
+    PULSE LINE POSITION (v3 fix):
+    The pulse line now exits from the STEM at y=650, which is the
+    lowercase baseline — approximately 2/3 down the stem height.
+
+    Rationale: In cursive handwriting, after drawing a capital P's
+    bowl, the pen travels back down the stem and then sweeps right
+    at the baseline where lowercase letters sit. This is NOT at the
+    bowl junction (y=490) — it's lower, where the natural writing
+    flow would continue into "-ulse".
+
+    The line starts at the stem (x=195) at y=650, moves right with
+    a brief flat segment, then into the EKG spikes. The flat lead-in
+    from the stem creates the cursive "sweep right" feeling before
+    the pulse rhythm begins.
+
+    Pulse line baseline is y=650. Spike amplitudes are ±150-170px
+    from this baseline, keeping the spikes within the icon's safe
+    area and visually balanced against the P.
+    ═══════════════════════════════════════════════════════════════
   -->
   <g filter="url(#emboss)">
 
-    <!-- P stem — full height, bold -->
+    <!-- P STEM — full height vertical stroke.
+         Bold 42px stroke with round caps for a confident,
+         hand-drawn quality. -->
     <line
       x1="195" y1="190"
       x2="195" y2="810"
@@ -94,17 +323,20 @@
       stroke-linecap="round"
     />
 
-    <!--
-      P bowl — smooth arc from top of stem, out right, and back to stem at y=490
-      Uses a single large arc for a clean, confident shape.
-      Top: y=190, rightmost extent: ~x=650 at y=340 (vertical center of bowl)
-      Bottom: returns to stem at y=490
-    -->
+    <!-- P BOWL — smooth arc from top of stem, out right, back to stem.
+         Top of bowl: y=190 (top of stem)
+         Widest point: x=650 at y=340 (vertical center of bowl)
+         Bottom of bowl: y=490 (returns to stem)
+
+         Uses cubic bezier curves for a smooth, confident arc.
+         The bowl is generous and open — reads clearly as P even
+         at small sizes. -->
+    <!-- P BOWL — tighter arc, less U-shaped. Widest at x=580 (was 650). -->
     <path
       d="M 195 190
          L 380 190
-         C 520 190, 650 230, 650 340
-         C 650 450, 520 490, 380 490
+         C 490 190, 580 230, 580 340
+         C 580 450, 490 490, 380 490
          L 195 490"
       fill="none"
       stroke="#7a9e87"
@@ -113,24 +345,52 @@
       stroke-linejoin="round"
     />
 
-    <!--
-      Pulse line — exits from bottom of bowl at y=490
-      Flows rightward with EKG spikes:
-      - Baseline at y=490
-      - Spike amplitudes: ±160-180px from baseline
-      - Extends to x=960 (near right edge)
-    -->
+    <!-- PULSE LINE — exits from the stem at the lowercase baseline.
+
+         Path breakdown:
+         M 195 650    — Start at the stem, at the lowercase baseline
+         L 340 650    — Flat lead-in: the cursive "sweep right" from
+                        the stem. This horizontal segment is the pen
+                        leaving the P and beginning "-ulse". It needs
+                        enough length to feel like natural handwriting
+                        flow, not a mechanical junction.
+         L 400 650    — Continue flat briefly before the first deflection
+         L 440 685    — Small downward dip: the pulse line "wakes up"
+                        before the main spike. Creates anticipation.
+         L 510 480    — FIRST MAJOR SPIKE UP: sharp rise to y=480.
+                        This is the R-wave of the EKG pattern.
+         L 580 820    — DEEP TROUGH: drops well below baseline to y=820.
+                        The S-wave. Creates dramatic contrast.
+         L 650 470    — SECOND SPIKE UP: another strong peak at y=470.
+                        Slightly different height than the first for
+                        organic, non-mechanical rhythm.
+         L 715 810    — SECOND TROUGH: drops to y=810.
+         L 770 560    — Recovery rise: smaller peak, the rhythm is
+                        settling back toward baseline.
+         L 815 650    — Returns to baseline.
+         L 940 650    — Flat tail-out: the pulse line resolves to
+                        baseline and trails off toward the right edge.
+                        This trailing flat gives the rhythm a sense of
+                        continuation beyond the frame.
+
+         The spikes are asymmetric and organic — not perfectly
+         regular. This gives the pulse a living, breathing quality
+         rather than a mechanical waveform. -->
+    <!-- PULSE LINE — detached from stem with a gap.
+         Starts at x=340 (not x=195) so the P reads cleanly as a P.
+         The gap between stem and pulse line lets both elements breathe.
+         Peaks reduced to stay clear of the bowl (bowl bottom at y=490 + stroke). -->
     <path
-      d="M 380 490
-         L 500 490
-         L 545 525
-         L 600 310
-         L 660 670
-         L 720 320
-         L 775 660
-         L 820 430
-         L 855 490
-         L 960 490"
+      d="M 340 650
+         L 400 650
+         L 440 680
+         L 510 530
+         L 580 800
+         L 650 520
+         L 715 790
+         L 770 580
+         L 815 650
+         L 940 650"
       fill="none"
       stroke="#7a9e87"
       stroke-width="30"
@@ -139,8 +399,20 @@
     />
   </g>
 
-  <!-- Soft glow layer on top — gives the mark luminance -->
+  <!--
+    ═══════════════════════════════════════════════════════════════
+    LAYER 8: GLOW LAYER
+    Duplicate of the mark rendered in a lighter green with blur.
+    At 15% opacity, this creates a soft phosphor-like luminance
+    around the strokes — like the afterglow on a CRT display or
+    the way instrument markings seem to emit light.
+
+    Uses the same geometry as the mark layer so the glow perfectly
+    traces the strokes.
+    ═══════════════════════════════════════════════════════════════
+  -->
   <g opacity="0.15" filter="url(#markGlow)">
+
     <!-- Glow: P stem -->
     <line
       x1="195" y1="190"
@@ -150,12 +422,12 @@
       stroke-linecap="round"
     />
 
-    <!-- Glow: P bowl -->
+    <!-- Glow: P bowl (tighter arc matching mark layer) -->
     <path
       d="M 195 190
          L 380 190
-         C 520 190, 650 230, 650 340
-         C 650 450, 520 490, 380 490
+         C 490 190, 580 230, 580 340
+         C 580 450, 490 490, 380 490
          L 195 490"
       fill="none"
       stroke="#a3c4af"
@@ -164,18 +436,18 @@
       stroke-linejoin="round"
     />
 
-    <!-- Glow: Pulse line -->
+    <!-- Glow: Pulse line (detached from stem, matching mark layer) -->
     <path
-      d="M 380 490
-         L 500 490
-         L 545 525
-         L 600 310
-         L 660 670
-         L 720 320
-         L 775 660
-         L 820 430
-         L 855 490
-         L 960 490"
+      d="M 340 650
+         L 400 650
+         L 440 680
+         L 510 530
+         L 580 800
+         L 650 520
+         L 715 790
+         L 770 580
+         L 815 650
+         L 940 650"
       fill="none"
       stroke="#a3c4af"
       stroke-width="30"
@@ -183,4 +455,5 @@
       stroke-linejoin="round"
     />
   </g>
+
 </svg>

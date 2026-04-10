@@ -21,7 +21,7 @@ interface Props {
 export function ScanLineIcon({ size = 24 }: Props) {
   return (
     <img
-      src="/assets/pulse-avatar.svg"
+      src="/assets/pulse-avatar.png"
       width={size}
       height={size}
       alt=""
