@@ -186,6 +186,7 @@ export default function AdminLayout() {
             }}
           />
           <span
+            className="pulse-wordmark-glow"
             style={{
               color: 'var(--color-accent-pulse)',
               fontWeight: 600,

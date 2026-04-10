@@ -160,6 +160,71 @@ body {
   color: var(--color-text-primary);
   background-color: var(--color-bg);
   -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* ── Instrument texture layer (dark theme only) ────────────────────────────
+   Adds the icon's visual language to the app: noise grain, subtle vignette,
+   and the "pulse" wordmark glow treatment. All controlled by custom properties
+   so one change propagates everywhere. Disable by setting --texture-opacity: 0.
+
+   Light theme: no texture (clean white surfaces).
+   Dark theme: subtle grain + vignette that matches the icon's instrument feel.
+──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --texture-noise-opacity: 0;
+  --texture-vignette-opacity: 0;
+  --texture-vignette-color: transparent;
+  --card-border-width: 1px;
+  --card-border-outer: transparent;
+  --wordmark-text-shadow: none;
+}
+
+[data-theme='dark'] {
+  --texture-noise-opacity: 0.025;
+  --texture-vignette-opacity: 1;
+  --texture-vignette-color: rgba(30, 40, 50, 0.15);
+  --card-border-width: 1px;
+  --card-border-outer: rgba(122, 158, 135, 0.06);
+  --wordmark-text-shadow: 0 0 12px rgba(122, 158, 135, 0.3);
+}
+
+/* Noise grain overlay — applied to body::before in dark theme.
+   Uses a tiny repeating SVG data URI for the grain pattern.
+   Much more performant than an SVG filter on the full viewport. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--texture-noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* Vignette — subtle darkening at edges, lighter center.
+   Applied to body::after in dark theme. Creates the recessed instrument feel. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--texture-vignette-opacity);
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    transparent 0%,
+    transparent 50%,
+    var(--texture-vignette-color) 100%
+  );
+}
+
+/* Ensure all content sits above the texture layers */
+body > #root {
+  position: relative;
+  z-index: 1;
 }
 
 /* Global focus indicator — 2px solid interactive, 2px offset */
@@ -197,4 +262,14 @@ body {
 /* ── Brand animation keyframes ─────────────────────────────────────────── */
 @keyframes trace-draw {
   to { stroke-dashoffset: 0; }
+}
+
+/* ── Wordmark glow — matches icon's emboss/glow treatment ──────────────── */
+.pulse-wordmark-glow {
+  text-shadow: var(--wordmark-text-shadow);
+}
+
+/* ── Card bezel — double border treatment matching icon's bezel ────────── */
+.pulse-card-bezel {
+  box-shadow: 0 0 0 1px var(--card-border-outer);
 }
