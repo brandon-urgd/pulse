@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ur/gd Pulse — AI-guided feedback platform (S0 base resources)'
+Description: 'ur/gd Pulse — AI-guided feedback platform (Spec 2 complete, Stage 6 promotion gate)'
 
 # ─── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
