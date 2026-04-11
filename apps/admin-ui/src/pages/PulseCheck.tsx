@@ -655,8 +655,8 @@ export default function PulseCheck() {
           {(() => {
             // Verdict color based on verdict text sentiment, not energy
             const v = verdict.toLowerCase();
-            const isPositive = v.includes('strong consensus') || v.includes('move forward');
-            const isNegative = v.includes('not enough') || v.includes('gather more');
+            const isPositive = v.includes('strong consensus') || v.includes('move forward') || v.includes('clear direction') || v.includes('strong alignment') || v.includes('solid foundation');
+            const isNegative = v.includes('not enough') || v.includes('gather more') || v.includes('too thin') || v.includes('insufficient') || v.includes('no actionable');
             const verdictColorClass = isNegative ? styles.verdictBlockNegative : isPositive ? styles.verdictBlockPositive : styles.verdictBlockNeutral;
             return (
               <div className={`${styles.verdictBlock} ${verdictColorClass}`}>
@@ -849,8 +849,8 @@ export default function PulseCheck() {
         {/* Verdict + narrative — above everything else */}
         {(() => {
           const v = synthesizedVerdict.toLowerCase();
-          const isPositive = v.includes('strong consensus') || v.includes('move forward');
-          const isNegative = v.includes('not enough') || v.includes('gather more');
+          const isPositive = v.includes('strong consensus') || v.includes('move forward') || v.includes('clear direction') || v.includes('strong alignment') || v.includes('solid foundation');
+          const isNegative = v.includes('not enough') || v.includes('gather more') || v.includes('too thin') || v.includes('insufficient') || v.includes('no actionable');
           const verdictColorClass = isNegative ? styles.verdictBlockNegative : isPositive ? styles.verdictBlockPositive : styles.verdictBlockNeutral;
           return (
             <div className={`${styles.verdictBlock} ${verdictColorClass}`}>

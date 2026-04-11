@@ -125,7 +125,7 @@ async function invokeBedrockModel(systemPrompt, userPrompt, maxTokens) {
 
 const PULSE_CHECK_JSON_FORMAT = `Respond in valid JSON:
 {
-  "verdict": "synthesized one-line verdict — must be exactly one of: 'Strong consensus — move forward' | 'Mixed perspectives — review the gaps' | 'Not enough to go on — gather more input'",
+  "verdict": "A single sentence that honestly characterizes the state of the feedback. This is NOT a fixed enum — write what fits the actual signals. Guidelines: reflect the quality and depth of feedback received, not just the quantity of reviewers. One thorough reviewer who covered everything is more valuable than five who gave surface-level responses. Be direct but not dismissive. Examples of good verdicts: 'Clear direction on positioning — simplicity over privacy as the lead', 'Strong alignment on the core concept, open questions on pricing model', 'Reviewers split on tone — needs more voices before committing', 'Solid foundation with one structural concern worth addressing'. Avoid generic verdicts like 'needs more input' unless the feedback was genuinely too thin to act on.",
   "narrative": "2–3 sentences from the facilitator's perspective. Orient the reader: what does this feedback mean for the work? What's the key tension or open question? Plain, direct language. No bullet points. No hedging.",
   "themes": [
     {
@@ -159,8 +159,21 @@ const PULSE_CHECK_RULES = `CRITICAL RULES:
 - Compress aggressively — each item should be readable in 3–5 seconds
 - Never rewrite reviewer quotes into corporate language
 
-For verdict: weight external reviewers primarily; note self-review separately.
-For sharedConviction/repeatedTension: only include if 2+ reviewers showed the same signal.
+QUOTE SELECTION RULES:
+- Only extract quotes that contain substantive feedback about the work being reviewed
+- NEVER use meta-conversation quotes — things like "I think we've covered this", "let's move on", "good question", "that makes sense" are NOT feedback quotes
+- NEVER use the reviewer's corrections or redirections of the AI agent as signal quotes
+- Each quote must be self-explanatory — a reader who hasn't seen the conversation should understand the point being made. If a quote is too short to stand alone (e.g., "it's the simplicity"), expand it to include enough context: "it's the simplicity — that's what would actually get someone to switch"
+- Prefer quotes of 10–30 words that capture a complete thought over fragments
+
+VERDICT CALIBRATION:
+- The verdict is a free-form single sentence — not a fixed enum. Write what actually fits the feedback.
+- Reflect the quality and depth of feedback, not just the number of reviewers.
+- One thorough reviewer who covered the requested sections and gave specific, actionable feedback deserves a verdict that reflects what was learned — not a dismissal for low sample size.
+- Only suggest "gather more input" if the feedback was genuinely too thin to act on — incomplete sessions, surface-level responses, or requested sections not covered.
+- Good verdicts are specific to the content: "Clear direction on X, open question on Y" is better than generic assessments.
+
+For sharedConviction/repeatedTension: only include if 2+ reviewers showed the same signal. For solo reviews, leave these empty — the signal lives in themes and proposedRevisions instead.
 For proposedRevisions: include as many as the signals warrant — no minimum, no maximum. Let signal density drive the count. A technical document may produce many small line-edits; a philosophical one may produce a few conceptual shifts. Return empty array only if no actionable changes are warranted.
 For revisionType: use "structural" for changes to organization/flow, "line-edit" for specific wording/phrasing changes, "conceptual" for changes to ideas/framing/argument, "feature" for additions or removals of discrete capabilities or sections.`
 
@@ -479,8 +492,9 @@ export const handler = async (event) => {
     }
 
     // 3. Validate and normalize consolidated output
-    const VALID_VERDICTS = ['Strong consensus — move forward', 'Mixed perspectives — review the gaps', 'Not enough to go on — gather more input']
-    const verdict = VALID_VERDICTS.includes(consolidated.verdict) ? consolidated.verdict : 'Mixed perspectives — review the gaps'
+    const verdict = typeof consolidated.verdict === 'string' && consolidated.verdict.trim().length > 0
+      ? consolidated.verdict.trim()
+      : 'Review the feedback below'
     const narrative = typeof consolidated.narrative === 'string' ? consolidated.narrative.trim() : ''
     const themes = Array.isArray(consolidated.themes) ? consolidated.themes : []
     const sharedConviction = Array.isArray(consolidated.sharedConviction) ? consolidated.sharedConviction : []

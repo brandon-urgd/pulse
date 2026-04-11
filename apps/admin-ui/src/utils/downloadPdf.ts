@@ -72,7 +72,7 @@ export async function downloadRevisionPdf(
   itemName: string,
   revisionNumber: number,
 ) {
-  const doc = createElement(RevisionPdf, { originalContent, revisionContent, itemName, revisionNumber });
+  const doc = createElement(RevisionPdf, { revisionContent, itemName, revisionNumber });
   const blob = await renderPdf(doc);
   const filename = itemName ? `Revision — ${itemName}` : 'Revision';
   await downloadBlob(blob, `${filename}.pdf`);

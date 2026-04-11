@@ -5401,6 +5401,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PulseItemsTable.Arn
               - Effect: Allow
                 Action:
@@ -5702,7 +5703,7 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref GenerateSessionSummaryCodeKey
-      Timeout: 120
+      Timeout: 300
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateSessionSummary]
       TracingConfig:
@@ -6773,7 +6774,7 @@ Resources:
       FunctionName: !Sub 'urgd-pulse-generateReport-${Environment}'
       Runtime: nodejs22.x
       Handler: index.handler
-      Timeout: 120
+      Timeout: 300
       MemorySize: 1024
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, GenerateReport]
       Role: !GetAtt PulseGenerateReportFunctionRole.Arn
@@ -6949,7 +6950,7 @@ Resources:
       FunctionName: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
       Runtime: nodejs22.x
       Handler: index.handler
-      Timeout: 120
+      Timeout: 300
       MemorySize: 1024
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ProcessPulseCheck]
       Role: !GetAtt PulseProcessPulseCheckFunctionRole.Arn
@@ -7620,7 +7621,7 @@ Resources:
       FunctionName: !Sub 'urgd-pulse-processRevision-${Environment}'
       Runtime: nodejs22.x
       Handler: index.handler
-      Timeout: 120
+      Timeout: 300
       MemorySize: 1024
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ProcessRevision]
       Role: !GetAtt PulseProcessRevisionFunctionRole.Arn

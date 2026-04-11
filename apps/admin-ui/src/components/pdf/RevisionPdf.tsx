@@ -4,7 +4,6 @@ import { PDF_COLORS, PDF_FONTS } from '../../config/pdf-brand';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  originalContent: string;
   revisionContent: string;
   itemName: string;
   revisionNumber: number;
@@ -38,7 +37,7 @@ const s = StyleSheet.create({
 
 // ─── Document ─────────────────────────────────────────────────────────────────
 
-export function RevisionPdf({ originalContent, revisionContent, itemName, revisionNumber }: Props) {
+export function RevisionPdf({ revisionContent, itemName, revisionNumber }: Props) {
   return (
     <Document>
       <Page size="A4" style={s.page}>
@@ -46,12 +45,7 @@ export function RevisionPdf({ originalContent, revisionContent, itemName, revisi
         <Text style={s.title}>Revision {revisionNumber} — {itemName}</Text>
         <View style={s.accentLine} />
 
-        {/* Original */}
-        <Text style={s.sectionHeader}>Original</Text>
-        <Text style={s.contentBlock}>{originalContent || '(no content)'}</Text>
-
         {/* Revision */}
-        <Text style={s.sectionHeader}>Revision</Text>
         <Text style={s.contentBlock}>{revisionContent || '(no content)'}</Text>
 
         {/* Footer */}

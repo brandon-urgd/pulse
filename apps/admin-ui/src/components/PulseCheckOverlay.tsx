@@ -43,10 +43,18 @@ export default function PulseCheckOverlay({
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [pct, setPct] = useState(0);
   const [visible, setVisible] = useState(true);
+  const [showLongWait, setShowLongWait] = useState(false);
   const focusTrapRef = useFocusTrap(visible);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
   const phaseStartPct = useRef(0);
+
+  // Show patience message after 45 seconds
+  useEffect(() => {
+    if (done || error) return;
+    const timer = setTimeout(() => setShowLongWait(true), 45000);
+    return () => clearTimeout(timer);
+  }, [done, error]);
 
   // Animate the bar through phases
   useEffect(() => {
@@ -140,6 +148,11 @@ export default function PulseCheckOverlay({
             <p className={styles.notice}>
               {notice ?? labels.pulseCheck.overlayNotice}
             </p>
+            {showLongWait && (
+              <p className={styles.longWaitNotice} aria-live="polite">
+                {labels.pulseCheck.overlayLongWait}
+              </p>
+            )}
           </>
         )}
       </div>

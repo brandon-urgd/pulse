@@ -153,7 +153,7 @@ Revised Document:`
         accept: 'application/json',
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 4096,
+          max_tokens: 25000,
           messages: [{ role: 'user', content: prompt }],
         }),
       }))
