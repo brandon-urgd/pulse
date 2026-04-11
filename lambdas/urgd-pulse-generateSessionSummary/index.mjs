@@ -5,7 +5,7 @@
 import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
-import { log, requireEnv } from './shared/utils.mjs'
+import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
 requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'BEDROCK_MODEL_ID'])
@@ -13,18 +13,6 @@ requireEnv(['SESSIONS_TABLE', 'TRANSCRIPTS_TABLE', 'BEDROCK_MODEL_ID'])
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 export const handler = async (event) => {
   const { sessionId, tenantId } = event

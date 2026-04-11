@@ -550,7 +550,7 @@ export default function PulseCheck() {
           <div className={`${styles.generatePrompt} ${itemIsActive ? styles.generatePromptActive : styles.generatePromptClosed}`}>
             {itemIsActive ? (
               <>
-                <p className={styles.generatePromptEyebrow}>Ready to wrap up?</p>
+                <p className={styles.generatePromptEyebrow}>{labels.pulseCheck.closeAndRunEyebrow}</p>
                 <p className={styles.generatePromptHeading}>{labels.pulseCheck.closeAndRunPromptText}</p>
                 <p className={styles.generatePromptWarning}>{labels.pulseCheck.closeAndRunWarning}</p>
                 <button

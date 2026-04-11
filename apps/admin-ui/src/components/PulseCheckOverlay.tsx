@@ -110,7 +110,7 @@ export default function PulseCheckOverlay({
       <div className={styles.card}>
         {error ? (
           <>
-            <p className={styles.errorHeading}>Something went wrong.</p>
+            <p className={styles.errorHeading}>{labels.pulseCheck.overlayErrorHeading}</p>
             <p className={styles.errorMessage}>{error}</p>
             <button
               type="button"

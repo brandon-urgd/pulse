@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ThemeRow, ReviewerColumn } from './SignalMatrix';
 import type { SignalType } from './SignalBadge';
+import { labels } from '../config/labels-registry';
 import styles from './SignalSummary.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -129,7 +130,7 @@ export default function SignalSummary({ themes, reviewers, sessionCount }: Signa
             </div>
             {topQuotes.length > 0 && (
               <div className={styles.themeCardBody}>
-                <p className={styles.quotesHeading}>Top quotes</p>
+                <p className={styles.quotesHeading}>{labels.pulseCheck.topQuotesHeading}</p>
                 <ul className={styles.quoteList}>
                   {topQuotes.map((quote, i) => (
                     <li key={i} className={styles.quoteItem}>

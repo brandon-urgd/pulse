@@ -5,7 +5,7 @@
 import { DynamoDBClient, ScanCommand, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { log, requireEnv } from './shared/utils.mjs'
+import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
@@ -17,18 +17,6 @@ const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 const REMINDER_WINDOW_HOURS = 24
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 /**
  * Fetches the emailReminders feature flag and inviter email for a tenant.

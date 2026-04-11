@@ -82,6 +82,14 @@ npm run dev --workspace=apps/session-ui # Run session UI locally
 - Manual dispatch → promote to staging or prod (requires "DEPLOY" confirmation for prod)
 - CI/CD: GitHub Actions with OIDC, Semgrep + Checkov security scanning, smoke tests covering all 61 Lambdas
 
+### Environment URLs
+
+| Environment | Frontend | API | Status |
+|---|---|---|---|
+| Dev | https://pulse.urgdstudios.com (dev stage) | https://api.pulse.urgdstudios.com/dev | Auto-deploy on push to main |
+| Staging | https://pulse.urgdstudios.com (staging stage) | https://api.pulse.urgdstudios.com/staging | Manual promotion |
+| Prod | https://pulse.urgdstudios.com | https://api.pulse.urgdstudios.com/prod | Manual promotion, requires DEPLOY confirmation |
+
 ## Standards
 
 See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and Security standards.

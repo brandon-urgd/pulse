@@ -28,7 +28,7 @@
 .accentLine {
   width: 60px;
   height: 2px;
-  background: #7a9e87;
+  background: var(--color-accent-pulse);
   margin-top: 12px;
   border: none;
 }

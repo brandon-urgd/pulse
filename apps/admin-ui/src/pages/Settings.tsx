@@ -431,10 +431,10 @@ export default function Settings() {
       {/* ── Support & Privacy ── */}
       {/* ── Account actions ── */}
       <section className={styles.section}>
-        <h2 className={styles.sectionHeading}>Account actions</h2>
+        <h2 className={styles.sectionHeading}>{labels.settings.accountActionsHeading}</h2>
         <div className={styles.actionsSection}>
           <button type="button" className={styles.signOutButton} onClick={() => setReportModalType('general-inquiry')}>
-            Contact us
+            {labels.settings.contactButton}
           </button>
           <button type="button" className={styles.signOutButton} onClick={handleSignOut}>
             {labels.settings.signOutButton}

@@ -4,7 +4,7 @@
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
-import { log, requireEnv } from './shared/utils.mjs'
+import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
@@ -13,18 +13,6 @@ requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME'])
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 /**
  * Extract file extension (lowercase, including dot) from S3 key.

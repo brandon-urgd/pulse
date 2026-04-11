@@ -5,7 +5,7 @@ import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/clie
 import { S3Client } from '@aws-sdk/client-s3'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
 // Fail-fast env var validation
@@ -13,18 +13,6 @@ requireEnv(['ITEMS_TABLE', 'QUARANTINE_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 const ALLOWED_EXTENSIONS = new Set(['.md', '.txt', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif'])
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])

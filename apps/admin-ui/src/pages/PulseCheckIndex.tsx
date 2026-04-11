@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { labels } from '../config/labels-registry';
 import styles from './PulseCheckIndex.module.css';
 
 /**
@@ -8,9 +9,9 @@ import styles from './PulseCheckIndex.module.css';
 export default function PulseCheckIndex() {
   return (
     <div className={styles.container}>
-      <p className={styles.heading}>Select an item to view its Pulse Check.</p>
+      <p className={styles.heading}>{labels.pulseCheck.indexEmptyHeading}</p>
       <Link to="/admin/items" className={styles.link}>
-        Go to Items →
+        {labels.pulseCheck.indexGoToItems}
       </Link>
     </div>
   );

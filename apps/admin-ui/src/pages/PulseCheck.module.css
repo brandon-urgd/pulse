@@ -175,21 +175,21 @@
 }
 
 .verdictBlockPositive {
-  border-left-color: #7a9e87;
-  background: rgba(122, 158, 135, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(122, 158, 135, 0.2);
+  border-left-color: var(--color-verdict-positive);
+  background: var(--color-verdict-positive-bg);
+  box-shadow: inset 0 0 0 1px var(--color-verdict-positive-ring);
 }
 
 .verdictBlockNeutral {
-  border-left-color: #d4a843;
-  background: rgba(212, 168, 67, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(212, 168, 67, 0.2);
+  border-left-color: var(--color-verdict-neutral);
+  background: var(--color-verdict-neutral-bg);
+  box-shadow: inset 0 0 0 1px var(--color-verdict-neutral-ring);
 }
 
 .verdictBlockNegative {
-  border-left-color: #c46565;
-  background: rgba(196, 101, 101, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(196, 101, 101, 0.2);
+  border-left-color: var(--color-verdict-negative);
+  background: var(--color-verdict-negative-bg);
+  box-shadow: inset 0 0 0 1px var(--color-verdict-negative-ring);
 }
 
 .verdictLabel {

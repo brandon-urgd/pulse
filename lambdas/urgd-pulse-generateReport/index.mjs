@@ -6,7 +6,7 @@
 import { DynamoDBClient, QueryCommand, PutItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
-import { log, requireEnv } from './shared/utils.mjs'
+import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 
 requireEnv(['TRANSCRIPTS_TABLE', 'REPORTS_TABLE', 'SESSIONS_TABLE', 'BEDROCK_MODEL_ID'])
@@ -14,18 +14,6 @@ requireEnv(['TRANSCRIPTS_TABLE', 'REPORTS_TABLE', 'SESSIONS_TABLE', 'BEDROCK_MOD
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 // X-Ray annotations — gracefully no-ops outside Lambda environment
 async function addXRayAnnotations(annotations) {

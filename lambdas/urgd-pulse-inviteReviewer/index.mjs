@@ -5,7 +5,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, Quer
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { createResponse, errorResponse, log, requireEnv, isValidEmail } from './shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv, isValidEmail, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
 import { randomBytes, randomUUID } from 'crypto'
@@ -20,18 +20,6 @@ const ses = new SESClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 /**
  * Generates a unique 8-character alphanumeric pulse code.

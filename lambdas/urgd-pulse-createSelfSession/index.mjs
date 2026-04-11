@@ -6,7 +6,7 @@
 // Generates a session token directly and returns { sessionId, sessionUrl }.
 
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
 import { randomUUID } from 'crypto'
@@ -14,18 +14,6 @@ import { randomUUID } from 'crypto'
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
-
-function unmarshalFeatures(m) {
-  if (!m) return {}
-  const result = {}
-  for (const [key, val] of Object.entries(m)) {
-    if ('N' in val) result[key] = Number(val.N)
-    else if ('BOOL' in val) result[key] = val.BOOL
-    else if ('S' in val) result[key] = val.S
-    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
-  }
-  return result
-}
 
 /**
  * Build initial sectionCoverage map from item's feedbackSections (5.5).

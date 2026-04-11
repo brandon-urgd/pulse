@@ -241,6 +241,8 @@ export const labels = {
     title: 'Settings',
     documentTitle: 'Settings — Pulse',
     accountSection: 'Account',
+    accountActionsHeading: 'Account actions',
+    contactButton: 'Contact us',
     tierLabel: 'Plan',
     tierFree: 'Free',
     emailLabel: 'Email',
@@ -446,6 +448,7 @@ export const labels = {
     incompleteSessionsNotice: '{incomplete} of {total} reviewers didn\u2019t finish — their partial feedback is included.',
     generatePromptText: 'All sessions are closed. Run a Pulse Check to consolidate feedback into a single view.',
     closeAndRunPromptText: 'Closing this item will stop new reviewers from entering and run your Pulse Check.',
+    closeAndRunEyebrow: 'Ready to wrap up?',
     closeAndRunWarning: 'Any reviewers currently in a session won\u2019t be cut off \u2014 they can still finish. If sessions complete after you run, you can re-run the Pulse Check to include them.',
     closeAndRunButton: 'Close & Run Pulse Check',
     closeAndRunError: 'Something went wrong. Try again.',
@@ -497,6 +500,18 @@ export const labels = {
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
     downloadPdf: 'Download PDF',
     downloadingPdf: 'Generating PDF…',
+    // Index empty state
+    indexEmptyHeading: 'Select an item to view its Pulse Check.',
+    indexGoToItems: 'Go to Items →',
+    // Signal matrix
+    matrixSignalDistribution: 'Signal distribution',
+    matrixTheme: 'Theme',
+    matrixShowQuote: 'Show quote',
+    matrixHideQuote: 'Hide',
+    // Signal summary
+    topQuotesHeading: 'Top quotes',
+    // Overlay error
+    overlayErrorHeading: 'Something went wrong.',
     // S4 enhancements
     confidenceSolo: 'Based on 1 reviewer',
     confidenceMulti: 'Based on {count} reviewers',

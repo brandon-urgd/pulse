@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SignalBadge, { type SignalType, type EnergyLevel } from './SignalBadge';
+import { labels } from '../config/labels-registry';
 import styles from './SignalMatrix.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ function SignalCell({ signal }: { signal: ReviewerSignal | undefined }) {
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
             >
-              {expanded ? 'Hide' : 'Show quote'}
+              {expanded ? labels.pulseCheck.matrixHideQuote : labels.pulseCheck.matrixShowQuote}
             </button>
           </>
         )}
@@ -156,7 +157,7 @@ export default function SignalMatrix({ themes, reviewers, ariaLabel }: SignalMat
         <thead>
           <tr>
             {/* Summary column header */}
-            <th className={styles.summaryHeader} scope="col">Signal distribution</th>
+            <th className={styles.summaryHeader} scope="col">{labels.pulseCheck.matrixSignalDistribution}</th>
             {/* Theme column header */}
             <th scope="col">Theme</th>
             {/* Reviewer columns */}

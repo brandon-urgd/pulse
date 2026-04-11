@@ -78,6 +78,8 @@ export const log = (level, message, context = {}) => {
 
 /**
  * Creates a structured HTTP error for use in Lambda handlers.
+ * NOTE: Not currently used in Pulse handlers — retained for standards compliance.
+ * See Lambda Standards for the createAdminError/isAdminHttpError pattern.
  */
 export const createAdminError = (statusCode, message, details = {}) => {
   const error = new Error(message)
@@ -94,14 +96,6 @@ export const isAdminHttpError = (error) => error?.name === 'AdminHttpError'
  */
 export const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
-export const sanitizeString = (str, maxLength = 255) => {
-  if (typeof str !== 'string') return ''
-  return str.trim().slice(0, maxLength)
-}
-
-export const isValidStringLength = (str, min = 1, max = 255) =>
-  typeof str === 'string' && str.length >= min && str.length <= max
-
 /**
  * Fail-fast env var validation — throws at module load time if any required var is missing.
  */
@@ -111,4 +105,20 @@ export const requireEnv = (names) => {
       throw new Error(`Missing required env var: ${key}`)
     }
   }
+}
+
+/**
+ * Recursively unmarshals a DynamoDB Map (features, serviceFlags, usageCounters)
+ * into a plain JS object. Handles N, BOOL, S, and nested M types.
+ */
+export function unmarshalFeatures(m) {
+  if (!m) return {}
+  const result = {}
+  for (const [key, val] of Object.entries(m)) {
+    if ('N' in val) result[key] = Number(val.N)
+    else if ('BOOL' in val) result[key] = val.BOOL
+    else if ('S' in val) result[key] = val.S
+    else if ('M' in val) result[key] = unmarshalFeatures(val.M)
+  }
+  return result
 }
