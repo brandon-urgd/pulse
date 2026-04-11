@@ -21,7 +21,7 @@ interface Props {
 export function PulseWaveIcon({ size = 24 }: Props) {
   return (
     <img
-      src="/assets/pulse-avatar.png"
+      src="/assets/pulse-avatar.svg"
       width={size}
       height={size}
       alt=""

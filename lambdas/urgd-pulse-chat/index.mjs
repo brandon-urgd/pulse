@@ -412,13 +412,17 @@ async function handleChat(event, responseStream) {
       return errorResponse(400, 'No valid messages to process', {}, origin)
     }
 
-    // 4.3: For image sessions on first message, inject image content block
+    // 4.3: For image sessions, inject image content block into the FIRST user message only.
+    // The image persists in Bedrock's conversation context across turns — re-injecting it
+    // into the last message on every turn caused the model to hallucinate "new angles" or
+    // "different views" of the same image. Fix: attach to the first user message so it
+    // appears once at the start of the conversation history.
     if (itemType === 'image' && imageBase64) {
-      const lastUserIdx = coalescedMessages.length - 1
-      const lastMsg = coalescedMessages[lastUserIdx]
-      if (lastMsg.role === 'user') {
-        const textContent = typeof lastMsg.content === 'string' ? lastMsg.content : ''
-        coalescedMessages[lastUserIdx] = {
+      const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+      if (firstUserIdx !== -1) {
+        const firstMsg = coalescedMessages[firstUserIdx]
+        const textContent = typeof firstMsg.content === 'string' ? firstMsg.content : ''
+        coalescedMessages[firstUserIdx] = {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } },
@@ -859,6 +863,8 @@ function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, t
 - Each paragraph you write appears as its own chat bubble. Group related thoughts into one bubble.
 - A question always gets its own bubble, separated by a blank line.
 - Most responses should be one to three bubbles. Four is the upper end.
+- When a reviewer signals a topic is covered — through agreement, short answers, humor, or explicit redirection — move to the next section or topic. Don't mine a topic past its natural depth. Two to three exchanges on a single thread is usually enough before pivoting.
+- When a reviewer gives a definitive opinion on an element (strong positive or negative with clear reasoning), acknowledge it and move to a new aspect. Don't re-ask about the same element unless the reviewer brings it back up.
 
 `
 
@@ -927,7 +933,9 @@ This is your primary steering signal. Shape your questions around it. Periodical
 
   // ── Document/image content ──
   if (itemType === 'image') {
-    prompt += `This is an image feedback session. The image has been provided to you directly. Describe what you see in the image in your own words before asking your first question.
+    prompt += `This is an image feedback session. The image was provided once at the start of this session. It does not change between messages. Never describe it as a "new angle," "different view," "full picture," or suggest the image has changed in any way. You saw the complete image at the start — reference it naturally without re-describing it each turn.
+
+When describing the image, use everyday language. Say "the patterned wood floor" not "herringbone parquet." Say "the small bathroom" not "the powder room." Say "the dark tile" not "zellige tile." If the reviewer uses a specific term, you can mirror it — but don't assume vocabulary. The reviewer is a regular person giving their honest reaction.
 
 `
   } else {
@@ -1042,23 +1050,27 @@ Missing tags means the coverage map will be incomplete — this directly affects
   // ── Special message handling ──
   if (message === '__session_start__') {
     if (itemType === 'image') {
-      // 4.5/8.6: Photo session opening
-      prompt += `This is the very start of the session. This is an image feedback session. The reviewer did NOT create this image — they are giving feedback on it as an outside perspective. Structure your opening like this:
+      // 4.5/8.6: Photo session opening — two-step like documents
+      prompt += `This is the very start of the session. This is an image feedback session. The reviewer did NOT create this image — they are giving feedback on it as an outside perspective.
 
-1. A warm, brief greeting. Introduce yourself as Pulse. One to two sentences.
-2. Describe what you see in the image in your own words — be specific about what stands out to you. This shows the reviewer you've looked carefully.
-3. Then explain what you're here to do: gather their honest reactions and impressions as someone viewing this work.
+Structure your opening the same way as a document session — greet first, THEN describe the image after they're ready:
 
-Keep each thought to one or two sentences. Do NOT mention sections. Do NOT ask about the reviewer's creative process or intent — they didn't make this.\n`
+1. A warm, brief greeting. Introduce yourself as Pulse. Explain you're here to walk through this image and hear their honest impressions. Let them know they're in control. Ask if they're ready to start.
+
+Do NOT describe the image yet. Wait for the reviewer to respond. On your NEXT message (after they say they're ready), describe the image in 2-3 sentences using everyday language — focus on the overall impression and one or two standout details, not an exhaustive inventory. Save specific observations for later in the conversation as anchors for questions. Then ask your first question.
+
+Your opening should feel natural and different each time. Vary the words — don't use the same phrasing across sessions. Keep it to 3-4 short sentences.
+
+Do NOT mention sections. Do NOT ask about the reviewer's creative process or intent — they didn't make this.\n`
     } else {
-      prompt += `This is the very start of the session. Send your opening as a series of short, distinct thoughts:
+      prompt += `This is the very start of the session. Your opening should feel natural and different each time. Hit these beats:
 
-1. A warm, brief greeting. Introduce yourself as Pulse. One to two sentences.
-2. Explain what you're here to do: "I'm here to walk you through ${itemName} and hear what you think — just a conversation, nothing formal."
-3. Let them know they're in control: "You can take your time, and if you ever want to stop early, just tap 'End session' at the top."
-4. Invite them to begin: "Ready to dive in? Or any questions before we start?"
+1. Greet warmly. Introduce yourself as Pulse — an AI feedback guide.
+2. Explain you're here to walk through the material and hear their honest take. Keep it casual — just a conversation, nothing formal.
+3. Let them know they're in control — they can take their time, and they can end the session whenever they want.
+4. Invite them to start.
 
-Keep each thought to one or two sentences. Do NOT mention the number of sections.\n`
+Vary the words — don't use the same phrasing across sessions. Keep it to 3-4 short sentences total. Do NOT mention the number of sections.\n`
     }
   } else if (message === '__session_resume__') {
     prompt += 'The reviewer has returned to continue their session. Welcome them back warmly and briefly. Reference where you left off.\n'
