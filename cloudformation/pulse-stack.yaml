@@ -363,12 +363,6 @@ Parameters:
     Type: String
     Description: Shield EventBridge rule ARN (from SSM parameter /urgd/shield/eventbridge_rule_arn)
 
-  PublicSignup:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-    Description: Whether public self-registration is enabled
-
   AppleClientId:
     Type: String
     Default: ''
