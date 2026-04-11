@@ -53,7 +53,7 @@ describe('urgd-pulse-getUploadUrl', () => {
     s3SendSpy.mockReset()
     getSignedUrlSpy.mockReset()
     // GetItemCommand returns a valid item, UpdateItemCommand returns {}
-    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, status: { S: 'draft' } } })
     dynamoSendSpy.mockResolvedValue({})
     getSignedUrlSpy.mockResolvedValue(MOCK_UPLOAD_URL)
   })

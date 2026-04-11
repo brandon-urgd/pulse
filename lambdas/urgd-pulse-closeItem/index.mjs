@@ -76,17 +76,27 @@ export const handler = async (event) => {
       for (const session of sessions) {
         const sid = session.sessionId?.S
         if (!sid) continue
-        await dynamo.send(new UpdateItemCommand({
-          TableName: process.env.SESSIONS_TABLE,
-          Key: { tenantId: { S: tenantId }, sessionId: { S: sid } },
-          UpdateExpression: 'SET #status = :expired, expiresAt = :now',
-          ExpressionAttributeNames: { '#status': 'status' },
-          ExpressionAttributeValues: {
-            ':expired': { S: 'expired' },
-            ':now': { S: now },
-          },
-        }))
-        expiredCount++
+        try {
+          await dynamo.send(new UpdateItemCommand({
+            TableName: process.env.SESSIONS_TABLE,
+            Key: { tenantId: { S: tenantId }, sessionId: { S: sid } },
+            UpdateExpression: 'SET #status = :expired, expiresAt = :now',
+            ConditionExpression: '#status = :not_started',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: {
+              ':expired': { S: 'expired' },
+              ':now': { S: now },
+              ':not_started': { S: 'not_started' },
+            },
+          }))
+          expiredCount++
+        } catch (condErr) {
+          if (condErr.name === 'ConditionalCheckFailedException') {
+            // Session transitioned to a different state — skip safely
+          } else {
+            throw condErr
+          }
+        }
       }
 
       lastKey = sessionsResult.LastEvaluatedKey

@@ -84,6 +84,10 @@ export const handler = async (event) => {
 
     const currentItem = unmarshal(existing.Item)
 
+    if (currentItem.status === 'closed' || currentItem.status === 'revised') {
+      return errorResponse(409, 'Cannot extend deadline on a closed or revised item', {}, origin)
+    }
+
     // Validate the new date differs from the current closeDate
     if (currentItem.closeDate) {
       const currentCloseDate = new Date(currentItem.closeDate)

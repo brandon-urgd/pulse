@@ -36,7 +36,7 @@ interface RevisionsResponse {
 }
 
 interface ItemResponse {
-  data: { itemId: string; itemName: string; status: string };
+  data: { itemId: string; itemName: string; status: string; itemType?: 'document' | 'image' };
 }
 
 // ─── Revision pane content ────────────────────────────────────────────────────
@@ -106,6 +106,20 @@ export default function ItemRevision() {
     { enabled: Boolean(itemId) }
   );
   const itemName = itemResp?.data?.itemName ?? '';
+  const isImageItem = itemResp?.data?.itemType === 'image';
+
+  // Image items don't support revisions — show a message instead
+  if (isImageItem) {
+    return (
+      <div className={styles.container}>
+        <Link to={`/admin/pulse-check/${itemId}`} className={styles.backLink}>
+          {labels.revision.backLink.replace('{itemName}', itemName)}
+        </Link>
+        <h1 className={styles.heading}>{labels.revision.heading}</h1>
+        <p className={styles.emptyBody}>{labels.pulseCheck.imageRevisionNotice}</p>
+      </div>
+    );
+  }
 
   const { data: revisionsResp, isLoading, isError, refetch } = useAuthedQuery<RevisionsResponse>(
     ['revisions', itemId],

@@ -58,7 +58,7 @@ describe('Property 13: Upload URL File Type Property', () => {
     s3SendSpy.mockReset()
     getSignedUrlSpy.mockReset()
     // GetItemCommand returns a valid item, UpdateItemCommand returns {}
-    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, status: { S: 'draft' } } })
     dynamoSendSpy.mockResolvedValue({})
     getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
   })
@@ -75,7 +75,7 @@ describe('Property 13: Upload URL File Type Property', () => {
         async (ext, prefix, fileSize) => {
           dynamoSendSpy.mockReset()
           getSignedUrlSpy.mockReset()
-          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, status: { S: 'draft' } } })
           dynamoSendSpy.mockResolvedValue({})
           getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
 
@@ -148,7 +148,7 @@ describe('Property 13: Upload URL File Type Property', () => {
         async (ext, fileSize) => {
           dynamoSendSpy.mockReset()
           getSignedUrlSpy.mockReset()
-          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } } })
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, status: { S: 'draft' } } })
           dynamoSendSpy.mockResolvedValue({})
           getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')
 

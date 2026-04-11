@@ -49,6 +49,7 @@ function makeItemRecord() {
       tenantId: { S: 'tenant-abc' },
       itemId: { S: 'item-123' },
       itemName: { S: 'Test Item' },
+      status: { S: 'draft' },
     },
   }
 }

@@ -48,6 +48,11 @@ export const handler = async (event) => {
       return createResponse(200, { message: 'Session already cancelled' }, {}, origin)
     }
 
+    if (status !== 'not_started' && status !== 'cancelled') {
+      log('warn', 'CancelSession: can only cancel not_started sessions', { requestId, tenantId, sessionId, status })
+      return errorResponse(409, 'Only pending sessions can be cancelled', {}, origin)
+    }
+
     // Soft-cancel: mark as "cancelled" so the pulse code returns a clear message if used
     await dynamo.send(new UpdateItemCommand({
       TableName: process.env.SESSIONS_TABLE,

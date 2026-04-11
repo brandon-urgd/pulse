@@ -206,22 +206,31 @@ async function triggerPulseChecksForTerminalItems(expiredByItem) {
       // We DO trigger pulse check + notification if all real sessions are terminal,
       // so the tenant gets their results without waiting for the close date.
 
-      // Get item name for the notification email
+      // Get item status and name — only trigger pulse check if item is closed
       let itemName = 'your item'
+      let itemStatus = 'active'
       if (itemsTable) {
         try {
           const itemResult = await dynamo.send(new GetItemCommand({
             TableName: itemsTable,
             Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-            ProjectionExpression: 'itemName',
+            ProjectionExpression: 'itemName, #s',
+            ExpressionAttributeNames: { '#s': 'status' },
           }))
           itemName = itemResult.Item?.itemName?.S ?? 'your item'
+          itemStatus = itemResult.Item?.status?.S ?? 'active'
         } catch (err) {
-          log('warn', 'ExpireSessions: failed to fetch item name', { tenantId, itemId, errorName: err.name })
+          log('warn', 'ExpireSessions: failed to fetch item', { tenantId, itemId, errorName: err.name })
         }
       }
 
-      log('info', 'ExpireSessions: all sessions terminal, triggering pulse check', { tenantId, itemId })
+      // Only trigger pulse check if item is closed — open items should wait for close
+      if (itemStatus !== 'closed') {
+        log('info', 'ExpireSessions: all sessions terminal but item not closed, skipping pulse check', { tenantId, itemId, itemStatus })
+        continue
+      }
+
+      log('info', 'ExpireSessions: all sessions terminal and item closed, triggering pulse check', { tenantId, itemId })
 
       // Invoke runPulseCheck async (fire-and-forget)
       try {

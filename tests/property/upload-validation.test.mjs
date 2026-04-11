@@ -54,7 +54,7 @@ function setupMocks() {
   getSignedUrlSpy.mockReset()
   // GetItem returns valid item, UpdateItem returns {}
   dynamoSendSpy.mockResolvedValueOnce({
-    Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } },
+    Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, status: { S: 'draft' } },
   })
   dynamoSendSpy.mockResolvedValue({})
   getSignedUrlSpy.mockResolvedValue('https://s3.amazonaws.com/presigned-url')

@@ -155,6 +155,12 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
+    const itemStatus = itemResult.Item.status?.S
+    if (itemStatus !== 'draft') {
+      log('warn', 'GetUploadUrl: item not in draft status', { requestId, tenantId, itemId, itemStatus })
+      return errorResponse(409, 'Documents can only be uploaded to draft items', {}, origin)
+    }
+
     const key = `pulse/${tenantId}/items/${itemId}/${fileName}`
 
     // Generate presigned PUT URL

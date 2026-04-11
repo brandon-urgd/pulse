@@ -295,18 +295,6 @@
   font-style: italic;
 }
 
-.quoteItem::before {
-  content: '\201C';
-  color: var(--color-text-muted);
-  margin-right: 2px;
-}
-
-.quoteItem::after {
-  content: '\201D';
-  color: var(--color-text-muted);
-  margin-left: 2px;
-}
-
 .emptySection {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
@@ -775,6 +763,12 @@
 
 .revisionCta:hover {
   opacity: 0.88;
+}
+
+.imageRevisionNotice {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .revisionCtaRow {

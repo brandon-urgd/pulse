@@ -6624,7 +6624,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                Resource: !GetAtt PulseTenantsTable.Arn
+                Resource:
+                  - !GetAtt PulseTenantsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:Query
@@ -6878,6 +6880,7 @@ Resources:
         Mode: Active
       Environment:
         Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable

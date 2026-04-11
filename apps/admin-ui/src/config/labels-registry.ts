@@ -527,6 +527,7 @@ export const labels = {
     batchUndo: 'Undo',
     viewRevisions: 'View Revisions',
     generateRevision: 'Generate Revision',
+    imageRevisionNotice: 'Revisions aren\u2019t available for image items \u2014 decisions are saved for your reference.',
   },
 
   // Support / Report Modal (Task 37)

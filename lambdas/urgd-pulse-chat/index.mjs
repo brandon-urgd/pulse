@@ -655,13 +655,37 @@ async function handleChat(event, responseStream) {
         updateValues[':completedAt'] = { S: new Date().toISOString() }
       }
 
-      await dynamo.send(new UpdateItemCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
-        UpdateExpression: `SET ${updateExprParts.join(', ')}`,
-        ExpressionAttributeNames: updateNames,
-        ExpressionAttributeValues: updateValues,
-      }))
+      // Guard: prevent overwriting terminal session states (expired/completed by another process)
+      updateNames['#status'] = 'status'
+      updateValues[':not_started'] = { S: 'not_started' }
+      updateValues[':in_progress'] = { S: 'in_progress' }
+
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+          UpdateExpression: `SET ${updateExprParts.join(', ')}`,
+          ConditionExpression: '#status IN (:not_started, :in_progress)',
+          ExpressionAttributeNames: updateNames,
+          ExpressionAttributeValues: updateValues,
+        }))
+      } catch (condErr) {
+        if (condErr.name === 'ConditionalCheckFailedException') {
+          log('warn', 'Chat: session is no longer active, skipping update', { requestId, sessionId, tenantId })
+          if (hasResponseStream && !isStreaming) {
+            const errResp = errorResponse(410, 'Session is no longer active', {}, origin)
+            responseStream.write(JSON.stringify(errResp))
+            responseStream.end()
+            return
+          }
+          if (!hasResponseStream) {
+            return errorResponse(410, 'Session is no longer active', {}, origin)
+          }
+          // Streaming path: response already sent to client, just return
+          return
+        }
+        throw condErr
+      }
 
       // 4.4: On session complete, update item coverageMap with aggregate coverage
       if (sessionComplete && frozenSnapshot?.feedbackSections && itemId) {
@@ -803,48 +827,76 @@ async function updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionI
     return
   }
 
-  // Read current item coverageMap
-  const itemResult = await dynamo.send(new GetItemCommand({
-    TableName: process.env.ITEMS_TABLE,
-    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-    ProjectionExpression: 'coverageMap',
-  }))
+  // Read current item coverageMap (with updatedAt for optimistic locking)
+  const MAX_RETRIES = 2
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const itemResult = await dynamo.send(new GetItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      ProjectionExpression: 'coverageMap, updatedAt',
+    }))
 
-  const existingCoverage = itemResult.Item?.coverageMap?.M ? unmarshalMap(itemResult.Item.coverageMap) : {}
+    const expectedUpdatedAt = itemResult.Item?.updatedAt?.S || null
+    const existingCoverage = itemResult.Item?.coverageMap?.M ? unmarshalMap(itemResult.Item.coverageMap) : {}
 
-  // Merge this session's coverage into the aggregate
-  for (const [sectionId, data] of Object.entries(sectionCoverage)) {
-    if (!data.touched) continue
+    // Merge this session's coverage into the aggregate
+    for (const [sectionId, data] of Object.entries(sectionCoverage)) {
+      if (!data.touched) continue
 
-    if (!existingCoverage[sectionId]) {
-      existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
+      if (!existingCoverage[sectionId]) {
+        existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
+      }
+
+      const entry = existingCoverage[sectionId]
+      entry.sessionCount = (entry.sessionCount || 0) + 1
+      entry.avgDepth = data.depth || entry.avgDepth
+      if (!entry.reviewerIds) entry.reviewerIds = []
+      if (reviewerId && !entry.reviewerIds.includes(reviewerId)) {
+        entry.reviewerIds.push(reviewerId)
+      }
     }
 
-    const entry = existingCoverage[sectionId]
-    entry.sessionCount = (entry.sessionCount || 0) + 1
-    entry.avgDepth = data.depth || entry.avgDepth
-    if (!entry.reviewerIds) entry.reviewerIds = []
-    if (reviewerId && !entry.reviewerIds.includes(reviewerId)) {
-      entry.reviewerIds.push(reviewerId)
+    // Ensure untouched sections have entries too
+    for (const [sectionId, data] of Object.entries(sectionCoverage)) {
+      if (!existingCoverage[sectionId]) {
+        existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
+      }
     }
-  }
 
-  // Ensure untouched sections have entries too
-  for (const [sectionId, data] of Object.entries(sectionCoverage)) {
-    if (!existingCoverage[sectionId]) {
-      existingCoverage[sectionId] = { sessionCount: 0, avgDepth: null, reviewerIds: [] }
-    }
-  }
-
-  await dynamo.send(new UpdateItemCommand({
-    TableName: process.env.ITEMS_TABLE,
-    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-    UpdateExpression: 'SET coverageMap = :cm, updatedAt = :now',
-    ExpressionAttributeValues: {
+    const conditionParts = []
+    const condValues = {
       ':cm': marshalCoverageMap(existingCoverage),
       ':now': { S: new Date().toISOString() },
-    },
-  }))
+    }
+
+    if (expectedUpdatedAt) {
+      conditionParts.push('updatedAt = :expectedUpdatedAt')
+      condValues[':expectedUpdatedAt'] = { S: expectedUpdatedAt }
+    } else {
+      conditionParts.push('attribute_not_exists(updatedAt)')
+    }
+
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET coverageMap = :cm, updatedAt = :now',
+        ConditionExpression: conditionParts.join(' AND '),
+        ExpressionAttributeValues: condValues,
+      }))
+      return // Success — exit retry loop
+    } catch (writeErr) {
+      if (writeErr.name === 'ConditionalCheckFailedException') {
+        if (attempt < MAX_RETRIES) {
+          log('warn', 'updateItemCoverageMap: concurrent write detected, retrying', { tenantId, itemId, sessionId, attempt: attempt + 1 })
+          continue // Re-read and re-merge
+        }
+        log('warn', 'updateItemCoverageMap: concurrent write detected, max retries exceeded', { tenantId, itemId, sessionId })
+        return // Give up gracefully — coverage will be slightly stale but not lost
+      }
+      throw writeErr
+    }
+  }
 }
 
 /**
@@ -1007,7 +1059,7 @@ Missing tags means the coverage map will be incomplete — this directly affects
   prompt += `Section transitions:
 - You MUST cover ALL ${totalSections} listed sections before ending the session. Do not skip any section. Do not end the session with uncovered sections remaining.
 - After the depth-appropriate number of exchanges for the current section, transition to the next section. Do not linger on one section at the expense of others.
-- When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your message — after all your visible text.
+- When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your last sentence — appended directly after the period or question mark, no newline before it. Example: "...what stood out to you about the pricing model?[SECTION:3]"
 - Before transitioning, consider whether the feedback focus applies to the upcoming content.
 - When all sections are covered, include [SESSION_COMPLETE] at the very end of your final message.
 - Never ask the reviewer to react to something you haven't shown them. Summarize or quote first, then ask.

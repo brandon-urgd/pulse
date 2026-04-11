@@ -85,6 +85,7 @@ interface ItemResponse {
       sections: Array<{ id: string; title: string; classification: string }>;
     };
     sectionDepthPreferences?: Record<string, 'deep' | 'explore' | 'skim'>;
+    itemType?: 'document' | 'image';
   };
 }
 
@@ -312,6 +313,8 @@ export default function PulseCheck() {
   const itemDescription = itemResp?.data?.description ?? '';
   const itemCoverageMap = itemResp?.data?.coverageMap ?? {};
   const itemSectionMap = itemResp?.data?.sectionMap;
+  const itemType = itemResp?.data?.itemType ?? 'document';
+  const isImageItem = itemType === 'image';
 
   // Filter sections to only those the tenant requested feedback on
   const feedbackSections = itemResp?.data?.feedbackSections;
@@ -427,6 +430,10 @@ export default function PulseCheck() {
       await authedMutate(`/api/manage/items/${itemId}/close`, 'PUT', {}, navigate);
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      // Brief delay to allow DynamoDB write to propagate before the
+      // runPulseCheck Lambda reads the item status. Without this, the
+      // guard (status === 'closed') can reject a legitimate request.
+      await new Promise((r) => setTimeout(r, 1500));
       showOverlay();
       generateMutation.mutate(undefined);
     } catch {
@@ -785,10 +792,13 @@ export default function PulseCheck() {
                   >
                     {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                   </button>
-                  {hasPersistedActionableDecision && (
+                  {hasPersistedActionableDecision && !isImageItem && (
                     <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
                       {labels.pulseCheck.viewRevisions}
                     </Link>
+                  )}
+                  {isImageItem && hasPersistedActionableDecision && (
+                    <span className={styles.imageRevisionNotice}>{labels.pulseCheck.imageRevisionNotice}</span>
                   )}
                   {saveStatus === 'saved' && (
                     <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>
@@ -1035,10 +1045,13 @@ export default function PulseCheck() {
                 >
                   {saveStatus === 'saving' ? labels.pulseCheck.savingDecisions : labels.pulseCheck.saveDecisionsButton}
                 </button>
-                {hasPersistedActionableDecision && (
+                {hasPersistedActionableDecision && !isImageItem && (
                   <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionCta}>
                     {labels.pulseCheck.viewRevisions}
                   </Link>
+                )}
+                {isImageItem && hasPersistedActionableDecision && (
+                  <span className={styles.imageRevisionNotice}>{labels.pulseCheck.imageRevisionNotice}</span>
                 )}
                 {saveStatus === 'saved' && (
                   <span className={styles.saveSuccess} aria-live="polite">{labels.pulseCheck.decisionsSaved}</span>

@@ -189,15 +189,21 @@ async function closeItem(itemId, tenantId) {
           TableName: process.env.SESSIONS_TABLE,
           Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
           UpdateExpression: 'SET #status = :expired, expiredAt = :now',
+          ConditionExpression: '#status <> :completed',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: {
             ':expired': { S: 'expired' },
             ':now': { S: now },
+            ':completed': { S: 'completed' },
           },
         }))
         expiredCount++
       } catch (err) {
-        log('error', 'CloseExpiredItems: failed to expire session', { itemId, sessionId, errorName: err.name })
+        if (err.name === 'ConditionalCheckFailedException') {
+          log('info', 'CloseExpiredItems: session already in terminal state, skipping', { itemId, sessionId })
+        } else {
+          log('error', 'CloseExpiredItems: failed to expire session', { itemId, sessionId, errorName: err.name })
+        }
       }
     }
   } while (lastKey)

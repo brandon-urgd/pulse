@@ -11,7 +11,7 @@ import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } fro
 import { resolveFeature } from './shared/features.mjs'
 
 requireEnv([
-  'SESSIONS_TABLE', 'PULSE_CHECKS_TABLE',
+  'ITEMS_TABLE', 'SESSIONS_TABLE', 'PULSE_CHECKS_TABLE',
   'PROCESS_FUNCTION_NAME', 'CORS_ALLOWED_ORIGINS',
 ])
 
@@ -64,7 +64,20 @@ export const handler = async (event) => {
       }
     }
 
-    // 1. Query all sessions for this item
+    // 1. Verify item is closed before generating pulse check
+    const itemResult = await dynamo.send(new GetItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      ProjectionExpression: '#status',
+      ExpressionAttributeNames: { '#status': 'status' },
+    }))
+    if (!itemResult.Item) return errorResponse(404, 'Item not found', {}, origin)
+    const itemStatus = itemResult.Item.status?.S
+    if (itemStatus !== 'closed') {
+      return errorResponse(409, 'Item must be closed before running a Pulse Check. Use Close & Run.', {}, origin)
+    }
+
+    // 2. Query all sessions for this item
     const sessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',

@@ -203,16 +203,26 @@ Revised Document:`
     }))
 
     // 7. Update item status to 'revised'
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.ITEMS_TABLE,
-      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: 'SET #status = :revised, updatedAt = :now',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: {
-        ':revised': { S: 'revised' },
-        ':now': { S: completedAt },
-      },
-    }))
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET #status = :revised, updatedAt = :now',
+        ConditionExpression: '#status = :closed',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':revised': { S: 'revised' },
+          ':now': { S: completedAt },
+          ':closed': { S: 'closed' },
+        },
+      }))
+    } catch (condErr) {
+      if (condErr.name === 'ConditionalCheckFailedException') {
+        log('warn', 'ProcessRevision: item status was not closed, skipping status update', { tenantId, itemId, revisionId })
+      } else {
+        throw condErr
+      }
+    }
 
     // 8. Publish CloudWatch metrics
     await putMetrics([

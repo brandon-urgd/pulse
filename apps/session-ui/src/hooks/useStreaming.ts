@@ -25,7 +25,11 @@ function stripTags(
   while ((match = re.exec(text)) !== null) {
     onSection(parseInt(match[1], 10))
   }
-  return text.replace(TAG_SECTION, '').replace(TAG_COMPLETE, '')
+  // Strip tags and clean up any trailing whitespace/newlines left behind
+  return text
+    .replace(TAG_SECTION, '')
+    .replace(TAG_COMPLETE, '')
+    .replace(/\n\s*$/g, '')
 }
 
 /**
