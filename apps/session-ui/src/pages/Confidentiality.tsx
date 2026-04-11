@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { acceptConfidentiality } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
-import ScanScopeTransition from '../components/ScanScopeTransition'
+import PulseScopeTransition from '../components/PulseScopeTransition'
 
 const SAGE = 'var(--color-accent-deep)'
 const SAGE_SUBTLE = 'var(--color-accent-subtle)'
@@ -179,10 +179,10 @@ export default function Confidentiality() {
     }
   }
 
-  // Transition screen — ScanScopeTransition animation
+  // Transition screen — PulseScopeTransition animation
   if (transitioning) {
     return (
-      <ScanScopeTransition
+      <PulseScopeTransition
         playing={true}
         onComplete={() => navigate(`/s/${sessionId}/chat`, { replace: true })}
       />

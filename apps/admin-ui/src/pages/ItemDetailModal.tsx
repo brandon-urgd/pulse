@@ -7,7 +7,7 @@ import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import SectionPanel from '../components/SectionPanel';
 import CoverageIndicator from '../components/CoverageIndicator';
-import { ScanLineLoader } from '../components/ScanLineLoader';
+import { PulseWaveLoader } from '../components/PulseWaveLoader';
 import AssessmentHelper from '../components/AssessmentHelper';
 import { authedMutate } from '../hooks/useAuthedMutation';
 import styles from './ItemDetailModal.module.css';
@@ -620,7 +620,7 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                   {form.sectionAnalysisTimedOut ? (
                     <p className={styles.timeLimitHint}>{labels.itemDetail.analysisTimeout}</p>
                   ) : (
-                    <ScanLineLoader text={labels.itemDetail.analyzingDocument} />
+                    <PulseWaveLoader text={labels.itemDetail.analyzingDocument} />
                   )}
                 </div>
               )}

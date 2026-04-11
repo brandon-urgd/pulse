@@ -1,15 +1,15 @@
 /**
- * ScanLineLoader — Generating/loading animation
+ * PulseWaveLoader — Generating/loading animation
  *
- * A looping scan-line trace that draws and redraws, with status text below.
+ * A looping pulse wave that draws and redraws, with status text below.
  * Use for pulse check generation, revision generation, or any async wait.
  *
  * Usage:
- *   <ScanLineLoader text="Generating revision for Product Launch Brief..." />
- *   <ScanLineLoader text="Running your Pulse Check..." />
- *   <ScanLineLoader />  // no text, just the animation
+ *   <PulseWaveLoader text="Generating revision for Product Launch Brief..." />
+ *   <PulseWaveLoader text="Running your Pulse Check..." />
+ *   <PulseWaveLoader />  // no text, just the animation
  *
- * Requires: animations.css (trace-draw keyframe)
+ * Requires: animations.css (wave-draw keyframe)
  * No external dependencies.
  */
 import React from 'react';
@@ -20,7 +20,7 @@ interface Props {
   color?: string;
 }
 
-export function ScanLineLoader({
+export function PulseWaveLoader({
   text,
   width = 200,
   color = 'var(--color-accent, #7a9e87)',
@@ -47,7 +47,7 @@ export function ScanLineLoader({
           style={{
             strokeDasharray: width * 2,
             strokeDashoffset: width * 2,
-            animation: 'trace-draw 2s ease-out infinite',
+            animation: 'wave-draw 2s ease-out infinite',
           }}
         />
       </svg>
@@ -63,4 +63,4 @@ export function ScanLineLoader({
   );
 }
 
-export default ScanLineLoader;
+export default PulseWaveLoader;

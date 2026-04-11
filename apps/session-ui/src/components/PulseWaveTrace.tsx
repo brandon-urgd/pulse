@@ -1,12 +1,12 @@
 /**
- * ScanLineTrace — Atmospheric background SVG trace
+ * PulseWaveTrace — Atmospheric background SVG pulse wave
  *
  * Usage:
- *   <ScanLineTrace />                          // defaults: 800w, 40h, 4% opacity, 3 peaks
- *   <ScanLineTrace opacity={0.03} peaks={2} /> // subtle, fewer peaks
+ *   <PulseWaveTrace />                          // defaults: 800w, 40h, 4% opacity, 3 peaks
+ *   <PulseWaveTrace opacity={0.03} peaks={2} /> // subtle, fewer peaks
  *
- * Place behind glass cards or branded backgrounds. The trace is static (no animation).
- * For animated traces, see ScanScopeTransition or SplashVariations.
+ * Place behind glass cards or branded backgrounds. The wave is static (no animation).
+ * For animated waves, see PulseScopeTransition or SplashVariations.
  *
  * No dependencies — pure React + inline SVG.
  */
@@ -20,7 +20,7 @@ interface Props {
   color?: string;
 }
 
-export function ScanLineTrace({
+export function PulseWaveTrace({
   width = 800,
   height = 40,
   opacity = 0.04,
@@ -58,4 +58,4 @@ export function ScanLineTrace({
   );
 }
 
-export default ScanLineTrace;
+export default PulseWaveTrace;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScanLineIcon } from './ScanLineIcon'
+import { PulseWaveIcon } from './PulseWaveIcon'
 
 const KEYFRAMES = `
 @keyframes thinkDot {
@@ -51,7 +51,7 @@ export default function ThinkingIndicator() {
     <>
       {!reducedMotion && <style>{KEYFRAMES}</style>}
       <div style={rowStyle}>
-        <ScanLineIcon size={28} />
+        <PulseWaveIcon size={28} />
         <div
           style={bubbleStyle}
           aria-label="Agent is thinking"

@@ -111,7 +111,7 @@
   <rect x="16" y="16" width="992" height="992" rx="76" fill="none" stroke="#7a9e87" stroke-opacity="0.12" stroke-width="1.5"/>
   <rect x="30" y="30" width="964" height="964" rx="64" fill="none" stroke="#7a9e87" stroke-opacity="0.20" stroke-width="2.5" filter="url(#borderGlow)"/>
 
-  <!-- LAYER 7: THE MARK — Bold P (42px) + Pulse Line (30px) from master -->
+  <!-- LAYER 7: THE MARK — Bold P (42px) + Pulse Wave (30px) from master -->
   <g filter="url(#emboss)">
     <!-- P stem -->
     <line x1="195" y1="190" x2="195" y2="810" stroke="#7a9e87" stroke-width="42" stroke-linecap="round"/>
@@ -121,7 +121,7 @@
       d="M 195 190 L 380 190 C 490 190, 580 230, 580 340 C 580 450, 490 490, 380 490 L 195 490"
       fill="none" stroke="#7a9e87" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
 
-    <!-- Pulse line — detached, at lowercase baseline -->
+    <!-- Pulse wave — detached, at lowercase baseline -->
     <path
       d="M 340 650 L 400 650 L 440 680 L 510 530 L 580 800 L 650 520 L 715 790 L 770 580 L 815 650 L 940 650"
       fill="none" stroke="#7a9e87" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>

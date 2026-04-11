@@ -8,8 +8,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { validateSession } from '../api/session'
 import { useSession } from '../context/SessionContext'
 import SessionFooter from '../components/SessionFooter'
-import { ScanLineTrace } from '../components/ScanLineTrace'
-import ScanScopeTransition from '../components/ScanScopeTransition'
+import { PulseWaveTrace } from '../components/PulseWaveTrace'
+import PulseScopeTransition from '../components/PulseScopeTransition'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -240,7 +240,7 @@ export default function SessionValidate() {
   // Preview mode transition — show "Welcome to Pulse" animation then navigate to chat
   if (showTransition && previewSessionId) {
     return (
-      <ScanScopeTransition
+      <PulseScopeTransition
         playing={true}
         onComplete={() => navigate(`/s/${previewSessionId}/chat`, { replace: true })}
       />
@@ -274,7 +274,7 @@ export default function SessionValidate() {
           right: 0,
           pointerEvents: 'none',
         }}>
-          <ScanLineTrace opacity={0.035} peaks={3} />
+          <PulseWaveTrace opacity={0.035} peaks={3} />
         </div>
       )}
       <div style={styles.card}>

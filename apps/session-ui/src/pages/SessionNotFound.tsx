@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ScanLineTrace } from '../components/ScanLineTrace'
+import { PulseWaveTrace } from '../components/PulseWaveTrace'
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -47,7 +47,7 @@ export default function SessionNotFound() {
           right: 0,
           pointerEvents: 'none',
         }}>
-          <ScanLineTrace opacity={0.035} peaks={3} />
+          <PulseWaveTrace opacity={0.035} peaks={3} />
         </div>
       )}
       <h1 style={styles.heading}>We couldn't find that session.</h1>

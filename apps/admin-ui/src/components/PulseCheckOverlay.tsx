@@ -3,7 +3,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './PulseCheckOverlay.module.css';
 import { labels } from '../config/labels-registry';
 
-// Default radar-themed phases that cycle during the wait
+// Default pulse-wave-themed phases that cycle during the wait
 const DEFAULT_PHASES: { message: string; targetPct: number; durationMs: number }[] = [
   { message: labels.pulseCheck.overlayPhase1, targetPct: 18,  durationMs: 2000 },
   { message: labels.pulseCheck.overlayPhase2, targetPct: 35,  durationMs: 4000 },

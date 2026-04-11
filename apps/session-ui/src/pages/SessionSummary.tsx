@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
 import { getSessionSummary, submitSummaryFeedback } from '../api/session'
 import PulseLine from '../components/PulseLine'
-import { ScanLineLoader } from '../components/ScanLineLoader'
-import { ScanLineTrace } from '../components/ScanLineTrace'
+import { PulseWaveLoader } from '../components/PulseWaveLoader'
+import { PulseWaveTrace } from '../components/PulseWaveTrace'
 import SessionFooter from '../components/SessionFooter'
 import EmailOptIn from '../components/EmailOptIn'
 
@@ -399,7 +399,7 @@ export default function SessionSummary() {
           right: 0,
           pointerEvents: 'none',
         }}>
-          <ScanLineTrace opacity={0.035} peaks={3} />
+          <PulseWaveTrace opacity={0.035} peaks={3} />
         </div>
       )}
       {/* Top bar */}
@@ -423,7 +423,7 @@ export default function SessionSummary() {
 
         {loadState === 'loading' || loadState === 'not-ready' ? (
           <div style={styles.loadingState} role="status" aria-busy="true">
-            <ScanLineLoader text={loadState === 'not-ready' ? 'Preparing your summary…' : 'Loading…'} />
+            <PulseWaveLoader text={loadState === 'not-ready' ? 'Preparing your summary…' : 'Loading…'} />
           </div>
         ) : loadState === 'error' ? (
           <div style={styles.errorState} role="alert">

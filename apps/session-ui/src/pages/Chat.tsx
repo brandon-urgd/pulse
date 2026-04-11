@@ -10,7 +10,7 @@ import {
 } from '../api/session'
 import { consumeStream } from '../hooks/useStreaming'
 import ChatBubble from '../components/ChatBubble'
-import { ScanLineIcon } from '../components/ScanLineIcon'
+import { PulseWaveIcon } from '../components/PulseWaveIcon'
 import PulseLine from '../components/PulseLine'
 import FileAttachmentBar from '../components/FileAttachmentBar'
 import ThinkingIndicator from '../components/ThinkingIndicator'
@@ -914,7 +914,7 @@ export default function Chat() {
               <div style={styles.messageRow}>
                 {isFirstInCluster ? (
                   <div style={{ flexShrink: 0, width: '28px', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
-                    <ScanLineIcon size={28} />
+                    <PulseWaveIcon size={28} />
                   </div>
                 ) : (
                   <div style={{ width: '28px', flexShrink: 0 }} />

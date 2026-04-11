@@ -1,8 +1,8 @@
 /**
- * ScanScopeTransition — Full-screen splash animation (CF-2)
+ * PulseScopeTransition — Full-screen splash animation (CF-2)
  *
  * Usage:
- *   <ScanScopeTransition playing={true} onComplete={() => navigate('/next')} />
+ *   <PulseScopeTransition playing={true} onComplete={() => navigate('/next')} />
  *
  * Sequence (5s total):
  *   0.0s — Black screen, grid fades in
@@ -12,7 +12,7 @@
  *   3.8s — Everything fades to black
  *   4.8s — onComplete fires
  *
- * Requires: animations.css (trace-draw, peak-flash, fade-in keyframes)
+ * Requires: animations.css (wave-draw, peak-flash, fade-in keyframes)
  * No external dependencies — pure React + inline styles + CSS keyframes.
  */
 import React, { useEffect, useState } from 'react';
@@ -82,7 +82,7 @@ function FullWidthTrace({ animate }: { animate: boolean }) {
           style={{
             strokeDasharray: w * 2,
             strokeDashoffset: w * 2,
-            animation: 'trace-draw 2.5s ease-out forwards 0.8s',
+            animation: 'wave-draw 2.5s ease-out forwards 0.8s',
           }}
         />
       )}
@@ -99,7 +99,7 @@ function FullWidthTrace({ animate }: { animate: boolean }) {
   );
 }
 
-export function ScanScopeTransition({ playing, onComplete }: Props) {
+export function PulseScopeTransition({ playing, onComplete }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
 
   useEffect(() => {
@@ -172,4 +172,4 @@ export function ScanScopeTransition({ playing, onComplete }: Props) {
   );
 }
 
-export default ScanScopeTransition;
+export default PulseScopeTransition;
