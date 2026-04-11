@@ -639,8 +639,9 @@ export const labels = {
 
   // Data retention disclosure
   retention: {
-    notice: 'Session transcripts are automatically deleted 30 days after a Pulse Check is generated. Reports, pulse checks, and your uploaded documents are retained until you delete the item or your account.',
+    notice: 'Session transcripts are automatically deleted 30 days after a Pulse Check is generated. Reports, pulse checks, and your uploaded documents are retained until you delete the item or your account. Documents and images are archived to long-term storage after one year.',
     shortNotice: 'Transcripts are deleted 30 days after the Pulse Check is generated.',
+    archiveNotice: 'Documents and images are archived to long-term storage after one year. Your content is never deleted automatically.',
     settingsHeading: 'Data Retention',
   },
 

@@ -23,8 +23,5 @@
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=9.0.0"
-  },
-  "dependencies": {
-    "stripe": "^22.0.0"
   }
 }

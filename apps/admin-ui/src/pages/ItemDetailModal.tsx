@@ -480,6 +480,10 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                       />
                     </div>
 
+                    <p className={styles.retentionNotice}>
+                      {labels.retention.shortNotice} {labels.retention.archiveNotice}
+                    </p>
+
                     {form.formError && (
                       <p className={styles.formError} role="alert" aria-live="polite">
                         {form.formError}

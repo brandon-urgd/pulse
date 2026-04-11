@@ -951,6 +951,21 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveClosedItemDocuments
+            Status: !If [IsProduction, Enabled, Disabled]
+            Prefix: pulse/
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+              - StorageClass: GLACIER
+                TransitionInDays: 365
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 90
       CorsConfiguration:
         CorsRules:
           - AllowedOrigins:
@@ -1226,6 +1241,10 @@ Resources:
           HttpMethod: '*'
           MetricsEnabled: true
           DataTraceEnabled: false
+        - ResourcePath: '/api/public/config'
+          HttpMethod: GET
+          CachingEnabled: true
+          CacheTtlInSeconds: 60
 
   # Gateway Responses — CORS headers on API Gateway error responses (timeouts, auth failures)
   PulseGatewayResponse4XX:
@@ -1836,7 +1855,7 @@ Resources:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref HealthCodeKey
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 256
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, Health]
       TracingConfig:
         Mode: Active
@@ -1879,7 +1898,7 @@ Resources:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref BedrockHealthCodeKey
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 256
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, BedrockHealth]
       TracingConfig:
         Mode: Active
@@ -8625,6 +8644,10 @@ Resources:
                   - !GetAtt PulseGenerateReportFunction.Arn
                   - !GetAtt PulseRunPulseCheckFunction.Arn
                   - !GetAtt PulseSendPulseCheckReadyFunction.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt PulseCloseExpiredItemsDLQ.Arn
 
   PulseCloseExpiredItemsFunction:
     Type: AWS::Lambda::Function
@@ -8640,6 +8663,8 @@ Resources:
       Timeout: 300
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CloseExpiredItems]
+      DeadLetterConfig:
+        TargetArn: !GetAtt PulseCloseExpiredItemsDLQ.Arn
       TracingConfig:
         Mode: Active
       Environment:
@@ -8741,6 +8766,10 @@ Resources:
                   - dynamodb:BatchWriteItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt PulseTranscriptsTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt PulsePurgeTranscriptsDLQ.Arn
 
   PulsePurgeTranscriptsFunction:
     Type: AWS::Lambda::Function
@@ -8756,6 +8785,8 @@ Resources:
       Timeout: 900
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PurgeTranscripts]
+      DeadLetterConfig:
+        TargetArn: !GetAtt PulsePurgeTranscriptsDLQ.Arn
       TracingConfig:
         Mode: Active
       Environment:
@@ -9022,6 +9053,10 @@ Resources:
                   - kms:GenerateDataKey*
                   - kms:Decrypt
                 Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt PulseStripeWebhookDLQ.Arn
       Tags:
         - Key: project
           Value: pulse
@@ -9051,6 +9086,8 @@ Resources:
       Timeout: 30
       MemorySize: 256
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, StripeWebhook]
+      DeadLetterConfig:
+        TargetArn: !GetAtt PulseStripeWebhookDLQ.Arn
       TracingConfig:
         Mode: Active
       Environment:
@@ -9320,6 +9357,249 @@ Resources:
       OKActions:
         - !Ref PulseCriticalTopic
       TreatMissingData: notBreaching
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Stage 6 — Well-Architected Review: DLQs for async Lambdas
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseStripeWebhookDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'urgd-pulse-stripeWebhook-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseCloseExpiredItemsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'urgd-pulse-closeExpiredItems-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulsePurgeTranscriptsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'urgd-pulse-purgeTranscripts-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # DLQ alarm — fires if any DLQ receives messages (failed async invocations)
+  PulseDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'urgd-pulse-${Environment}-dlq-messages'
+      AlarmDescription: One or more async Lambda invocations failed and landed in a DLQ
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt PulseStripeWebhookDLQ.QueueName
+      AlarmActions:
+        - !Ref PulseCriticalTopic
+      OKActions:
+        - !Ref PulseCriticalTopic
+      TreatMissingData: notBreaching
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Stage 6 — Well-Architected Review: CloudWatch Dashboard
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseOperationalDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'urgd-pulse-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "API Gateway — Requests & Errors",
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "Sum", "label": "Total Requests"}],
+                  ["AWS/ApiGateway", "5XXError", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "Sum", "label": "5xx Errors", "color": "#d62728"}],
+                  ["AWS/ApiGateway", "4XXError", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "Sum", "label": "4xx Errors", "color": "#ff7f0e"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "API Gateway — Latency (p50 / p95 / p99)",
+                "metrics": [
+                  ["AWS/ApiGateway", "Latency", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "p50", "label": "p50"}],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "p95", "label": "p95", "color": "#ff7f0e"}],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "urgd-pulse-api-${Environment}", "Stage", "${Environment}", {"stat": "p99", "label": "p99", "color": "#d62728"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "yAxis": {"left": {"label": "ms"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda — Errors (Key Functions)",
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "urgd-pulse-chat-${Environment}", {"stat": "Sum", "label": "chat"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "urgd-pulse-stripeWebhook-${Environment}", {"stat": "Sum", "label": "stripeWebhook", "color": "#d62728"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "urgd-pulse-closeExpiredItems-${Environment}", {"stat": "Sum", "label": "closeExpiredItems"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "urgd-pulse-purgeTranscripts-${Environment}", {"stat": "Sum", "label": "purgeTranscripts"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "urgd-pulse-createTenant-${Environment}", {"stat": "Sum", "label": "createTenant"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda — Duration (Key Functions, p95)",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "urgd-pulse-chat-${Environment}", {"stat": "p95", "label": "chat"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "urgd-pulse-generateReport-${Environment}", {"stat": "p95", "label": "generateReport"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "urgd-pulse-processPulseCheck-${Environment}", {"stat": "p95", "label": "processPulseCheck"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "urgd-pulse-extractText-${Environment}", {"stat": "p95", "label": "extractText"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "urgd-pulse-generateRevision-${Environment}", {"stat": "p95", "label": "generateRevision"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "yAxis": {"left": {"label": "ms"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "DynamoDB — Consumed Read/Write Capacity",
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "urgd-pulse-tenants-${Environment}", {"stat": "Sum", "label": "tenants (read)"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "urgd-pulse-tenants-${Environment}", {"stat": "Sum", "label": "tenants (write)"}],
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "urgd-pulse-sessions-${Environment}", {"stat": "Sum", "label": "sessions (read)"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "urgd-pulse-sessions-${Environment}", {"stat": "Sum", "label": "sessions (write)"}],
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "urgd-pulse-transcripts-${Environment}", {"stat": "Sum", "label": "transcripts (read)"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "urgd-pulse-transcripts-${Environment}", {"stat": "Sum", "label": "transcripts (write)"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "DynamoDB — Throttled Requests",
+                "metrics": [
+                  ["AWS/DynamoDB", "ThrottledRequests", "TableName", "urgd-pulse-tenants-${Environment}", {"stat": "Sum", "label": "tenants"}],
+                  ["AWS/DynamoDB", "ThrottledRequests", "TableName", "urgd-pulse-sessions-${Environment}", {"stat": "Sum", "label": "sessions"}],
+                  ["AWS/DynamoDB", "ThrottledRequests", "TableName", "urgd-pulse-transcripts-${Environment}", {"stat": "Sum", "label": "transcripts"}],
+                  ["AWS/DynamoDB", "ThrottledRequests", "TableName", "urgd-pulse-items-${Environment}", {"stat": "Sum", "label": "items"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 18, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda — Concurrent Executions",
+                "metrics": [
+                  ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "urgd-pulse-chat-${Environment}", {"stat": "Maximum", "label": "chat"}],
+                  ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "urgd-pulse-generateReport-${Environment}", {"stat": "Maximum", "label": "generateReport"}],
+                  ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "urgd-pulse-processPulseCheck-${Environment}", {"stat": "Maximum", "label": "processPulseCheck"}],
+                  ["AWS/Lambda", "ConcurrentExecutions", "FunctionName", "urgd-pulse-extractText-${Environment}", {"stat": "Maximum", "label": "extractText"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 18, "width": 12, "height": 6,
+              "properties": {
+                "title": "SQS — Dead Letter Queue Depth",
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-stripeWebhook-dlq-${Environment}", {"stat": "Maximum", "label": "stripeWebhook DLQ"}],
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-closeExpiredItems-dlq-${Environment}", {"stat": "Maximum", "label": "closeExpiredItems DLQ"}],
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-purgeTranscripts-dlq-${Environment}", {"stat": "Maximum", "label": "purgeTranscripts DLQ"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            }
+          ]
+        }
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Stage 6 — Well-Architected Review: Budget Alarm ($200/month prod)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseBudget:
+    Type: AWS::Budgets::Budget
+    Condition: IsProduction
+    Properties:
+      Budget:
+        BudgetName: urgd-pulse-monthly-budget
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 200
+          Unit: USD
+        CostFilters:
+          TagKeyValue:
+            - 'user:project$pulse'
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref MonitoringEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref CriticalAlertsEmail
 
 
 Outputs:

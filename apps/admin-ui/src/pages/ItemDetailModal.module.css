@@ -353,6 +353,15 @@
 .docStatusReady    { color: var(--color-success); }
 .docStatusError    { color: var(--color-error); }
 
+/* ── Retention notice ─────────────────────────────────────────────────────── */
+
+.retentionNotice {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-sm) 0 0;
+  line-height: 1.5;
+}
+
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 
 .formError {
