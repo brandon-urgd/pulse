@@ -67,10 +67,9 @@ jobs:
         run: pip install --quiet cfn-lint checkov semgrep
 
       - name: cfn-lint
-        # W2001: PublicSignup parameter unused in template (kept for deploy-pipeline parameter file generation)
         run: |
           set -euo pipefail
-          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045 W2001
+          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045
           echo "✅ cfn-lint passed"
 
       - name: Checkov
@@ -260,7 +259,6 @@ jobs:
               {"ParameterKey": "AppleKeyId",                 "ParameterValue": os.environ["APPLE_KEY_ID"]},
               {"ParameterKey": "AppleClientId",              "ParameterValue": os.environ["APPLE_CLIENT_ID"]},
               {"ParameterKey": "ApplePrivateKey",            "ParameterValue": os.environ["APPLE_PRIVATE_KEY"]},
-              {"ParameterKey": "PublicSignup",               "ParameterValue": "true" if "$env" == "dev" else "false"},
               {"ParameterKey": "QuarantineBucketName",       "ParameterValue": os.environ["QUARANTINE_BUCKET_NAME"]},
               {"ParameterKey": "ShieldEventBridgeRuleArn",   "ParameterValue": os.environ["SHIELD_EVENTBRIDGE_RULE_ARN"]},
               {"ParameterKey": "MonitoringEmail",            "ParameterValue": "alerts@urgd.dev"},
