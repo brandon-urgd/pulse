@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ur/gd Pulse — AI-guided feedback platform (Spec 2 complete, Stage 6 promotion gate)'
+Description: 'ur/gd Pulse - AI-guided feedback platform (Spec 2 complete, Stage 6 promotion gate)'
 
 # ─── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
@@ -650,7 +650,7 @@ Resources:
     Type: AWS::ServiceCatalogAppRegistry::Application
     Properties:
       Name: !Sub 'urgd-pulse-${Environment}'
-      Description: 'Pulse — AI-guided feedback platform by ur/gd Studios'
+      Description: 'Pulse - AI-guided feedback platform by ur/gd Studios'
       Tags:
         project: pulse
         brand: urgd

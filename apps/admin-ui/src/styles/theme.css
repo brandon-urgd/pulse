@@ -17,8 +17,8 @@
 
   /* Text */
   --color-text-primary: #212529;
-  --color-text-secondary: #6c757d;
-  --color-text-muted: #6c757d;
+  --color-text-secondary: #636b73;
+  --color-text-muted: #636b73;
   --color-text-inverse: #ffffff;
 
   /* Interactive — neutral (never use pulse accent for buttons/links) */
