@@ -443,6 +443,15 @@ async function handleChat(event, responseStream) {
       coalescedMessages.shift()
     }
 
+    // Normalize string content to Converse API content block format.
+    // The Converse API requires content to be an array of content blocks,
+    // not a plain string. The SDK's internal logger crashes on string content.
+    for (const msg of coalescedMessages) {
+      if (typeof msg.content === 'string') {
+        msg.content = [{ text: msg.content }]
+      }
+    }
+
     if (coalescedMessages.length === 0) {
       log('error', 'Chat: no valid messages after coalescing', { requestId, sessionId, tenantId })
       if (hasResponseStream) {
@@ -462,7 +471,9 @@ async function handleChat(event, responseStream) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const firstMsg = coalescedMessages[firstUserIdx]
-        const textContent = typeof firstMsg.content === 'string' ? firstMsg.content : ''
+        const textContent = Array.isArray(firstMsg.content)
+          ? (firstMsg.content.find(b => b.text)?.text || '')
+          : (typeof firstMsg.content === 'string' ? firstMsg.content : '')
         coalescedMessages[firstUserIdx] = {
           role: 'user',
           content: [
@@ -499,7 +510,9 @@ async function handleChat(event, responseStream) {
           const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
           if (firstUserIdx !== -1) {
             const firstMsg = coalescedMessages[firstUserIdx]
-            const textContent = typeof firstMsg.content === 'string' ? firstMsg.content : ''
+            const textContent = Array.isArray(firstMsg.content)
+              ? (firstMsg.content.find(b => b.text)?.text || '')
+              : (typeof firstMsg.content === 'string' ? firstMsg.content : '')
             coalescedMessages[firstUserIdx] = {
               role: 'user',
               content: [
