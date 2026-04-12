@@ -214,7 +214,7 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
 
     setIsGenerating(true);
     try {
-      const body: Record<string, string> = { closeDate: publicSessionDate };
+      const body: Record<string, string> = { closeDate: new Date(publicSessionDate).toISOString() };
       if (publicSessionName.trim()) body.sessionName = publicSessionName.trim();
 
       await authedMutate(
@@ -296,7 +296,10 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
 
     setIsExtending(true);
     try {
-      await authedMutate(`/api/manage/items/${itemId}/deadline`, 'PUT', { closeDate: extendDate }, navigate);
+      // datetime-local gives "2026-04-15T14:30" in the user's local time with no timezone.
+      // Convert to UTC ISO 8601 so the Lambda compares against the correct time.
+      const closeDateUTC = new Date(extendDate).toISOString();
+      await authedMutate(`/api/manage/items/${itemId}/deadline`, 'PUT', { closeDate: closeDateUTC }, navigate);
       setExtendMessage(labels.invitation.extendSuccess);
       setExtendDate('');
       refetchSessions();
