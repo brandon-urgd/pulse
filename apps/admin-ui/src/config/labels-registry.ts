@@ -508,7 +508,7 @@ export const labels = {
     // Signal matrix
     matrixSignalDistribution: 'Signal distribution',
     matrixTheme: 'Theme',
-    matrixShowQuote: 'Show quote',
+    matrixShowQuote: 'Details',
     matrixHideQuote: 'Hide',
     // Signal summary
     topQuotesHeading: 'Top quotes',

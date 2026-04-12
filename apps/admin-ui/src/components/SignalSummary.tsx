@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { ThemeRow, ReviewerColumn } from './SignalMatrix';
 import type { SignalType } from './SignalBadge';
 import { labels } from '../config/labels-registry';
@@ -45,21 +44,7 @@ function getTopQuotes(signals: Record<string, { signal: SignalType; quote: strin
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function InlineQuotePreview({ quote }: { quote: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const needsTruncation = quote.length > 60;
-  const preview = needsTruncation ? quote.slice(0, 60) + '…' : quote;
-
-  return (
-    <span
-      onClick={() => needsTruncation && setExpanded(!expanded)}
-      onKeyDown={needsTruncation ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } } : undefined}
-      role={needsTruncation ? 'button' : undefined}
-      tabIndex={needsTruncation ? 0 : undefined}
-      aria-expanded={needsTruncation ? expanded : undefined}
-    >
-      {expanded ? quote : preview}
-    </span>
-  );
+  return <span>{quote}</span>;
 }
 
 function SentimentBar({ signals, reviewerCount }: { signals: Record<string, { signal: SignalType; quote: string }>; reviewerCount: number }) {
