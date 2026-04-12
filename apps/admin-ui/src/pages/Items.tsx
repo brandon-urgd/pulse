@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
@@ -246,15 +246,21 @@ export default function Items() {
   const [modalTarget, setModalTarget] = useState<string | 'new' | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Item | null>(null);
 
+  const rawItems = data?.data ?? [];
+
   // ── Focus restoration: when returning from mobile edit page ──────────────
   const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const focusRestoredRef = useRef(false);
 
   useEffect(() => {
-    const state = location.state as { returnFocusId?: string; openModalId?: string } | null;
+    const state = location.state as { returnFocusId?: string; openModalId?: string; openExampleItem?: boolean } | null;
     const returnItemId = state?.returnFocusId;
     const openModalId = state?.openModalId;
-    if (openModalId && !focusRestoredRef.current) {
+    if (state?.openExampleItem && !focusRestoredRef.current) {
+      focusRestoredRef.current = true;
+      const example = rawItems.find(item => item.isExample);
+      if (example) setModalTarget(example.itemId);
+    } else if (openModalId && !focusRestoredRef.current) {
       focusRestoredRef.current = true;
       setModalTarget(openModalId);
     } else if (returnItemId && !focusRestoredRef.current) {
@@ -264,7 +270,7 @@ export default function Items() {
         if (el) el.focus();
       });
     }
-  }, [location.state]);
+  }, [location.state, rawItems]);
 
   const setCardRef = (itemId: string) => (el: HTMLButtonElement | null) => {
     if (el) cardRefs.current.set(itemId, el);
@@ -284,8 +290,6 @@ export default function Items() {
   useEffect(() => {
     document.title = labels.items.documentTitle;
   }, []);
-
-  const rawItems = data?.data ?? [];
   const items = useMemo(() => sortItems(rawItems, sortField, sortDir), [rawItems, sortField, sortDir]);
 
   // Example item delete protection: allow deletion only when ≥1 real item exists

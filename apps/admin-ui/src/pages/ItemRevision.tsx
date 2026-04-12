@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router';
+import ReactMarkdown from 'react-markdown';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
@@ -46,7 +47,15 @@ function RevisionPane({ label, content, accentBorder }: { label: string; content
     <div className={styles.pane}>
       <p className={styles.paneLabel}>{label}</p>
       <div className={`${styles.paneContent} ${accentBorder ? styles.paneContentAccent : ''}`}>
-        <pre className={styles.paneText}>{content}</pre>
+        <div className={styles.paneMarkdown}>
+          <ReactMarkdown
+            components={{
+              img: ({ alt }) => <span>{alt}</span>,
+            }}
+          >
+            {content || ''}
+          </ReactMarkdown>
+        </div>
       </div>
     </div>
   );
@@ -304,6 +313,7 @@ export default function ItemRevision() {
           onErrorDismiss={() => { setOverlayVisible(false); setOverlayError(''); }}
           phases={REVISION_PHASES}
           notice={labels.revision.overlayNotice}
+          operationType="revision"
         />
       )}
 

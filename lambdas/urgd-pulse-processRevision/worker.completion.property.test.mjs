@@ -39,8 +39,8 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input; this.name = 'InvokeModelCommand' } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input; this.name = 'ConverseCommand' } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -126,10 +126,8 @@ describe('Property 3: Worker completion transitions revision to complete with st
 
           // Bedrock response
           bedrockSendSpy.mockResolvedValueOnce({
-            body: Buffer.from(JSON.stringify({
-              content: [{ text: revisedContent }],
-              usage: { input_tokens: tokensIn, output_tokens: tokensOut },
-            })),
+            output: { message: { content: [{ text: revisedContent }] } },
+            usage: { inputTokens: tokensIn, outputTokens: tokensOut },
           })
 
           const event = {

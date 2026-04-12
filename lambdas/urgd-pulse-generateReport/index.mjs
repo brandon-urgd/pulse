@@ -4,7 +4,7 @@
 // Stores report in reports table — idempotent (PutItem replaces existing)
 
 import { DynamoDBClient, QueryCommand, PutItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
@@ -170,15 +170,10 @@ For themes: extract the actual topics discussed (e.g., "pricing model", "team st
     const bedrockStart = Date.now()
     let bedrockResponse
     try {
-      bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 2048,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        messages: [{ role: 'user', content: [{ text: prompt }] }],
+        inferenceConfig: { maxTokens: 2048 },
       }))
     } catch (bedrockErr) {
       const bedrockLatency = Date.now() - bedrockStart
@@ -189,10 +184,9 @@ For themes: extract the actual topics discussed (e.g., "pricing model", "team st
     }
 
     const bedrockLatency = Date.now() - bedrockStart
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const rawText = responseBody.content?.[0]?.text || '{}'
-    const tokensIn = responseBody.usage?.input_tokens || 0
-    const tokensOut = responseBody.usage?.output_tokens || 0
+    const rawText = bedrockResponse.output?.message?.content?.[0]?.text || '{}'
+    const tokensIn = bedrockResponse.usage?.inputTokens || 0
+    const tokensOut = bedrockResponse.usage?.outputTokens || 0
 
     // Annotate X-Ray trace
     await addXRayAnnotations({

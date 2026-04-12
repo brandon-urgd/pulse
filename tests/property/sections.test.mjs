@@ -202,8 +202,8 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 const { handler: analyzeDocumentHandler } = await import('../../lambdas/urgd-pulse-analyzeDocument/index.mjs')
@@ -280,9 +280,11 @@ describe('Property P6: Graceful fallback on analysis failure', () => {
           }
           s3SendSpy.mockResolvedValue({ Body: mockBody })
 
-          // Malformed response — not valid JSON sections
           const malformedResponse = JSON.stringify({ content: [{ text: 'not valid json at all }{' }] })
-          bedrockSendSpy.mockResolvedValue({ body: Buffer.from(malformedResponse) })
+          bedrockSendSpy.mockResolvedValue({
+            output: { message: { content: [{ text: 'not valid json at all }{' }] } },
+            usage: { inputTokens: 10, outputTokens: 5 },
+          })
 
           await analyzeDocumentHandler({ itemId, tenantId })
 

@@ -82,8 +82,8 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -100,7 +100,7 @@ vi.mock('@aws-sdk/client-lambda', () => {
 
 vi.mock('ulid', () => ({ ulid: () => '01HTEST000000000000000001' }))
 
-const { handler } = await import('./index.mjs')
+const { handler, computeTimeAllocations, buildSystemPrompt } = await import('./index.mjs')
 
 function makeEvent(overrides = {}) {
   return {
@@ -139,10 +139,8 @@ function makeItemRecord() {
 
 function makeBedrockResponse(text = 'Agent response') {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text }],
-      usage: { input_tokens: 100, output_tokens: 50 },
-    })),
+    output: { message: { content: [{ text }] } },
+    usage: { inputTokens: 100, outputTokens: 50 },
   }
 }
 
@@ -364,6 +362,62 @@ describe('urgd-pulse-chat', () => {
 
       const res = await handler(makeEvent())
       expect(res.statusCode).toBe(503)
+    })
+  })
+
+  describe('computeTimeAllocations — unit tests', () => {
+    it('single section returns timeLimitMinutes', () => {
+      const sections = [{ id: 's1', wordCount: 200 }]
+      const allocations = computeTimeAllocations(sections, {}, 30)
+      expect(allocations).toHaveLength(1)
+      expect(allocations[0]).toBe(30)
+    })
+
+    it('equal word counts with same depth returns equal allocations', () => {
+      const sections = [
+        { id: 's1', wordCount: 100 },
+        { id: 's2', wordCount: 100 },
+        { id: 's3', wordCount: 100 },
+      ]
+      const allocations = computeTimeAllocations(sections, {}, 30)
+      expect(allocations).toHaveLength(3)
+      // Each should be 10 (within floating-point tolerance)
+      for (const alloc of allocations) {
+        expect(Math.abs(alloc - 10)).toBeLessThanOrEqual(0.001)
+      }
+    })
+  })
+
+  describe('buildSystemPrompt — closing turn', () => {
+    const basePromptArgs = {
+      itemName: 'Test Document',
+      itemDescription: 'A test document',
+      itemContent: 'Some content here.',
+      itemType: 'document',
+      totalSections: 3,
+      currentSection: 3,
+      closingState: 'closing',
+      windingDown: undefined,
+      message: 'Looks good',
+      isSpecial: false,
+      frozenSnapshot: null,
+      coverageMap: null,
+      imageBase64: null,
+      isSelfReview: false,
+      timeLimitMinutes: 30,
+    }
+
+    it('closing phase prompt contains the closing question instruction', () => {
+      const prompt = buildSystemPrompt(basePromptArgs)
+      expect(prompt).toContain('ask ONE open-ended closing question')
+    })
+
+    it('closing phase prompt contains the banned phrase list', () => {
+      const prompt = buildSystemPrompt(basePromptArgs)
+      expect(prompt).toContain('Thanks for taking the time')
+      expect(prompt).toContain('I appreciate your time')
+      expect(prompt).toContain('Thank you for your valuable feedback')
+      expect(prompt).toContain('This has been a productive session')
     })
   })
 })

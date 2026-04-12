@@ -38,9 +38,9 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient {
     send(...args) { return bedrockSendSpy(...args) }
   }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  class InvokeModelWithResponseStreamCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand, InvokeModelWithResponseStreamCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  class ConverseStreamCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand, ConverseStreamCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -143,10 +143,8 @@ describe('urgd-pulse-chat (non-streaming)', () => {
         .mockResolvedValueOnce({}) // UpdateItem session state
 
       bedrockSendSpy.mockResolvedValue({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Agent response here' }],
-          usage: { input_tokens: 10, output_tokens: 5 },
-        }))
+        output: { message: { content: [{ text: 'Agent response here' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
       })
 
       const event = makeEvent('session-xyz', 'tenant-abc', 'Hello')
@@ -221,10 +219,8 @@ describe('urgd-pulse-chat (non-streaming)', () => {
         .mockResolvedValueOnce({}) // UpdateItem session state
 
       bedrockSendSpy.mockResolvedValue({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Agent response here' }],
-          usage: { input_tokens: 10, output_tokens: 5 },
-        }))
+        output: { message: { content: [{ text: 'Agent response here' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
       })
 
       const event = makeEvent('session-xyz', 'tenant-abc', 'Hello')
@@ -247,10 +243,8 @@ describe('urgd-pulse-chat (non-streaming)', () => {
         .mockResolvedValueOnce({}) // UpdateItem session state
 
       bedrockSendSpy.mockResolvedValue({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Agent response here' }],
-          usage: { input_tokens: 10, output_tokens: 5 },
-        }))
+        output: { message: { content: [{ text: 'Agent response here' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
       })
 
       const event = makeEvent('session-xyz', 'tenant-abc', 'Hello')
@@ -280,10 +274,8 @@ describe('urgd-pulse-chat (non-streaming)', () => {
         .mockResolvedValueOnce({}) // UpdateItem session state
 
       bedrockSendSpy.mockResolvedValue({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Agent response here' }],
-          usage: { input_tokens: 10, output_tokens: 5 },
-        }))
+        output: { message: { content: [{ text: 'Agent response here' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
       })
 
       const event = makeEvent('session-xyz', 'tenant-abc', 'Hello')

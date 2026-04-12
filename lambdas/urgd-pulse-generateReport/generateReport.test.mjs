@@ -21,8 +21,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -45,10 +45,8 @@ const VALID_REPORT = {
 
 function makeBedrockResponse(report = VALID_REPORT) {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text: JSON.stringify(report) }],
-      usage: { input_tokens: 500, output_tokens: 200 },
-    })),
+    output: { message: { content: [{ text: JSON.stringify(report) }] } },
+    usage: { inputTokens: 500, outputTokens: 200 },
   }
 }
 
@@ -193,10 +191,8 @@ describe('urgd-pulse-generateReport', () => {
         .mockResolvedValueOnce({ Items: TRANSCRIPT_ITEMS })
         .mockResolvedValueOnce({})
       bedrockSendSpy.mockResolvedValueOnce({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Not valid JSON at all' }],
-          usage: { input_tokens: 50, output_tokens: 20 },
-        })),
+        output: { message: { content: [{ text: 'Not valid JSON at all' }] } },
+        usage: { inputTokens: 50, outputTokens: 20 },
       })
 
       await expect(handler({ sessionId: 'session-1', tenantId: 'tenant-1' })).resolves.toBeUndefined()

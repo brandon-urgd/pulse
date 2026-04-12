@@ -36,8 +36,8 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {

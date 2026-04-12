@@ -5,7 +5,7 @@
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { log, requireEnv } from './shared/utils.mjs'
 
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET', 'BEDROCK_MODEL_ID'])
@@ -43,7 +43,13 @@ function parseSectionMap(responseText) {
     const classification = s.classification === 'substantive' ? 'substantive' : 'lightweight'
     if (!title) throw new Error(`Section ${id} has empty title`)
     if (!/^s\d+$/.test(id)) throw new Error(`Section ${id} has invalid id format`)
-    return { id, title, classification }
+    const entry = { id, title, classification }
+    // Validate wordCount: must be a non-negative integer; otherwise omit
+    const wc = s.wordCount
+    if (Number.isInteger(wc) && wc >= 0) {
+      entry.wordCount = wc
+    }
+    return entry
   })
 
   const totalSubstantiveSections = sections.filter(s => s.classification === 'substantive').length
@@ -62,19 +68,27 @@ function marshalSectionMap(sectionMap) {
   return {
     M: {
       sections: {
-        L: sectionMap.sections.map(s => ({
-          M: {
-            id: { S: s.id },
-            title: { S: s.title },
-            classification: { S: s.classification },
-          },
-        })),
+        L: sectionMap.sections.map(s => {
+          const entry = {
+            M: {
+              id: { S: s.id },
+              title: { S: s.title },
+              classification: { S: s.classification },
+            },
+          }
+          if (Number.isInteger(s.wordCount) && s.wordCount >= 0) {
+            entry.M.wordCount = { N: String(s.wordCount) }
+          }
+          return entry
+        }),
       },
       totalSubstantiveSections: { N: String(sectionMap.totalSubstantiveSections) },
       analyzedAt: { S: sectionMap.analyzedAt },
     },
   }
 }
+
+export { parseSectionMap, marshalSectionMap }
 
 export const handler = async (event) => {
   const { itemId, tenantId } = event || {}
@@ -106,8 +120,8 @@ export const handler = async (event) => {
 Return a JSON object with this exact structure:
 {
   "sections": [
-    { "id": "s1", "title": "Section Title", "classification": "substantive" },
-    { "id": "s2", "title": "Another Section", "classification": "lightweight" }
+    { "id": "s1", "title": "Section Title", "classification": "substantive", "wordCount": 450 },
+    { "id": "s2", "title": "Another Section", "classification": "lightweight", "wordCount": 120 }
   ]
 }
 
@@ -115,34 +129,27 @@ Rules:
 - Use sequential IDs: s1, s2, s3, etc.
 - Title should be the actual section heading from the document, or a brief descriptive title if no heading exists.
 - Classification must be exactly "substantive" or "lightweight".
+- wordCount is the approximate number of words in the section body content, excluding the section title. Must be a non-negative integer.
 - Aim for 3-10 sections. If the document is very short, 2-3 sections is fine.
 - Do not include sub-sections — only top-level structural divisions.
 - Return ONLY the JSON object, no other text.`
 
-    const bedrockPayload = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: `Analyze this document and classify its sections:\n\n${extractedText.slice(0, 50000)}` },
-      ],
-    }
-
     let bedrockResponse
     try {
-      bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(bedrockPayload),
+        system: [{ text: systemPrompt }],
+        messages: [
+          { role: 'user', content: [{ text: `Analyze this document and classify its sections:\n\n${extractedText.slice(0, 50000)}` }] },
+        ],
+        inferenceConfig: { maxTokens: 2048 },
       }))
     } catch (err) {
       log('error', 'AnalyzeDocument: Bedrock invocation failed', { tenantId, itemId, errorName: err.name })
       return // Graceful fallback
     }
 
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const responseText = responseBody.content?.[0]?.text || ''
+    const responseText = bedrockResponse.output?.message?.content?.[0]?.text ?? ''
 
     // 3. Parse and validate the response
     let sectionMap

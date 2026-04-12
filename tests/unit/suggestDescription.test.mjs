@@ -31,8 +31,8 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient {
     send(...args) { return bedrockSendSpy(...args) }
   }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 function makeS3Body(text) {
@@ -69,11 +69,10 @@ function makeItemRecord(overrides = {}) {
 }
 
 function makeBedrockResponse(suggestion) {
-  const body = JSON.stringify({
-    content: [{ text: suggestion }],
-    usage: { input_tokens: 50, output_tokens: 30 },
-  })
-  return { body: Buffer.from(body) }
+  return {
+    output: { message: { content: [{ text: suggestion }] } },
+    usage: { inputTokens: 50, outputTokens: 30 },
+  }
 }
 
 const { handler } = await import('../../lambdas/urgd-pulse-suggestDescription/index.mjs')

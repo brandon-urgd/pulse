@@ -95,4 +95,26 @@ npm run dev --workspace=apps/session-ui # Run session UI locally
 See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and Security standards.
 
 ---
-*ur/gd Studios — us-west-2*
+
+## Version History
+
+### v1.1 — April 2026
+
+Quality-of-life iteration. No new infrastructure.
+
+- **Smarter session pacing** — AI allocates conversation time based on section word count × depth preference instead of equal time per section
+- **Native document context** — PDF and DOCX files are sent directly to the model (Converse API), so the AI sees formatting, layout, and images — not just extracted text
+- **"Anything else?" closing turn** — AI asks one open-ended question before the summary, giving reviewers a chance to surface unprompted thoughts
+- **Weighted progress bar** — PulseLine reflects content coverage, not just section count
+- **Markdown revision rendering** — revision output renders as formatted text instead of raw markdown syntax
+- **Progressive patience messages** — three-stage reassurance messages during long operations (45s, 90s, 150s) instead of one generic message
+- **Corrected onboarding CTA** — "Explore an example" opens the items list with the example item modal, not the Pulse Check page
+- **Full quote display** — Pulse Check synthesis lists show quotes in full without click-to-reveal
+- **Bedrock Converse migration** — all 8 Bedrock Lambdas migrated from InvokeModel to Converse/ConverseStream API
+
+### v1.0 — March 2026
+
+Initial release. AI-guided feedback sessions, Pulse Check synthesis, proposed revisions, tiered billing, public session links, QR codes, PDF export.
+
+---
+*Pulse v1.1 — ur/gd Studios — us-west-2*

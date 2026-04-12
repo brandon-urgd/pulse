@@ -27,8 +27,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -41,20 +41,22 @@ const { handler } = await import('./index.mjs')
 
 function makeBedrockResponse(verdict = 'Worth developing further') {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{
-        text: JSON.stringify({
-          verdict,
-          conviction: ['The pricing model is solid'],
-          tension: ['Timeline feels aggressive'],
-          uncertainty: ['Not sure about the market size'],
-          energy: 'engaged',
-          conversationShape: 'tactical',
-          themes: ['pricing', 'timeline', 'market'],
-        }),
-      }],
-      usage: { input_tokens: 500, output_tokens: 200 },
-    })),
+    output: {
+      message: {
+        content: [{
+          text: JSON.stringify({
+            verdict,
+            conviction: ['The pricing model is solid'],
+            tension: ['Timeline feels aggressive'],
+            uncertainty: ['Not sure about the market size'],
+            energy: 'engaged',
+            conversationShape: 'tactical',
+            themes: ['pricing', 'timeline', 'market'],
+          }),
+        }],
+      },
+    },
+    usage: { inputTokens: 500, outputTokens: 200 },
   }
 }
 

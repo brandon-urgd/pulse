@@ -11,25 +11,30 @@ const bedrockSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return sendSpy(...args) } }
+  class GetItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, QueryCommand, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
+})
+
+vi.mock('@aws-sdk/client-ses', () => {
+  class SESClient { send(...args) { return sendSpy(...args) } }
+  class SendEmailCommand { constructor(input) { this.input = input } }
+  return { SESClient, SendEmailCommand }
 })
 
 const { handler } = await import('./index.mjs')
 
 function makeBedrockResponse(json) {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text: JSON.stringify(json) }],
-      usage: { input_tokens: 200, output_tokens: 100 },
-    })),
+    output: { message: { content: [{ text: JSON.stringify(json) }] } },
+    usage: { inputTokens: 200, outputTokens: 100 },
   }
 }
 
@@ -77,10 +82,8 @@ describe('urgd-pulse-generateSessionSummary', () => {
         .mockResolvedValueOnce({})
 
       bedrockSendSpy.mockResolvedValueOnce({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'Not valid JSON at all' }],
-          usage: { input_tokens: 50, output_tokens: 20 },
-        })),
+        output: { message: { content: [{ text: 'Not valid JSON at all' }] } },
+        usage: { inputTokens: 50, outputTokens: 20 },
       })
 
       // Should not throw

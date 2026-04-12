@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 
+export interface SectionEntry {
+  id: string
+  wordCount?: number
+}
+
 interface Props {
   current: number
   total: number
+  sections?: SectionEntry[]
   animationDuration?: string
 }
 
@@ -14,7 +20,14 @@ const KEYFRAMES = `
 }
 `
 
-export default function PulseLine({ current, total, animationDuration = '2s' }: Props) {
+export function computeWeights(sections: SectionEntry[]): number[] {
+  const totalWords = sections.reduce((sum, s) => sum + (s.wordCount ?? 0), 0)
+  const useWordCount = totalWords > 0 && sections.every(s => s.wordCount != null)
+  if (!useWordCount) return sections.map(() => 1 / sections.length)
+  return sections.map(s => s.wordCount! / totalWords)
+}
+
+export default function PulseLine({ current, total, sections, animationDuration = '2s' }: Props) {
   const [reducedMotion, setReducedMotion] = useState(false)
 
   useEffect(() => {
@@ -25,14 +38,24 @@ export default function PulseLine({ current, total, animationDuration = '2s' }: 
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Percentage complete — sections completed (not including current) / total
-  // Current section counts as half-done to give a sense of progress within it
-  // When current >= total (session complete), snap to 100%
-  const pct = total > 0
-    ? current >= total
-      ? 100
-      : Math.min(100, ((current - 0.5) / total) * 100)
-    : 0
+  // Compute progress percentage using word-count weights when available
+  let pct: number
+  if (total <= 0) {
+    pct = 0
+  } else if (current >= total) {
+    pct = 100
+  } else if (sections && sections.length > 0) {
+    const weights = computeWeights(sections)
+    const completedWeight = weights.slice(0, current - 1).reduce((a, b) => a + b, 0)
+    const currentWeight = weights[current - 1] ?? 0
+    pct = Math.min(100, (completedWeight + currentWeight * 0.5) * 100)
+  } else {
+    // Fallback: equal weights via original formula
+    pct = Math.min(100, ((current - 0.5) / total) * 100)
+  }
+
+  // Clamp to [0, 100]
+  pct = Math.max(0, Math.min(100, pct))
 
   const trackStyle: React.CSSProperties = {
     width: '100%',

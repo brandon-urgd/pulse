@@ -6,6 +6,8 @@ vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
+// ── Noop mocks for AWS SDK clients (must be before dynamic import) ──
+
 const dynamoSendSpy = vi.fn()
 const s3SendSpy = vi.fn()
 const bedrockSendSpy = vi.fn()
@@ -30,8 +32,8 @@ vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient {
     send(...args) { return bedrockSendSpy(...args) }
   }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 function makeS3Body(text) {
@@ -43,14 +45,17 @@ function makeS3Body(text) {
 }
 
 function makeBedrockResponse(sections) {
-  const body = JSON.stringify({
-    content: [{ text: JSON.stringify({ sections }) }],
-    usage: { input_tokens: 100, output_tokens: 50 },
-  })
-  return { body: Buffer.from(body) }
+  return {
+    output: {
+      message: {
+        content: [{ text: JSON.stringify({ sections }) }],
+      },
+    },
+    usage: { inputTokens: 100, outputTokens: 50 },
+  }
 }
 
-const { handler } = await import('../../lambdas/urgd-pulse-analyzeDocument/index.mjs')
+const { handler, parseSectionMap, marshalSectionMap } = await import('../../lambdas/urgd-pulse-analyzeDocument/index.mjs')
 
 describe('urgd-pulse-analyzeDocument', () => {
   beforeEach(() => {
@@ -160,5 +165,212 @@ describe('urgd-pulse-analyzeDocument', () => {
 
       expect(dynamoSendSpy).not.toHaveBeenCalled()
     })
+  })
+})
+
+
+// ── v1.1 wordCount unit tests ──────────────────────────────────────────────
+// Requirements: 1.1, 1.2, 1.4, 1.5
+
+describe('parseSectionMap — wordCount handling', () => {
+  it('extracts wordCount when present as a non-negative integer', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 450 },
+        { id: 's2', title: 'Body', classification: 'substantive', wordCount: 0 },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+
+    expect(result.sections[0].wordCount).toBe(450)
+    expect(result.sections[1].wordCount).toBe(0)
+  })
+
+  it('omits wordCount when absent from Bedrock response', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive' },
+        { id: 's2', title: 'Body', classification: 'lightweight' },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+
+    expect(result.sections[0]).not.toHaveProperty('wordCount')
+    expect(result.sections[1]).not.toHaveProperty('wordCount')
+  })
+
+  it('omits wordCount when value is null', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: null },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+    expect(result.sections[0]).not.toHaveProperty('wordCount')
+  })
+
+  it('omits wordCount when value is negative', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: -5 },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+    expect(result.sections[0]).not.toHaveProperty('wordCount')
+  })
+
+  it('omits wordCount when value is a non-integer float', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 3.7 },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+    expect(result.sections[0]).not.toHaveProperty('wordCount')
+  })
+
+  it('omits wordCount when value is a string', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 'many' },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+    expect(result.sections[0]).not.toHaveProperty('wordCount')
+  })
+
+  it('preserves other section fields when wordCount is invalid', () => {
+    const json = JSON.stringify({
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: -1 },
+      ],
+    })
+
+    const result = parseSectionMap(json)
+    expect(result.sections[0].id).toBe('s1')
+    expect(result.sections[0].title).toBe('Intro')
+    expect(result.sections[0].classification).toBe('substantive')
+  })
+})
+
+describe('marshalSectionMap — wordCount handling', () => {
+  it('includes wordCount: { N } when wordCount is present', () => {
+    const sectionMap = {
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 450 },
+      ],
+      totalSubstantiveSections: 1,
+      analyzedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const marshalled = marshalSectionMap(sectionMap)
+    const entry = marshalled.M.sections.L[0].M
+
+    expect(entry.wordCount).toEqual({ N: '450' })
+  })
+
+  it('includes wordCount: { N: "0" } when wordCount is 0', () => {
+    const sectionMap = {
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 0 },
+      ],
+      totalSubstantiveSections: 1,
+      analyzedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const marshalled = marshalSectionMap(sectionMap)
+    const entry = marshalled.M.sections.L[0].M
+
+    expect(entry.wordCount).toEqual({ N: '0' })
+  })
+
+  it('omits wordCount from DynamoDB entry when absent on section', () => {
+    const sectionMap = {
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive' },
+      ],
+      totalSubstantiveSections: 1,
+      analyzedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const marshalled = marshalSectionMap(sectionMap)
+    const entry = marshalled.M.sections.L[0].M
+
+    expect(entry).not.toHaveProperty('wordCount')
+  })
+
+  it('handles mixed sections — some with wordCount, some without', () => {
+    const sectionMap = {
+      sections: [
+        { id: 's1', title: 'Intro', classification: 'substantive', wordCount: 300 },
+        { id: 's2', title: 'TOC', classification: 'lightweight' },
+        { id: 's3', title: 'Body', classification: 'substantive', wordCount: 1200 },
+      ],
+      totalSubstantiveSections: 2,
+      analyzedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const marshalled = marshalSectionMap(sectionMap)
+    const entries = marshalled.M.sections.L
+
+    expect(entries[0].M.wordCount).toEqual({ N: '300' })
+    expect(entries[1].M).not.toHaveProperty('wordCount')
+    expect(entries[2].M.wordCount).toEqual({ N: '1200' })
+  })
+})
+
+describe('graceful degradation — sections without wordCount are still written', () => {
+  it('writes all sections to DynamoDB even when none have wordCount', async () => {
+    // Reset spies for this test since they're shared across describe blocks
+    dynamoSendSpy.mockReset()
+    dynamoSendSpy.mockResolvedValue({})
+
+    const sections = [
+      { id: 's1', title: 'Introduction', classification: 'substantive' },
+      { id: 's2', title: 'Appendix', classification: 'lightweight' },
+    ]
+
+    s3SendSpy.mockResolvedValue({ Body: makeS3Body('Some document text.') })
+    bedrockSendSpy.mockResolvedValue(makeBedrockResponse(sections))
+    dynamoSendSpy.mockResolvedValue({})
+
+    await handler({ itemId: 'item-wc1', tenantId: 'tenant-wc1' })
+
+    expect(dynamoSendSpy).toHaveBeenCalledOnce()
+    const sectionMapAttr = dynamoSendSpy.mock.calls[0][0].input.ExpressionAttributeValues[':sm']
+    expect(sectionMapAttr.M.sections.L).toHaveLength(2)
+    expect(sectionMapAttr.M.sections.L[0].M.id.S).toBe('s1')
+    expect(sectionMapAttr.M.sections.L[1].M.id.S).toBe('s2')
+    // Neither entry has wordCount
+    expect(sectionMapAttr.M.sections.L[0].M).not.toHaveProperty('wordCount')
+    expect(sectionMapAttr.M.sections.L[1].M).not.toHaveProperty('wordCount')
+  })
+
+  it('writes all sections when some have wordCount and some do not', async () => {
+    // Reset spies for this test since they're shared across describe blocks
+    dynamoSendSpy.mockReset()
+    dynamoSendSpy.mockResolvedValue({})
+
+    const sections = [
+      { id: 's1', title: 'Introduction', classification: 'substantive', wordCount: 500 },
+      { id: 's2', title: 'Appendix', classification: 'lightweight' },
+    ]
+
+    s3SendSpy.mockResolvedValue({ Body: makeS3Body('Some document text.') })
+    bedrockSendSpy.mockResolvedValue(makeBedrockResponse(sections))
+
+    await handler({ itemId: 'item-wc2', tenantId: 'tenant-wc2' })
+
+    expect(dynamoSendSpy).toHaveBeenCalledOnce()
+    const sectionMapAttr = dynamoSendSpy.mock.calls[0][0].input.ExpressionAttributeValues[':sm']
+    expect(sectionMapAttr.M.sections.L).toHaveLength(2)
+    expect(sectionMapAttr.M.sections.L[0].M.wordCount).toEqual({ N: '500' })
+    expect(sectionMapAttr.M.sections.L[1].M).not.toHaveProperty('wordCount')
   })
 })

@@ -3,7 +3,7 @@
 // Generates AI summary of the session transcript
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
@@ -95,20 +95,19 @@ Respond in valid JSON format:
   "closingMessage": "Thank you for your thoughtful feedback..."
 }`
 
-    const bedrockResponse = await bedrock.send(new InvokeModelCommand({
-      modelId: process.env.BEDROCK_MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    }))
+    let bedrockResponse
+    try {
+      bedrockResponse = await bedrock.send(new ConverseCommand({
+        modelId: process.env.BEDROCK_MODEL_ID,
+        messages: [{ role: 'user', content: [{ text: prompt }] }],
+        inferenceConfig: { maxTokens: 1024 },
+      }))
+    } catch (bedrockErr) {
+      log('error', 'GenerateSessionSummary: Bedrock invocation failed', { sessionId, tenantId, errorName: bedrockErr.name })
+      return // Graceful — summary is non-critical
+    }
 
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const rawText = responseBody.content?.[0]?.text || '{}'
-
+    const rawText = bedrockResponse.output?.message?.content?.[0]?.text || '{}'
     let summary
     try {
       // Extract JSON from response (may have surrounding text)
@@ -128,6 +127,7 @@ Respond in valid JSON format:
       TableName: process.env.SESSIONS_TABLE,
       Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
       UpdateExpression: 'SET summary = :summary, summaryGeneratedAt = :generatedAt',
+      ConditionExpression: 'attribute_exists(sessionId)',
       ExpressionAttributeValues: {
         ':summary': { S: JSON.stringify(summary) },
         ':generatedAt': { S: new Date().toISOString() },

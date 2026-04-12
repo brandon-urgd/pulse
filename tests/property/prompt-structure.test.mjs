@@ -36,9 +36,9 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  class InvokeModelWithResponseStreamCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand, InvokeModelWithResponseStreamCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  class ConverseStreamCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand, ConverseStreamCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -129,13 +129,10 @@ describe('Property P15: System prompt structure', () => {
 
           let capturedSystem = null
           bedrockSendSpy.mockImplementation((cmd) => {
-            const payload = JSON.parse(Buffer.from(cmd.input.body).toString('utf-8'))
-            capturedSystem = payload.system
+            capturedSystem = cmd.input.system?.[0]?.text
             return Promise.resolve({
-              body: Buffer.from(JSON.stringify({
-                content: [{ text: 'Hello!' }],
-                usage: { input_tokens: 10, output_tokens: 5 },
-              })),
+              output: { message: { content: [{ text: 'Hello!' }] } },
+              usage: { inputTokens: 10, outputTokens: 5 },
             })
           })
 
@@ -169,13 +166,10 @@ describe('Property P15: System prompt structure', () => {
 
           let capturedSystem = null
           bedrockSendSpy.mockImplementation((cmd) => {
-            const payload = JSON.parse(Buffer.from(cmd.input.body).toString('utf-8'))
-            capturedSystem = payload.system
+            capturedSystem = cmd.input.system?.[0]?.text
             return Promise.resolve({
-              body: Buffer.from(JSON.stringify({
-                content: [{ text: 'Hello!' }],
-                usage: { input_tokens: 10, output_tokens: 5 },
-              })),
+              output: { message: { content: [{ text: 'Hello!' }] } },
+              usage: { inputTokens: 10, outputTokens: 5 },
             })
           })
 
@@ -210,13 +204,10 @@ describe('Property P15: System prompt structure', () => {
 
           let capturedSystem = null
           bedrockSendSpy.mockImplementation((cmd) => {
-            const payload = JSON.parse(Buffer.from(cmd.input.body).toString('utf-8'))
-            capturedSystem = payload.system
+            capturedSystem = cmd.input.system?.[0]?.text
             return Promise.resolve({
-              body: Buffer.from(JSON.stringify({
-                content: [{ text: 'Hello!' }],
-                usage: { input_tokens: 10, output_tokens: 5 },
-              })),
+              output: { message: { content: [{ text: 'Hello!' }] } },
+              usage: { inputTokens: 10, outputTokens: 5 },
             })
           })
 
@@ -249,13 +240,10 @@ describe('Property P15: System prompt structure', () => {
 
           let capturedSystem = null
           bedrockSendSpy.mockImplementation((cmd) => {
-            const payload = JSON.parse(Buffer.from(cmd.input.body).toString('utf-8'))
-            capturedSystem = payload.system
+            capturedSystem = cmd.input.system?.[0]?.text
             return Promise.resolve({
-              body: Buffer.from(JSON.stringify({
-                content: [{ text: 'Hello!' }],
-                usage: { input_tokens: 10, output_tokens: 5 },
-              })),
+              output: { message: { content: [{ text: 'Hello!' }] } },
+              usage: { inputTokens: 10, outputTokens: 5 },
             })
           })
 

@@ -37,8 +37,8 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -87,10 +87,8 @@ function makeSession() {
 
 function makeBedrockResponse(text) {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text: text || 'Agent response' }],
-      usage: { input_tokens: 100, output_tokens: 50 },
-    })),
+    output: { message: { content: [{ text: text || 'Agent response' }] } },
+    usage: { inputTokens: 100, outputTokens: 50 },
   }
 }
 

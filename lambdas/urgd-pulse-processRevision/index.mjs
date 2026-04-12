@@ -7,7 +7,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { log, requireEnv } from './shared/utils.mjs'
 
@@ -43,6 +43,17 @@ async function getS3Text(bucket, key) {
   }
 }
 
+async function getS3Bytes(bucket, key) {
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+    const chunks = []
+    for await (const chunk of res.Body) chunks.push(chunk)
+    return Buffer.concat(chunks)
+  } catch {
+    return null
+  }
+}
+
 async function markFailed(tenantId, revisionId) {
   try {
     await dynamo.send(new UpdateItemCommand({
@@ -68,16 +79,30 @@ export const handler = async (event) => {
   try {
     // 1. Load original document from S3 — extracted.md if exists, else document.md
     const extractedKey = `pulse/${tenantId}/items/${itemId}/extracted.md`
-    const documentKey = `pulse/${tenantId}/items/${itemId}/document.md`
+    const fallbackKey = `pulse/${tenantId}/items/${itemId}/document.md`
 
     const originalContent = await getS3Text(process.env.DATA_BUCKET, extractedKey)
-      || await getS3Text(process.env.DATA_BUCKET, documentKey)
+      || await getS3Text(process.env.DATA_BUCKET, fallbackKey)
 
     if (!originalContent) {
       log('error', 'ProcessRevision: no document found in S3', { tenantId, itemId, revisionId })
       await markFailed(tenantId, revisionId)
       await putMetrics([{ MetricName: 'BedrockErrors', Value: 1, Unit: 'Count' }])
       return
+    }
+
+    // 1b. Load item record to get documentKey for native document context
+    let documentKey = null
+    try {
+      const itemResult = await dynamo.send(new GetItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      }))
+      if (itemResult.Item) {
+        documentKey = itemResult.Item.documentKey?.S || null
+      }
+    } catch (err) {
+      log('warn', 'ProcessRevision: failed to load item record for document context', { tenantId, itemId, revisionId, errorName: err.name })
     }
 
     // 2. Load pulse check and extract accepted/revised decisions
@@ -122,7 +147,7 @@ export const handler = async (event) => {
       return `${i + 1}. [${d.action.toUpperCase()}]${typeText} ${d.proposal}${noteText}`
     }).join('\n')
 
-    const prompt = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
+    const systemPrompt = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
 
 CRITICAL RULES:
 - Only incorporate the ACCEPTED and REVISED feedback points listed below
@@ -131,9 +156,9 @@ CRITICAL RULES:
 - Preserve the document's original structure, voice, and formatting
 - Do not add new sections or content not implied by the feedback
 - Do not remove sections unless explicitly indicated by the feedback
-- Return ONLY the revised document text — no preamble, no explanation, no metadata
+- Return ONLY the revised document text — no preamble, no explanation, no metadata`
 
-Original Document:
+    const userMessage = `Original Document:
 ---
 ${originalContent}
 ---
@@ -143,19 +168,46 @@ ${decisionsText}
 
 Revised Document:`
 
-    // 4. Invoke Bedrock
+    // 3b. Build user message content blocks — attach native document for PDF/DOCX
+    const userContentBlocks = []
+
+    if (documentKey) {
+      const ext = documentKey.split('.').pop()?.toLowerCase()
+      const docMediaTypes = {
+        pdf: 'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }
+      const mediaType = docMediaTypes[ext]
+
+      if (mediaType) {
+        let docBytes = null
+        try {
+          docBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
+        } catch (err) {
+          log('warn', 'ProcessRevision: failed to read original document from S3 for native context', { tenantId, itemId, revisionId, documentKey, errorName: err?.name })
+        }
+        if (!docBytes) {
+          log('warn', 'ProcessRevision: original document not available from S3, proceeding with extracted text only', { tenantId, itemId, revisionId, documentKey })
+        }
+        if (docBytes) {
+          userContentBlocks.push({
+            document: { format: ext, name: 'document', source: { bytes: docBytes } },
+          })
+        }
+      }
+    }
+
+    userContentBlocks.push({ text: userMessage })
+
+    // 4. Invoke Bedrock (Converse API)
     const bedrockStart = Date.now()
     let bedrockResponse
     try {
-      bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 25000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        system: [{ text: systemPrompt }],
+        messages: [{ role: 'user', content: userContentBlocks }],
+        inferenceConfig: { maxTokens: 25000 },
       }))
     } catch (bedrockErr) {
       const bedrockLatency = Date.now() - bedrockStart
@@ -168,10 +220,9 @@ Revised Document:`
     }
 
     const bedrockLatency = Date.now() - bedrockStart
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const revisedContent = responseBody.content?.[0]?.text ?? ''
-    const tokensIn = responseBody.usage?.input_tokens ?? 0
-    const tokensOut = responseBody.usage?.output_tokens ?? 0
+    const revisedContent = bedrockResponse.output?.message?.content?.[0]?.text ?? ''
+    const tokensIn = bedrockResponse.usage?.inputTokens ?? 0
+    const tokensOut = bedrockResponse.usage?.outputTokens ?? 0
 
     // 5. Store revised document in S3
     const revisionKey = `pulse/${tenantId}/items/${itemId}/revisions/${revisionId}/document.md`
@@ -195,10 +246,12 @@ Revised Document:`
       TableName: process.env.REVISIONS_TABLE,
       Key: { tenantId: { S: tenantId }, revisionId: { S: revisionId } },
       UpdateExpression: 'SET #status = :complete, completedAt = :completedAt',
+      ConditionExpression: '#status = :processing',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':complete': { S: 'complete' },
         ':completedAt': { S: completedAt },
+        ':processing': { S: 'processing' },
       },
     }))
 

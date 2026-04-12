@@ -27,8 +27,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -54,10 +54,8 @@ function makeBedrockResponse(overrides = {}) {
     themes: ['pricing', 'timeline', 'market'],
   }
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{ text: JSON.stringify({ ...base, ...overrides }) }],
-      usage: { input_tokens: 500, output_tokens: 200 },
-    })),
+    output: { message: { content: [{ text: JSON.stringify({ ...base, ...overrides }) }] } },
+    usage: { inputTokens: 500, outputTokens: 200 },
   }
 }
 

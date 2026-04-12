@@ -9,8 +9,8 @@ const bedrockSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -26,7 +26,8 @@ describe('urgd-pulse-bedrockHealth', () => {
 
   it('returns healthy when Bedrock responds successfully', async () => {
     bedrockSendSpy.mockResolvedValueOnce({
-      body: Buffer.from(JSON.stringify({ content: [{ text: 'pong' }] })),
+      output: { message: { content: [{ text: 'pong' }] } },
+      usage: { inputTokens: 10, outputTokens: 5 },
     })
 
     const result = await handler(makeEvent())
@@ -60,7 +61,8 @@ describe('urgd-pulse-bedrockHealth', () => {
 
   it('includes CORS headers in response', async () => {
     bedrockSendSpy.mockResolvedValueOnce({
-      body: Buffer.from(JSON.stringify({ content: [{ text: 'pong' }] })),
+      output: { message: { content: [{ text: 'pong' }] } },
+      usage: { inputTokens: 10, outputTokens: 5 },
     })
 
     const result = await handler(makeEvent())
@@ -70,7 +72,8 @@ describe('urgd-pulse-bedrockHealth', () => {
 
   it('invokes Bedrock with the configured model ID', async () => {
     bedrockSendSpy.mockResolvedValueOnce({
-      body: Buffer.from(JSON.stringify({ content: [{ text: 'pong' }] })),
+      output: { message: { content: [{ text: 'pong' }] } },
+      usage: { inputTokens: 10, outputTokens: 5 },
     })
 
     await handler(makeEvent())

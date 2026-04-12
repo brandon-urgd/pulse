@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
@@ -14,15 +14,6 @@ interface SettingsData {
 
 interface SettingsResponse {
   data: SettingsData;
-}
-
-interface ItemData {
-  itemId: string;
-  isExample?: boolean;
-}
-
-interface ItemsResponse {
-  data: ItemData[];
 }
 
 /**
@@ -41,11 +32,6 @@ export default function Welcome() {
     '/api/manage/settings'
   );
 
-  const { data: itemsResp } = useAuthedQuery<ItemsResponse>(
-    ['items'],
-    '/api/manage/items'
-  );
-
   // Redirect to Items page when onboarding is already complete
   useEffect(() => {
     if (!settingsLoading && settingsResp?.data?.onboardingComplete) {
@@ -57,9 +43,6 @@ export default function Welcome() {
     document.title = labels.welcome.documentTitle;
   }, []);
 
-  // Find the example item's ID for the secondary CTA
-  const exampleItem = itemsResp?.data?.find((item) => item.isExample);
-
   function handlePrimaryCta() {
     updateSettings({ onboardingComplete: true } as unknown as void);
     navigate('/admin/items/new');
@@ -67,11 +50,7 @@ export default function Welcome() {
 
   function handleSecondaryCta() {
     updateSettings({ onboardingComplete: true } as unknown as void);
-    if (exampleItem) {
-      navigate(`/admin/pulse-check/${exampleItem.itemId}`);
-    } else {
-      navigate('/admin/items');
-    }
+    navigate('/admin/items', { state: { openExampleItem: true } });
   }
 
   // Don't render while checking onboarding status

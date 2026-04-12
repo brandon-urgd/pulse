@@ -1,7 +1,7 @@
 // ur/gd pulse — Bedrock Health Lambda
 // GET /v1/bedrock/health → 200 { status: "healthy" }
 
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { createResponse, log } from './shared/utils.mjs'
 
 // Fail-fast env var validation
@@ -20,15 +20,10 @@ export const handler = async (event) => {
   log('info', 'Bedrock health check', { modelId: process.env.BEDROCK_MODEL_ID })
 
   try {
-    await bedrock.send(new InvokeModelCommand({
+    await bedrock.send(new ConverseCommand({
       modelId: process.env.BEDROCK_MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'ping' }],
-      }),
+      messages: [{ role: 'user', content: [{ text: 'ping' }] }],
+      inferenceConfig: { maxTokens: 10 },
     }))
 
     return createResponse(200, { status: 'healthy' }, {}, origin)

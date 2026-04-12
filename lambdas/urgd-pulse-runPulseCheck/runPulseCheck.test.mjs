@@ -23,8 +23,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -104,22 +104,20 @@ const SELF_REVIEW_REPORT = {
 
 function makeBedrockResponse() {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{
-        text: JSON.stringify({
-          verdict: 'Worth developing further',
-          themes: [{ themeId: 'pricing', label: 'Pricing', reviewerSignals: [] }],
-          sharedConviction: ['Pricing is solid'],
-          repeatedTension: [],
-          openQuestions: ['What is the market size?'],
-          reviewerVerdicts: [
-            { sessionId: 'session-1', verdict: 'Worth developing further', energy: 'engaged', isSelfReview: false },
-            { sessionId: 'session-2', verdict: 'Not there yet', energy: 'neutral', isSelfReview: false },
-          ],
-        }),
-      }],
-      usage: { input_tokens: 1000, output_tokens: 500 },
-    })),
+    output: { message: { content: [{
+      text: JSON.stringify({
+        verdict: 'Worth developing further',
+        themes: [{ themeId: 'pricing', label: 'Pricing', reviewerSignals: [] }],
+        sharedConviction: ['Pricing is solid'],
+        repeatedTension: [],
+        openQuestions: ['What is the market size?'],
+        reviewerVerdicts: [
+          { sessionId: 'session-1', verdict: 'Worth developing further', energy: 'engaged', isSelfReview: false },
+          { sessionId: 'session-2', verdict: 'Not there yet', energy: 'neutral', isSelfReview: false },
+        ],
+      }),
+    }] } },
+    usage: { inputTokens: 1000, outputTokens: 500 },
   }
 }
 
@@ -193,8 +191,7 @@ describe('urgd-pulse-runPulseCheck', () => {
       await handler(makeEvent('tenant-1', 'item-1'))
 
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-      const payload = JSON.parse(bedrockCall.input.body)
-      const prompt = payload.messages[0].content
+      const prompt = bedrockCall.input.messages[0].content[0].text
 
       // Self-review should be labeled in the prompt
       expect(prompt).toContain('Self-Review')
@@ -279,10 +276,8 @@ describe('urgd-pulse-runPulseCheck', () => {
         .mockResolvedValueOnce({ Items: REPORT_ITEMS })
         .mockResolvedValueOnce({})
       bedrockSendSpy.mockResolvedValueOnce({
-        body: Buffer.from(JSON.stringify({
-          content: [{ text: 'not valid json at all' }],
-          usage: { input_tokens: 100, output_tokens: 50 },
-        })),
+        output: { message: { content: [{ text: 'not valid json at all' }] } },
+        usage: { inputTokens: 100, outputTokens: 50 },
       })
 
       const result = await handler(makeEvent('tenant-1', 'item-1'))

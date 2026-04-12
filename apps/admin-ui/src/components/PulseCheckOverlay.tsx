@@ -24,7 +24,22 @@ interface PulseCheckOverlayProps {
   phases?: { message: string; targetPct: number; durationMs: number }[];
   /** Custom notice text below the progress bar */
   notice?: string;
+  /** Selects the patience message set — defaults to 'pulseCheck' */
+  operationType?: 'pulseCheck' | 'revision';
 }
+
+const PATIENCE_LABELS = {
+  pulseCheck: [
+    labels.pulseCheck.patience1,
+    labels.pulseCheck.patience2,
+    labels.pulseCheck.patience3,
+  ],
+  revision: [
+    labels.revision.patience1,
+    labels.revision.patience2,
+    labels.revision.patience3,
+  ],
+};
 
 /**
  * Full-screen overlay shown while a Pulse Check is generating.
@@ -38,22 +53,25 @@ export default function PulseCheckOverlay({
   onErrorDismiss,
   phases,
   notice,
+  operationType = 'pulseCheck',
 }: PulseCheckOverlayProps) {
   const PHASES = phases ?? DEFAULT_PHASES;
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [pct, setPct] = useState(0);
   const [visible, setVisible] = useState(true);
-  const [showLongWait, setShowLongWait] = useState(false);
+  const [patienceLevel, setPatienceLevel] = useState<0 | 1 | 2 | 3>(0);
   const focusTrapRef = useFocusTrap(visible);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
   const phaseStartPct = useRef(0);
 
-  // Show patience message after 45 seconds
+  // Progressive patience messages at 45s, 90s, 150s
   useEffect(() => {
     if (done || error) return;
-    const timer = setTimeout(() => setShowLongWait(true), 45000);
-    return () => clearTimeout(timer);
+    const t1 = setTimeout(() => setPatienceLevel(1), 45000);
+    const t2 = setTimeout(() => setPatienceLevel(2), 90000);
+    const t3 = setTimeout(() => setPatienceLevel(3), 150000);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [done, error]);
 
   // Animate the bar through phases
@@ -148,9 +166,9 @@ export default function PulseCheckOverlay({
             <p className={styles.notice}>
               {notice ?? labels.pulseCheck.overlayNotice}
             </p>
-            {showLongWait && (
+            {patienceLevel > 0 && (
               <p className={styles.longWaitNotice} aria-live="polite">
-                {labels.pulseCheck.overlayLongWait}
+                {PATIENCE_LABELS[operationType][patienceLevel - 1]}
               </p>
             )}
           </>

@@ -4,7 +4,7 @@
 
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET', 'BEDROCK_MODEL_ID', 'CORS_ALLOWED_ORIGINS'])
@@ -152,53 +152,45 @@ Rules:
     if (hasImage && !hasRoughInput && !hasDocument) {
       // Image-only: use multimodal content block
       const ext = (documentKey || '').split('.').pop()?.toLowerCase() || 'jpeg'
-      const mediaTypeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
-      const mediaType = mediaTypeMap[ext] || 'image/jpeg'
+      const formatMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', webp: 'webp', gif: 'gif' }
+      const format = formatMap[ext] || 'jpeg'
       messages.push({
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBytes.toString('base64') } },
-          { type: 'text', text: 'Generate a feedback request suggestion for this image.' },
+          { image: { format, source: { bytes: imageBytes } } },
+          { text: 'Generate a feedback request suggestion for this image.' },
         ],
       })
     } else if (hasImage && hasRoughInput) {
       const ext = (documentKey || '').split('.').pop()?.toLowerCase() || 'jpeg'
-      const mediaTypeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
-      const mediaType = mediaTypeMap[ext] || 'image/jpeg'
+      const formatMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', webp: 'webp', gif: 'gif' }
+      const format = formatMap[ext] || 'jpeg'
       messages.push({
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBytes.toString('base64') } },
-          { type: 'text', text: `My rough notes on what I want feedback on: "${roughInput.trim()}"` },
+          { image: { format, source: { bytes: imageBytes } } },
+          { text: `My rough notes on what I want feedback on: "${roughInput.trim()}"` },
         ],
       })
     } else {
-      messages.push({ role: 'user', content: userParts.join('\n\n') })
+      messages.push({ role: 'user', content: [{ text: userParts.join('\n\n') }] })
     }
 
-    // 5. Call Bedrock
-    const bedrockPayload = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 512,
-      system: systemPrompt,
-      messages,
-    }
-
+    // 5. Call Bedrock (Converse API)
     let bedrockResponse
     try {
-      bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(bedrockPayload),
+        system: [{ text: systemPrompt }],
+        messages,
+        inferenceConfig: { maxTokens: 512 },
       }))
     } catch (err) {
       log('error', 'SuggestDescription: Bedrock error', { requestId, tenantId, itemId, errorName: err.name })
       return errorResponse(500, 'Failed to generate suggestion', {}, origin)
     }
 
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-    const suggestion = responseBody.content?.[0]?.text || ''
+    const suggestion = bedrockResponse.output?.message?.content?.[0]?.text || ''
 
     log('info', 'SuggestDescription: suggestion generated', { requestId, tenantId, itemId })
 

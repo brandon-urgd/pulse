@@ -1,11 +1,11 @@
 // ur/gd pulse — Chat Lambda
 // POST /api/session/{sessionId}/chat
 // Handles AI-guided feedback conversation via Bedrock
-// S2-S2: Streaming via InvokeModelWithResponseStream + awslambda.streamifyResponse()
+// S2-S2: Streaming via ConverseStream + awslambda.streamifyResponse()
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseStreamCommand, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
@@ -138,6 +138,46 @@ function marshalCoverageMap(coverageMap) {
   return { M: m }
 }
 
+
+/**
+ * Depth multipliers for section time allocation.
+ * Same values used in useItemForm.ts for the time estimate preview.
+ */
+const DEPTH_MULTIPLIER = { deep: 1.5, explore: 1.0, skim: 0.5 }
+
+/**
+ * Compute per-section time allocations based on wordCount and depth preferences.
+ *
+ * Algorithm:
+ * - When all sections have wordCount: effective weight = wordCount × depthMultiplier
+ * - When any section lacks wordCount: depth-only fallback (depthMultiplier alone)
+ * - When all weights are 0: equal allocation (timeLimitMinutes / N)
+ * - Last section absorbs floating-point remainder so sum === timeLimitMinutes
+ */
+function computeTimeAllocations(sections, depthPrefs, timeLimitMinutes) {
+  const multiplier = (sectionId) =>
+    DEPTH_MULTIPLIER[depthPrefs?.[sectionId] ?? 'explore'] ?? 1.0
+
+  const totalWords = sections.reduce((sum, s) => sum + (s.wordCount ?? 0), 0)
+  const hasWordCounts = totalWords > 0 && sections.every(s => s.wordCount != null && s.wordCount >= 0)
+
+  const weights = sections.map(s =>
+    hasWordCounts
+      ? (s.wordCount * multiplier(s.id))
+      : multiplier(s.id)
+  )
+
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+
+  if (totalWeight === 0) {
+    return sections.map(() => timeLimitMinutes / sections.length)
+  }
+
+  const allocations = weights.map(w => (w / totalWeight) * timeLimitMinutes)
+  const sum = allocations.reduce((a, b) => a + b, 0)
+  allocations[allocations.length - 1] += timeLimitMinutes - sum
+  return allocations
+}
 
 /**
  * Core chat handler logic — shared between streaming and non-streaming paths.
@@ -371,6 +411,7 @@ async function handleChat(event, responseStream) {
       totalSections, currentSection, closingState,
       windingDown, message, isSpecial,
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
+      timeLimitMinutes,
     })
 
     // Build messages for Bedrock
@@ -425,9 +466,48 @@ async function handleChat(event, responseStream) {
         coalescedMessages[firstUserIdx] = {
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } },
-            { type: 'text', text: textContent },
+            { image: { format: (documentKey || '').split('.').pop()?.toLowerCase() === 'png' ? 'png' : 'jpeg', source: { bytes: Buffer.from(imageBase64, 'base64') } } },
+            { text: textContent },
           ],
+        }
+      }
+    }
+
+    // 5.4/5.5: Native document attachment — send-once pattern for PDF/DOCX items.
+    // On first turn (no prior transcript), attach original file as document content block.
+    // On subsequent turns, the document is already in conversation history — no re-attachment.
+    const isFirstTurn = history.length === 0
+    if (isFirstTurn && itemType === 'document' && documentKey) {
+      const ext = documentKey.split('.').pop()?.toLowerCase()
+      const docMediaTypes = {
+        pdf: 'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }
+      const mediaType = docMediaTypes[ext]
+
+      if (mediaType) {
+        let docBytes = null
+        try {
+          docBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
+        } catch (err) {
+          log('warn', 'Chat: failed to read original document from S3 for native context', { requestId, sessionId, tenantId, documentKey, errorName: err?.name })
+        }
+        if (!docBytes) {
+          log('warn', 'Chat: original document not available from S3, proceeding with extracted text only', { requestId, sessionId, tenantId, documentKey })
+        }
+        if (docBytes) {
+          const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+          if (firstUserIdx !== -1) {
+            const firstMsg = coalescedMessages[firstUserIdx]
+            const textContent = typeof firstMsg.content === 'string' ? firstMsg.content : ''
+            coalescedMessages[firstUserIdx] = {
+              role: 'user',
+              content: [
+                { document: { format: ext, name: 'document', source: { bytes: docBytes } } },
+                { text: textContent },
+              ],
+            }
+          }
         }
       }
     }
@@ -439,48 +519,52 @@ async function handleChat(event, responseStream) {
           TableName: process.env.SESSIONS_TABLE,
           Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
           UpdateExpression: 'SET streamingLock = :lock',
-          ExpressionAttributeValues: { ':lock': { S: new Date().toISOString() } },
+          ConditionExpression: 'attribute_not_exists(streamingLock) OR streamingLock < :threshold',
+          ExpressionAttributeValues: {
+            ':lock': { S: new Date().toISOString() },
+            ':threshold': { S: new Date(Date.now() - 60000).toISOString() },
+          },
         }))
       } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+          log('warn', 'Chat: streamingLock contention — another request is active', { requestId, sessionId, tenantId })
+          if (hasResponseStream) {
+            responseStream.write(JSON.stringify({ error: true, statusCode: 409, message: 'Please wait for the current response' }))
+            responseStream.end()
+            return
+          }
+          return errorResponse(409, 'Please wait for the current response', {}, origin)
+        }
         log('warn', 'Chat: failed to set streamingLock', { requestId, sessionId, errorName: err.name })
       }
     }
 
-    // 8. Invoke Bedrock
+    // 8. Invoke Bedrock (Converse/ConverseStream API)
     const bedrockStart = Date.now()
-    const bedrockPayload = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: coalescedMessages,
-    }
 
     let agentText = ''
     let tokensIn = 0
     let tokensOut = 0
 
     if (isStreaming) {
-      // 4.1: Streaming path
+      // 4.1: Streaming path — ConverseStream
       try {
-        const streamResponse = await bedrock.send(new InvokeModelWithResponseStreamCommand({
+        const streamResponse = await bedrock.send(new ConverseStreamCommand({
           modelId: process.env.BEDROCK_MODEL_ID,
-          contentType: 'application/json',
-          accept: 'application/json',
-          body: JSON.stringify(bedrockPayload),
+          system: [{ text: systemPrompt }],
+          messages: coalescedMessages,
+          inferenceConfig: { maxTokens: 1024 },
         }))
 
-        for await (const event of streamResponse.body) {
-          if (event.chunk) {
-            const chunkData = JSON.parse(new TextDecoder().decode(event.chunk.bytes))
-            if (chunkData.type === 'content_block_delta' && chunkData.delta?.text) {
-              const text = chunkData.delta.text
-              agentText += text
-              responseStream.write(text)
-            } else if (chunkData.type === 'message_delta' && chunkData.usage) {
-              tokensOut = chunkData.usage.output_tokens || 0
-            } else if (chunkData.type === 'message_start' && chunkData.message?.usage) {
-              tokensIn = chunkData.message.usage.input_tokens || 0
-            }
+        for await (const event of streamResponse.stream) {
+          if (event.contentBlockDelta?.delta?.text) {
+            const text = event.contentBlockDelta.delta.text
+            agentText += text
+            responseStream.write(text)
+          }
+          if (event.metadata?.usage) {
+            tokensIn = event.metadata.usage.inputTokens || 0
+            tokensOut = event.metadata.usage.outputTokens || 0
           }
         }
 
@@ -501,18 +585,17 @@ async function handleChat(event, responseStream) {
         throw streamErr
       }
     } else {
-      // Non-streaming fallback (API Gateway proxy)
-      const bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      // Non-streaming fallback (API Gateway proxy) — Converse
+      const bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(bedrockPayload),
+        system: [{ text: systemPrompt }],
+        messages: coalescedMessages,
+        inferenceConfig: { maxTokens: 1024 },
       }))
 
-      const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString('utf-8'))
-      agentText = responseBody.content?.[0]?.text || ''
-      tokensIn = responseBody.usage?.input_tokens || 0
-      tokensOut = responseBody.usage?.output_tokens || 0
+      agentText = bedrockResponse.output?.message?.content?.[0]?.text || ''
+      tokensIn = bedrockResponse.usage?.inputTokens || 0
+      tokensOut = bedrockResponse.usage?.outputTokens || 0
     }
 
     const bedrockLatency = Date.now() - bedrockStart
@@ -903,7 +986,7 @@ async function updateItemCoverageMap(tenantId, itemId, sectionCoverage, sessionI
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -1003,6 +1086,12 @@ ${itemContent || '(No document content available)'}
     const depths = frozenSnapshot.sectionDepthPreferences
     const sectionMap = frozenSnapshot.sectionMap
 
+    // v1.1: Compute per-section time allocations from wordCount × depth
+    const sectionEntries = sectionMap?.sections || []
+    const timeAllocations = sectionEntries.length > 0 && timeLimitMinutes > 0
+      ? computeTimeAllocations(sectionEntries, depths, timeLimitMinutes)
+      : null
+
     prompt += `Session structure:
 - This session covers ${totalSections} section${totalSections !== 1 ? 's' : ''}. Current section: ${currentSection} of ${totalSections}.
 - Section pacing by depth preference:
@@ -1010,12 +1099,13 @@ ${itemContent || '(No document content available)'}
     for (let i = 0; i < sections.length; i++) {
       const sId = sections[i]
       const depth = depths[sId] || 'explore'
-      const sectionInfo = sectionMap?.sections?.find(s => s.id === sId)
+      const sectionInfo = sectionEntries.find(s => s.id === sId)
       const title = sectionInfo?.title || `Section ${i + 1}`
       const pacingNote = depth === 'deep' ? 'thorough — multiple exchanges, dig into details'
         : depth === 'explore' ? 'cover well — 1-2 substantive exchanges'
         : 'brief acknowledgment — mention key point, move on quickly'
-      prompt += `  ${i + 1}. "${title}" (${depth}): ${pacingNote}\n`
+      const timeBudget = timeAllocations ? ` (~${timeAllocations[i].toFixed(1)} min)` : ''
+      prompt += `  ${i + 1}. "${title}" (${depth}): ${pacingNote}${timeBudget}\n`
     }
     prompt += '\n'
   } else {
@@ -1094,7 +1184,26 @@ Missing tags means the coverage map will be incomplete — this directly affects
   if (closingState === 'narrowing') {
     prompt += 'The session is entering its final phase. Go deeper on the current topic — ask the follow-up you haven\'t asked yet, or push on the most interesting thing the reviewer just said. Do not open new sections or topics. Do not announce this shift or mention time.\n\n'
   } else if (closingState === 'closing') {
-    prompt += 'The session is in its closing phase. Wrap up naturally. Include [SESSION_COMPLETE] at the very end of your final message.\n\n'
+    prompt += `The session is entering its closing phase. Before you deliver the summary, ask ONE open-ended closing question to give the reviewer a chance to surface anything the structured questions didn't draw out.
+
+Your closing question must:
+- Be conversational and specific to THIS conversation — reference the item name ("${itemName}") or a topic you actually discussed. For example: "Before we wrap up — is there anything about [specific topic from the conversation] you wanted to share that we didn't get to?"
+- NOT be generic or templated. Do not say "Is there anything else you'd like to add?" without referencing something concrete from the session.
+- NOT use "Thanks for taking the time", "I appreciate your time", "Thank you for your valuable feedback", "This has been a productive session", "Really glad to have had your perspective", or any similar formulaic phrase.
+
+After you ask the closing question:
+- If the reviewer shares additional thoughts, acknowledge what they say briefly and note it for the author. Do not press for elaboration or dig deeper — just receive it warmly and let them know it will be included.
+- Allow a natural exchange of a few turns if they have more to say. Keep your responses short — acknowledgment, not investigation.
+- Once the reviewer signals they are done (e.g., "No, that's all", "I think we covered it", or a short affirmative), proceed directly to the summary.
+
+Then deliver the closing summary:
+- Synthesize 2-3 key themes from the conversation — not a list of everything discussed, just the threads that mattered most.
+- Reference the most interesting or important thing the reviewer shared. Name it specifically.
+- Keep the closing to 2-3 bubbles max. Do not write a summary report or bullet-point recap.
+- End with something concrete the reviewer contributed — a specific insight, a tension they named, a reframe they offered.
+- Include [SESSION_COMPLETE] at the very end of your final summary message.
+
+`
   } else if (closingState === 'closed') {
     prompt += 'This session is complete. Do not respond to further messages.\n\n'
   }
@@ -1144,3 +1253,6 @@ const streamingHandler = async (event, responseStream, context) => {
 export const handler = typeof globalThis.awslambda?.streamifyResponse === 'function'
   ? globalThis.awslambda.streamifyResponse(streamingHandler)
   : async (event) => handleChat(event, null)
+
+// Named exports for testing
+export { computeTimeAllocations, DEPTH_MULTIPLIER, buildSystemPrompt }

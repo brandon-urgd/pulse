@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation, authedMutate } from '../hooks/useAuthedMutation';
@@ -152,25 +152,6 @@ function ScaleTierLabel({ sessionCount }: { sessionCount: number }) {
       ? labels.pulseCheck.scaleSmallGroup
       : labels.pulseCheck.scaleMediumGroup;
   return <span className={styles.scaleTier}>{label}</span>;
-}
-
-function InlineQuotePreview({ quote }: { quote: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const needsTruncation = quote.length > 60;
-  const preview = needsTruncation ? quote.slice(0, 60) + '…' : quote;
-
-  return (
-    <span
-      className={styles.quotePreview}
-      onClick={() => needsTruncation && setExpanded(!expanded)}
-      onKeyDown={needsTruncation ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } } : undefined}
-      role={needsTruncation ? 'button' : undefined}
-      tabIndex={needsTruncation ? 0 : undefined}
-      aria-expanded={needsTruncation ? expanded : undefined}
-    >
-      {expanded ? quote : preview}
-    </span>
-  );
 }
 
 function RevisionWeightIndicator({ count, total }: { count: number; total: number }) {
@@ -334,8 +315,10 @@ export default function PulseCheck() {
   // Poll every 3s while status is 'generating'
   useEffect(() => {
     if (pc?.status !== 'generating') return;
+    let mounted = true;
     const interval = setInterval(() => {
       refetch().then((result) => {
+        if (!mounted) return;
         if (result.data?.data?.status === 'complete') {
           setOverlayDone(true);
           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -345,7 +328,7 @@ export default function PulseCheck() {
         }
       });
     }, 3000);
-    return () => clearInterval(interval);
+    return () => { mounted = false; clearInterval(interval); };
   }, [pc?.status, refetch]);
 
   interface Session { sessionId: string; status: string; completedAt?: string }
@@ -526,6 +509,7 @@ export default function PulseCheck() {
       done={overlayDone}
       error={overlayError}
       onErrorDismiss={() => { setOverlayVisible(false); setOverlayError(''); }}
+      operationType="pulseCheck"
     />
   ) : null;
 
@@ -703,7 +687,7 @@ export default function PulseCheck() {
                   </h3>
                   <ul className={styles.quoteList}>
                     {t.reviewerSignals.map((rs, i) => (
-                      <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={rs.quote} /></li>
+                      <li key={i} className={styles.quoteItem}>{rs.quote}</li>
                     ))}
                   </ul>
                 </div>
@@ -925,7 +909,7 @@ export default function PulseCheck() {
             </h3>
             {sharedConvictions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {sharedConvictions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
+                {sharedConvictions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noConvictions}</p>
@@ -939,7 +923,7 @@ export default function PulseCheck() {
             </h3>
             {repeatedTensions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {repeatedTensions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
+                {repeatedTensions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noTensions}</p>
@@ -953,7 +937,7 @@ export default function PulseCheck() {
             </h3>
             {openQuestions.length > 0 ? (
               <ul className={styles.quoteList}>
-                {openQuestions.map((q, i) => <li key={i} className={styles.quoteItem}><InlineQuotePreview quote={q} /></li>)}
+                {openQuestions.map((q, i) => <li key={i} className={styles.quoteItem}>{q}</li>)}
               </ul>
             ) : (
               <p className={styles.emptySection}>{labels.pulseCheck.noQuestions}</p>

@@ -28,8 +28,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   class BedrockRuntimeClient { send(...args) { return bedrockSendSpy(...args) } }
-  class InvokeModelCommand { constructor(input) { this.input = input } }
-  return { BedrockRuntimeClient, InvokeModelCommand }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
 })
 
 vi.mock('@aws-sdk/client-cloudwatch', () => {
@@ -79,24 +79,22 @@ function makeReportItems(count, itemId) {
 
 function makeBedrockResponse(sessionCount) {
   return {
-    body: Buffer.from(JSON.stringify({
-      content: [{
-        text: JSON.stringify({
+    output: { message: { content: [{
+      text: JSON.stringify({
+        verdict: 'Worth developing further',
+        themes: [{ themeId: 'pricing', label: 'Pricing', reviewerSignals: [] }],
+        sharedConviction: ['Good idea'],
+        repeatedTension: [],
+        openQuestions: [],
+        reviewerVerdicts: Array.from({ length: sessionCount }, (_, i) => ({
+          sessionId: `session-${i}`,
           verdict: 'Worth developing further',
-          themes: [{ themeId: 'pricing', label: 'Pricing', reviewerSignals: [] }],
-          sharedConviction: ['Good idea'],
-          repeatedTension: [],
-          openQuestions: [],
-          reviewerVerdicts: Array.from({ length: sessionCount }, (_, i) => ({
-            sessionId: `session-${i}`,
-            verdict: 'Worth developing further',
-            energy: 'engaged',
-            isSelfReview: false,
-          })),
-        }),
-      }],
-      usage: { input_tokens: 1000, output_tokens: 500 },
-    })),
+          energy: 'engaged',
+          isSelfReview: false,
+        })),
+      }),
+    }] } },
+    usage: { inputTokens: 1000, outputTokens: 500 },
   }
 }
 
@@ -137,8 +135,7 @@ describe('Property 22: Pulse Check Completeness Invariant', () => {
 
           // Verify the prompt contains all N reports
           const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-          const payload = JSON.parse(bedrockCall.input.body)
-          const prompt = payload.messages[0].content
+          const prompt = bedrockCall.input.messages[0].content[0].text
 
           // Each report is labeled "Reviewer N" — verify all N are present
           for (let i = 0; i < sessionCount; i++) {

@@ -4,7 +4,7 @@
 // No API Gateway integration — never called directly by the frontend.
 
 import { DynamoDBClient, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
 import { log, requireEnv } from './shared/utils.mjs'
@@ -102,22 +102,16 @@ function parseBedrockJson(rawText) {
 }
 
 async function invokeBedrockModel(systemPrompt, userPrompt, maxTokens) {
-  const response = await bedrock.send(new InvokeModelCommand({
+  const response = await bedrock.send(new ConverseCommand({
     modelId: process.env.BEDROCK_MODEL_ID,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
+    system: [{ text: systemPrompt }],
+    messages: [{ role: 'user', content: [{ text: userPrompt }] }],
+    inferenceConfig: { maxTokens },
   }))
-  const responseBody = JSON.parse(Buffer.from(response.body).toString('utf-8'))
   return {
-    text: responseBody.content?.[0]?.text || '{}',
-    tokensIn: responseBody.usage?.input_tokens || 0,
-    tokensOut: responseBody.usage?.output_tokens || 0,
+    text: response.output?.message?.content?.[0]?.text || '{}',
+    tokensIn: response.usage?.inputTokens || 0,
+    tokensOut: response.usage?.outputTokens || 0,
   }
 }
 
