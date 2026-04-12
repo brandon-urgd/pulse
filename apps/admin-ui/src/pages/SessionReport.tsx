@@ -68,7 +68,7 @@ export default function SessionReport() {
   if (isError || !report) {
     return (
       <div className={styles.container}>
-        <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+        <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
           ← {labels.sessionReport.backToItem}
         </Link>
         <p className={styles.error} role="alert" aria-live="polite">
@@ -96,7 +96,7 @@ export default function SessionReport() {
   return (
     <div className={styles.container}>
       {/* Back link */}
-      <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+      <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
         ← {labels.sessionReport.backToItem}
       </Link>
 

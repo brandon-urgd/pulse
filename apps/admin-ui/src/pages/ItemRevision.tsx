@@ -272,7 +272,7 @@ export default function ItemRevision() {
   return (
     <div className={styles.container} aria-label={`Revision for ${itemName}`}>
       {/* Breadcrumb */}
-      <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+      <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
         {labels.revision.backLink.replace('{itemName}', itemName || 'item')}
       </Link>
 

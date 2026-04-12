@@ -545,7 +545,7 @@ export default function PulseCheck() {
       <>
         {Overlay}
         <div className={styles.container}>
-          <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+          <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
           <h1 className={styles.heading}>
@@ -638,7 +638,7 @@ export default function PulseCheck() {
       <>
         {Overlay}
         <div className={styles.container}>
-          <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+          <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
             ← {labels.pulseCheck.backToItem}
           </Link>
           <div className={styles.headingRow}>
@@ -835,7 +835,7 @@ export default function PulseCheck() {
     <>
       {Overlay}
       <div className={styles.container}>
-        <Link to={`/admin/items/${itemId}`} className={styles.backLink}>
+        <Link to="/admin/items" state={{ openModalId: itemId, returnFocusId: itemId }} className={styles.backLink}>
           ← {labels.pulseCheck.backToItem}
         </Link>
         <div className={styles.headingRow}>

@@ -251,10 +251,14 @@ export default function Items() {
   const focusRestoredRef = useRef(false);
 
   useEffect(() => {
-    const returnItemId = (location.state as { returnFocusId?: string } | null)?.returnFocusId;
-    if (returnItemId && !focusRestoredRef.current) {
+    const state = location.state as { returnFocusId?: string; openModalId?: string } | null;
+    const returnItemId = state?.returnFocusId;
+    const openModalId = state?.openModalId;
+    if (openModalId && !focusRestoredRef.current) {
       focusRestoredRef.current = true;
-      // Use requestAnimationFrame to wait for cards to render
+      setModalTarget(openModalId);
+    } else if (returnItemId && !focusRestoredRef.current) {
+      focusRestoredRef.current = true;
       requestAnimationFrame(() => {
         const el = cardRefs.current.get(returnItemId);
         if (el) el.focus();
