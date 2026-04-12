@@ -12,7 +12,7 @@ Pulse pairs human reviewers with an AI conversation agent to extract structured,
 
 **Data:** 7 DynamoDB tables (PAY_PER_REQUEST, PITR enabled), S3 for document/image storage with Shield quarantine scanning.
 
-**Infrastructure:** Single CloudFormation template (9,400 lines), 3 environments (dev/staging/prod), EventBridge schedulers, 8 CloudWatch alarms, X-Ray tracing, SNS alerting.
+**Infrastructure:** Single CloudFormation template (9,400 lines), 3 environments (dev/staging/prod), EventBridge schedulers, 9 CloudWatch alarms, X-Ray tracing, SNS alerting.
 
 ## Structure
 
