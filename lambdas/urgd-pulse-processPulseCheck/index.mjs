@@ -125,7 +125,7 @@ async function invokeBedrockModel(systemPrompt, userPrompt, maxTokens) {
 
 const PULSE_CHECK_JSON_FORMAT = `Respond in valid JSON:
 {
-  "verdict": "A single sentence that honestly characterizes the state of the feedback. This is NOT a fixed enum — write what fits the actual signals. Guidelines: reflect the quality and depth of feedback received, not just the quantity of reviewers. One thorough reviewer who covered everything is more valuable than five who gave surface-level responses. Be direct but not dismissive. Examples of good verdicts: 'Clear direction on positioning — simplicity over privacy as the lead', 'Strong alignment on the core concept, open questions on pricing model', 'Reviewers split on tone — needs more voices before committing', 'Solid foundation with one structural concern worth addressing'. Avoid generic verdicts like 'needs more input' unless the feedback was genuinely too thin to act on.",
+  "verdict": "A short verdict — 10 words max. This is a headline, not a paragraph. Capture the core takeaway in one punchy phrase. Examples: 'Clear direction on positioning, one open question on pricing', 'Strong concept, tone needs calibration', 'Solid foundation with one structural gap'. Never exceed 15 words.",
   "narrative": "2–3 sentences from the facilitator's perspective. Orient the reader: what does this feedback mean for the work? What's the key tension or open question? Plain, direct language. No bullet points. No hedging.",
   "themes": [
     {
