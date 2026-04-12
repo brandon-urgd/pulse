@@ -519,10 +519,11 @@ async function handleChat(event, responseStream) {
           TableName: process.env.SESSIONS_TABLE,
           Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
           UpdateExpression: 'SET streamingLock = :lock',
-          ConditionExpression: 'attribute_not_exists(streamingLock) OR streamingLock < :threshold',
+          ConditionExpression: 'attribute_not_exists(streamingLock) OR attribute_type(streamingLock, :nullType) OR streamingLock < :threshold',
           ExpressionAttributeValues: {
             ':lock': { S: new Date().toISOString() },
             ':threshold': { S: new Date(Date.now() - 60000).toISOString() },
+            ':nullType': { S: 'NULL' },
           },
         }))
       } catch (err) {
