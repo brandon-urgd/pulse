@@ -897,8 +897,9 @@ export default function Chat() {
 
           // agent — strip section/completion tags, render as single bubble
           const cleaned = msg.content
-            .replace(/\[SECTION:\d+\]/g, '')
+            .replace(/\[SECTION:\d+\]/g, ' ')
             .replace(/\[SESSION_COMPLETE\]/g, '')
+            .replace(/  +/g, ' ')
             .trim()
 
           if (!cleaned) return null
