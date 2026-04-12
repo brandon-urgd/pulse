@@ -129,6 +129,10 @@ export const handler = async (event) => {
       generatedAt,
       status: item.status?.S,
       newSessionsSinceLastRun,
+      pulseCheckFeedback: item.pulseCheckFeedback?.M ? {
+        rating: item.pulseCheckFeedback.M.rating?.S,
+        reason: item.pulseCheckFeedback.M.reason?.S,
+      } : undefined,
     }
 
     log('info', 'GetPulseCheck: success', { requestId, tenantId, itemId, newSessionsSinceLastRun })
