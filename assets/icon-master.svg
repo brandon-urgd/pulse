@@ -41,26 +41,6 @@
       <feColorMatrix type="saturate" values="0" in="noise" result="monoNoise"/>
     </filter>
 
-    <radialGradient id="bgRadial" cx="42%" cy="46%" r="55%">
-      <stop offset="0%" stop-color="#101518"/>
-      <stop offset="60%" stop-color="#0c1015"/>
-      <stop offset="100%" stop-color="#0a0f14"/>
-    </radialGradient>
-
-    <radialGradient id="markAmbient" cx="40%" cy="48%" r="38%">
-      <stop offset="0%" stop-color="#7a9e87"/>
-      <stop offset="100%" stop-color="#0a0f14"/>
-    </radialGradient>
-
-    <!-- Recessed center — edges lighter, center darker. Creates the
-         "pressed in" depth effect like QuickBooks. -->
-    <radialGradient id="recessGrad" cx="50%" cy="50%" r="65%">
-      <stop offset="0%" stop-color="#0a0f14" stop-opacity="0"/>
-      <stop offset="60%" stop-color="#0a0f14" stop-opacity="0"/>
-      <stop offset="85%" stop-color="#1e2d38" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#2a3f4e" stop-opacity="0.7"/>
-    </radialGradient>
-
     <!-- Sweep gradient — directional feel via linear gradient along the wedge.
          Leading edge (clockwise) is brighter, trailing edge fades to nothing. -->
     <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -69,20 +49,11 @@
     </linearGradient>
   </defs>
 
-  <!-- LAYER 1: Background -->
-  <rect width="1024" height="1024" fill="#0a0f14"/>
-  <rect width="1024" height="1024" fill="url(#bgRadial)"/>
-
-  <!-- Recessed center effect — edges are slightly lighter, center is darker.
-       Creates the "pressed in" look like QuickBooks. The icon surface feels
-       sunken into the screen with the border catching ambient light. -->
-  <rect width="1024" height="1024" fill="url(#recessGrad)"/>
+  <!-- LAYER 1: Background — pure black -->
+  <rect width="1024" height="1024" fill="#000000"/>
 
   <!-- LAYER 2: Noise texture -->
   <rect width="1024" height="1024" filter="url(#noiseFilter)" opacity="0.03"/>
-
-  <!-- LAYER 3: Ambient mark glow -->
-  <circle cx="410" cy="480" r="380" fill="url(#markAmbient)" opacity="0.06"/>
 
   <!-- LAYER 4: Crosshair grid — 30% (visible on phone screens) -->
   <g opacity="0.35" stroke="#7a9e87" fill="none">
