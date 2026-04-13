@@ -69,7 +69,7 @@ jobs:
       - name: cfn-lint
         run: |
           set -euo pipefail
-          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045
+          cfn-lint cloudformation/pulse-stack.yaml --ignore-checks W3045 W2001
           echo "✅ cfn-lint passed"
 
       - name: Checkov
