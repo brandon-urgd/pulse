@@ -62,9 +62,8 @@ export const handler = async (event) => {
       log('info', 'RenderPages: converting DOCX to PDF', { tenantId, itemId, elapsed: Date.now() - startTime })
 
       try {
-        // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
         // Paths are constructed from os.tmpdir() + fixed filenames — not user input.
-        execSync(`libreoffice --headless --convert-to pdf --outdir "${workDir}" "${docxPath}"`, {
+        execSync(`libreoffice --headless --convert-to pdf --outdir "${workDir}" "${docxPath}"`, { // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
           timeout: 120000,
           stdio: 'pipe',
         })
