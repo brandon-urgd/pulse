@@ -9744,8 +9744,11 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub 'urgd-pulse-renderpages-${Environment}'
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: KMS
       LifecyclePolicy:
         LifecyclePolicyText: |
           {
