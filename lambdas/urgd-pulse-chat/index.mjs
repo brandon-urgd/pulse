@@ -36,7 +36,7 @@ const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__']
+const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__', '__init_pregenerated__']
 
 async function getS3Text(bucket, key) {
   try {
@@ -276,6 +276,77 @@ async function handleChat(event, responseStream) {
 
     const itemId = session.itemId?.S
 
+    // Session Fast Start: __init_pregenerated__ path — write transcript entries for pre-generated greeting
+    // This path does NOT invoke Bedrock — it writes the already-generated greeting to the transcript
+    if (message === '__init_pregenerated__' && body.preGeneratedGreeting) {
+      // Idempotency guard: check if session already has transcript entries
+      const existingTranscript = await dynamo.send(new QueryCommand({
+        TableName: process.env.TRANSCRIPTS_TABLE,
+        KeyConditionExpression: 'sessionId = :sid',
+        ExpressionAttributeValues: { ':sid': { S: sessionId } },
+        Limit: 1,
+      }))
+      if (existingTranscript.Items && existingTranscript.Items.length > 0) {
+        log('info', 'Chat: __init_pregenerated__ skipped — transcript already exists', { requestId, sessionId, tenantId })
+        const resp = createResponse(200, { data: { greeting: body.preGeneratedGreeting, alreadyInitialized: true } }, {}, origin)
+        if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
+        return resp
+      }
+
+      const now = new Date().toISOString()
+      const reviewerMsgId = ulid()
+      const agentMsgId = ulid()
+
+      // Atomic write: reviewer [__session_start__] + agent greeting + session status update
+      await dynamo.send(new TransactWriteItemsCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: process.env.TRANSCRIPTS_TABLE,
+              Item: {
+                sessionId: { S: sessionId },
+                messageId: { S: reviewerMsgId },
+                role: { S: 'reviewer' },
+                content: { S: '[__session_start__]' },
+                timestamp: { S: now },
+              },
+            },
+          },
+          {
+            Put: {
+              TableName: process.env.TRANSCRIPTS_TABLE,
+              Item: {
+                sessionId: { S: sessionId },
+                messageId: { S: agentMsgId },
+                role: { S: 'agent' },
+                content: { S: body.preGeneratedGreeting },
+                timestamp: { S: now },
+              },
+            },
+          },
+          {
+            Update: {
+              TableName: process.env.SESSIONS_TABLE,
+              Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
+              UpdateExpression: 'SET #status = :status, startedAt = :startedAt, updatedAt = :now',
+              ExpressionAttributeNames: { '#status': 'status' },
+              ExpressionAttributeValues: {
+                ':status': { S: 'in_progress' },
+                ':startedAt': { S: now },
+                ':now': { S: now },
+              },
+            },
+          },
+        ],
+      }))
+
+      log('info', 'Chat: __init_pregenerated__ transcript written', { requestId, sessionId, tenantId, greetingLength: body.preGeneratedGreeting.length })
+
+      const resp = createResponse(200, { data: { greeting: body.preGeneratedGreeting } }, {}, origin)
+      if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
+      return resp
+    }
+
     // Read frozenSnapshot from session if available (4.4)
     const frozenSnapshot = unmarshalMap(session.frozenSnapshot)
     let sectionCoverage = unmarshalMap(session.sectionCoverage) || {}
@@ -319,6 +390,7 @@ async function handleChat(event, responseStream) {
     let itemType = 'document'
     let coverageMap = null
     let documentKey = null
+    let pageCount = 0
 
     if (itemId && tenantId) {
       try {
@@ -331,6 +403,7 @@ async function handleChat(event, responseStream) {
           itemDescription = itemResult.Item.description?.S || ''
           itemType = itemResult.Item.itemType?.S || 'document'
           documentKey = itemResult.Item.documentKey?.S || null
+          pageCount = itemResult.Item.pageCount?.N ? parseInt(itemResult.Item.pageCount.N, 10) : 0
           // 4.4: Read coverageMap from item record
           if (itemResult.Item.coverageMap?.M) {
             coverageMap = unmarshalMap(itemResult.Item.coverageMap)
@@ -483,6 +556,34 @@ async function handleChat(event, responseStream) {
             }
           }
         }
+      }
+    }
+
+    // Session Fast Start: Attach page images on first turn (send-once pattern)
+    if (isFirstTurn && itemType === 'document' && pageCount > 0) {
+      const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+      if (firstUserIdx !== -1) {
+        const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
+          ? [...coalescedMessages[firstUserIdx].content]
+          : [{ text: coalescedMessages[firstUserIdx].content }]
+
+        // Insert page images before the text block (after document block if present)
+        const textIdx = existingContent.findIndex(b => b.text)
+        const insertAt = textIdx !== -1 ? textIdx : existingContent.length
+
+        for (let p = 1; p <= pageCount; p++) {
+          const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
+          try {
+            const pageBytes = await getS3Bytes(process.env.DATA_BUCKET, pageKey)
+            if (pageBytes) {
+              existingContent.splice(insertAt + (p - 1), 0, { image: { format: 'png', source: { bytes: pageBytes } } })
+            }
+          } catch {
+            log('warn', 'Chat: failed to read page image, skipping', { requestId, sessionId, tenantId, page: p })
+          }
+        }
+
+        coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
       }
     }
 

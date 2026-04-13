@@ -410,6 +410,13 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                           );
                         })}
 
+                        {/* Page limit warning — visual context unavailable but text review works */}
+                        {form.itemData?.renderStatus === 'page_limit_exceeded' && (
+                          <div className={styles.pageLimitWarning} role="alert">
+                            Your document has {form.itemData.pageCountActual} pages but your plan allows up to {form.itemData.maxDocumentPages ?? 'the limit'}. Visual context is unavailable, but text-based review works normally.
+                          </div>
+                        )}
+
                         {/* Time limit + preview CTA — moved to sections pane when visible */}
                         {!form.showSectionsPane && !form.isEditMode && Object.values(form.fileStatuses).some(s => s.status === 'ready') && (
                           <div className={styles.uploadReadyCtas}>

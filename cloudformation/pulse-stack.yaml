@@ -504,6 +504,9 @@ Mappings:
       DeleteOrg: 3
       SuggestDescription: 3
       EmailSessionSummary: 3
+      # Session Fast Start
+      PreGenerate: 3
+      RenderPages: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -575,6 +578,9 @@ Mappings:
       DeleteOrg: 5
       SuggestDescription: 5
       EmailSessionSummary: 5
+      # Session Fast Start
+      PreGenerate: 5
+      RenderPages: 5
     prod:
       Health: 5
       BedrockHealth: 5
@@ -646,6 +652,9 @@ Mappings:
       DeleteOrg: 5
       SuggestDescription: 5
       EmailSessionSummary: 5
+      # Session Fast Start
+      PreGenerate: 15
+      RenderPages: 5
 Resources:
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -3279,6 +3288,10 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulseRenderPagesFunction.Arn
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S2: Lambda Functions
@@ -3532,6 +3545,7 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           DATA_BUCKET_NAME: !Ref PulseDataBucket
           ANALYZE_DOCUMENT_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:urgd-pulse-analyzeDocument-${Environment}'
+          RENDER_PAGES_FUNCTION_ARN: !GetAtt PulseRenderPagesFunction.Arn
       Tags:
         - Key: project
           Value: pulse
@@ -4121,6 +4135,10 @@ Resources:
                 Action:
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulsePreGenerateFunction.Arn
 
   PulseCreatePublicSessionFunctionRole:
     Type: AWS::IAM::Role
@@ -4576,6 +4594,7 @@ Resources:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          PRE_GENERATE_FUNCTION_ARN: !GetAtt PulsePreGenerateFunction.Arn
       Tags:
         - Key: project
           Value: pulse
@@ -7962,6 +7981,10 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulsePreGenerateFunction.Arn
 
   PulseCreateSelfSessionFunction:
     Type: AWS::Lambda::Function
@@ -7988,6 +8011,7 @@ Resources:
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          PRE_GENERATE_FUNCTION_ARN: !GetAtt PulsePreGenerateFunction.Arn
       Tags:
         - Key: project
           Value: pulse
@@ -9457,6 +9481,30 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulsePreGenerateDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'urgd-pulse-preGenerate-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseRenderPagesDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'urgd-pulse-renderPages-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   # DLQ alarm — fires if any DLQ receives messages (failed async invocations)
   PulseDLQMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -9614,7 +9662,9 @@ Resources:
                 "metrics": [
                   ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-stripeWebhook-dlq-${Environment}", {"stat": "Maximum", "label": "stripeWebhook DLQ"}],
                   ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-closeExpiredItems-dlq-${Environment}", {"stat": "Maximum", "label": "closeExpiredItems DLQ"}],
-                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-purgeTranscripts-dlq-${Environment}", {"stat": "Maximum", "label": "purgeTranscripts DLQ"}]
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-purgeTranscripts-dlq-${Environment}", {"stat": "Maximum", "label": "purgeTranscripts DLQ"}],
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-preGenerate-dlq-${Environment}", {"stat": "Maximum", "label": "preGenerate DLQ"}],
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "urgd-pulse-renderPages-dlq-${Environment}", {"stat": "Maximum", "label": "renderPages DLQ"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -9659,6 +9709,257 @@ Resources:
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref CriticalAlertsEmail
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Session Fast Start — Log Groups
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulsePreGenerateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-preGenerate-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulseRenderPagesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-renderPages-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Session Fast Start — ECR Repository (RenderPages container image)
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulseRenderPagesEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'urgd-pulse-renderpages-${Environment}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images after 5 days",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: orbit
+        - Key: environment
+          Value: !Ref Environment
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Session Fast Start — IAM Roles
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulsePreGenerateFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-preGenerate-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulsePreGeneratePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt PulseSessionsTable.Arn
+                  - !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseSessionsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt PulsePreGenerateDLQ.Arn
+
+  PulseRenderPagesFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-renderPages-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PulseRenderPagesPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt PulseItemsTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt PulseRenderPagesDLQ.Arn
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Session Fast Start — Lambda Functions
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulsePreGenerateFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulsePreGenerateLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-preGenerate-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulsePreGenerateFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PreGenerateCodeKey
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PreGenerate]
+      DeadLetterConfig:
+        TargetArn: !GetAtt PulsePreGenerateDLQ.Arn
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          SESSIONS_TABLE: !Ref PulseSessionsTable
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: orbit
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseRenderPagesFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - PulseRenderPagesLogGroup
+      - PulseRenderPagesEcrRepository
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-renderPages-${Environment}'
+      PackageType: Image
+      Role: !GetAtt PulseRenderPagesFunctionRole.Arn
+      Code:
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages-${Environment}:latest'
+      Timeout: 300
+      MemorySize: 2048
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RenderPages]
+      DeadLetterConfig:
+        TargetArn: !GetAtt PulseRenderPagesDLQ.Arn
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref PulseItemsTable
+          DATA_BUCKET: !Ref PulseDataBucket
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: orbit
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
 
 
 Outputs:

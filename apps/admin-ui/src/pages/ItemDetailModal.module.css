@@ -353,6 +353,17 @@
 .docStatusReady    { color: var(--color-success); }
 .docStatusError    { color: var(--color-error); }
 
+/* ── Page limit warning ──────────────────────────────────────────────────── */
+.pageLimitWarning {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 180, 0, 0.1);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 /* ── Retention notice ─────────────────────────────────────────────────────── */
 
 .retentionNotice {

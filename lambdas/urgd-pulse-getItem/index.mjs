@@ -52,6 +52,9 @@ function normalizeItem(raw) {
     ...(raw.sectionDepthPreferences !== undefined ? { sectionDepthPreferences: raw.sectionDepthPreferences } : {}),
     ...(raw.coverageMap !== undefined ? { coverageMap: raw.coverageMap } : {}),
     ...(raw.totalSections !== undefined ? { totalSections: raw.totalSections } : {}),
+    ...(raw.renderStatus !== undefined ? { renderStatus: raw.renderStatus } : {}),
+    ...(raw.pageCount !== undefined ? { pageCount: raw.pageCount } : {}),
+    ...(raw.pageCountActual !== undefined ? { pageCountActual: raw.pageCountActual } : {}),
   }
 }
 

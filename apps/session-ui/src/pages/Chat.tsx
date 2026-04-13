@@ -7,6 +7,7 @@ import {
   reportSessionCompletion,
   sendChatMessage,
   sendChatMessageStreaming,
+  writePreGeneratedTranscript,
 } from '../api/session'
 import { consumeStream } from '../hooks/useStreaming'
 import ChatBubble from '../components/ChatBubble'
@@ -350,8 +351,19 @@ export default function Chat() {
         if (state.status === 'not_started') {
           setSessionStatus('not_started')
           setMessages(existingMessages)
-          // Auto-send start signal
-          await autoSend('__session_start__', existingMessages)
+
+          // Session Fast Start: display pre-generated greeting instantly if available
+          if (state.preGeneratedGreeting && existingMessages.length === 0) {
+            const greetingMsg: Message = { role: 'agent', content: state.preGeneratedGreeting }
+            setMessages([greetingMsg])
+            setSessionStatus('in_progress')
+            setIsThinking(false)
+            // Best-effort: write transcript entries in the background
+            writePreGeneratedTranscript(sessionId, sessionToken!, state.preGeneratedGreeting)
+          } else {
+            // Fallback: no pre-generated greeting — use existing __session_start__ flow
+            await autoSend('__session_start__', existingMessages)
+          }
         } else if (state.status === 'in_progress') {
           setSessionStatus('in_progress')
           setMessages(existingMessages)

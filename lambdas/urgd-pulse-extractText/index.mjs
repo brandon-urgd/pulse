@@ -179,6 +179,47 @@ export const handler = async (event) => {
         log('warn', 'ExtractText: failed to invoke analyzeDocument', { tenantId, itemId, errorName: invokeErr.name })
       }
     }
+
+    // Invoke renderPages async for PDF and DOCX files
+    if (process.env.RENDER_PAGES_FUNCTION_ARN && (ext === '.pdf' || ext === '.docx')) {
+      try {
+        // Resolve maxDocumentPages limit for the tenant
+        let maxDocumentPages = 20 // conservative default
+        if (process.env.TENANTS_TABLE) {
+          try {
+            const [tenantFetch, systemFetch] = await Promise.all([
+              dynamo.send(new GetItemCommand({
+                TableName: process.env.TENANTS_TABLE,
+                Key: { tenantId: { S: tenantId } },
+              })),
+              dynamo.send(new GetItemCommand({
+                TableName: process.env.TENANTS_TABLE,
+                Key: { tenantId: { S: 'SYSTEM' } },
+              })),
+            ])
+            const tr = tenantFetch.Item ? {
+              tier: tenantFetch.Item.tier?.S ?? 'free',
+              features: unmarshalFeatures(tenantFetch.Item.features?.M),
+              serviceFlags: unmarshalFeatures(tenantFetch.Item.serviceFlags?.M),
+            } : { tier: 'free', features: {}, serviceFlags: {} }
+            const sr = systemFetch.Item ? { serviceFlags: unmarshalFeatures(systemFetch.Item.serviceFlags?.M) } : null
+            const pagesRes = resolveFeature(tr, 'maxDocumentPages', sr)
+            if (pagesRes.limit) maxDocumentPages = pagesRes.limit
+          } catch (flagErr) {
+            log('warn', 'ExtractText: failed to resolve maxDocumentPages for renderPages, using default', { tenantId, itemId, errorName: flagErr.name })
+          }
+        }
+
+        await lambdaClient.send(new InvokeCommand({
+          FunctionName: process.env.RENDER_PAGES_FUNCTION_ARN,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ tenantId, itemId, key, bucket, maxDocumentPages }),
+        }))
+        log('info', 'ExtractText: renderPages invoked async', { tenantId, itemId, maxDocumentPages })
+      } catch (invokeErr) {
+        log('warn', 'ExtractText: failed to invoke renderPages', { tenantId, itemId, errorName: invokeErr.name })
+      }
+    }
   } catch (err) {
     log('error', 'ExtractText: extraction failed', { tenantId, itemId, errorName: err.name })
 

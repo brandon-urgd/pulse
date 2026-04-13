@@ -133,6 +133,9 @@ export const handler = async (event) => {
 
     log('info', 'GetSessionState: success', { requestId, sessionId, tenantId })
 
+    // Include preGeneratedGreeting only for not_started sessions to avoid payload bloat
+    const preGeneratedGreeting = status === 'not_started' ? (session.preGeneratedGreeting?.S || null) : null
+
     return createResponse(200, {
       data: {
         currentSection,
@@ -144,6 +147,7 @@ export const handler = async (event) => {
         closingState,
         itemType,
         imageUrl,
+        ...(preGeneratedGreeting ? { preGeneratedGreeting } : {}),
       },
     }, {}, origin)
   } catch (err) {

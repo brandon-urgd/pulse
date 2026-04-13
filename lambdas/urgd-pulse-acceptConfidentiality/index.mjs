@@ -3,12 +3,16 @@
 // Updates session record with confidentialityAcceptedAt timestamp
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambda = process.env.PRE_GENERATE_FUNCTION_ARN
+  ? new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
+  : null
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -38,6 +42,20 @@ export const handler = async (event) => {
     }))
 
     log('info', 'AcceptConfidentiality: accepted', { requestId, sessionId, tenantId })
+
+    // Fire-and-forget: invoke PreGenerate Lambda to pre-generate the greeting
+    if (lambda && process.env.PRE_GENERATE_FUNCTION_ARN) {
+      try {
+        await lambda.send(new InvokeCommand({
+          FunctionName: process.env.PRE_GENERATE_FUNCTION_ARN,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ tenantId, sessionId }),
+        }))
+        log('info', 'AcceptConfidentiality: preGenerate invoked', { requestId, sessionId, tenantId })
+      } catch (invokeErr) {
+        log('warn', 'AcceptConfidentiality: failed to invoke preGenerate', { requestId, sessionId, tenantId, errorName: invokeErr.name })
+      }
+    }
 
     return createResponse(200, { data: { sessionId, confidentialityAcceptedAt: now } }, {}, origin)
   } catch (err) {

@@ -93,6 +93,7 @@ export const handler = async (event) => {
 
     // 1b. Load item record to get documentKey for native document context
     let documentKey = null
+    let pageCount = 0
     try {
       const itemResult = await dynamo.send(new GetItemCommand({
         TableName: process.env.ITEMS_TABLE,
@@ -100,6 +101,7 @@ export const handler = async (event) => {
       }))
       if (itemResult.Item) {
         documentKey = itemResult.Item.documentKey?.S || null
+        pageCount = itemResult.Item.pageCount?.N ? parseInt(itemResult.Item.pageCount.N, 10) : 0
       }
     } catch (err) {
       log('warn', 'ProcessRevision: failed to load item record for document context', { tenantId, itemId, revisionId, errorName: err.name })
@@ -193,6 +195,21 @@ Revised Document:`
           userContentBlocks.push({
             document: { format: ext, name: 'document', source: { bytes: docBytes } },
           })
+        }
+      }
+    }
+
+    // Attach page images if available (send-once pattern, same as Chat Lambda)
+    if (pageCount > 0) {
+      for (let p = 1; p <= pageCount; p++) {
+        const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
+        try {
+          const pageBytes = await getS3Bytes(process.env.DATA_BUCKET, pageKey)
+          if (pageBytes) {
+            userContentBlocks.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+          }
+        } catch {
+          log('warn', 'ProcessRevision: failed to read page image, skipping', { tenantId, itemId, revisionId, page: p })
         }
       }
     }

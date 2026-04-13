@@ -64,6 +64,7 @@ export interface SessionStateResponse {
   closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
   itemType?: 'document' | 'image'
   imageUrl?: string | null
+  preGeneratedGreeting?: string | null
 }
 
 export interface ChatResponse {
@@ -95,6 +96,29 @@ function makeError(body: { message?: string }, fallback: string, status: number)
   const err = new Error(body.message ?? fallback) as Error & { status: number }
   err.status = status
   return err
+}
+
+/**
+ * Write pre-generated greeting transcript entries via the __init_pregenerated__ path.
+ * Best-effort — failure does not block the greeting display (optimistic UI).
+ */
+export async function writePreGeneratedTranscript(
+  sessionId: string,
+  sessionToken: string,
+  preGeneratedGreeting: string
+): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionToken}`,
+      },
+      body: JSON.stringify({ message: '__init_pregenerated__', preGeneratedGreeting }),
+    })
+  } catch {
+    // Best-effort — failure is non-blocking
+  }
 }
 
 export async function sendChatMessage(
