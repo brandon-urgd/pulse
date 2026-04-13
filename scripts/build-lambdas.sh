@@ -62,6 +62,13 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
     continue
   fi
 
+  # Skip container-based Lambdas (built as Docker images, not ZIPs)
+  if [ -f "$lambda_dir/Dockerfile" ]; then
+    echo "── $lambda_name ── (skipped — container-based Lambda)"
+    echo ""
+    continue
+  fi
+
   echo "── $lambda_name ──────────────────────────────────────────────────────"
 
   BUILD_DIR="$BUILD_BASE/$lambda_name"
