@@ -15,4 +15,7 @@ COPY shared/ ${LAMBDA_TASK_ROOT}/shared/
 # Copy handler code
 COPY index.mjs ${LAMBDA_TASK_ROOT}/
 
+# Run as non-root user for security
+USER 1000
+
 CMD ["index.handler"]
