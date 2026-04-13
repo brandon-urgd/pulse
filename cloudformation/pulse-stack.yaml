@@ -349,6 +349,12 @@ Parameters:
     Default: lambda-packages/urgd-pulse-createCheckoutSession/latest.zip
     Description: S3 key for urgd-pulse-createCheckoutSession Lambda ZIP
 
+  # Session Fast Start CodeKey parameters
+  PreGenerateCodeKey:
+    Type: String
+    Default: lambda-packages/urgd-pulse-preGenerate/latest.zip
+    Description: S3 key for urgd-pulse-preGenerate Lambda ZIP
+
   DeploymentVersion:
     Type: String
     Default: 'local'
