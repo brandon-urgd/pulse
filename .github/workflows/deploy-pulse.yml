@@ -251,7 +251,7 @@ jobs:
 
           # Download the manifest written by build-lambdas.sh
           aws s3 cp \
-            "s3://${{ env.ARTIFACT_BUCKET }}/lambda-packages/manifest-${VERSION}.json" \
+            "s3://${{ env.ARTIFACT_BUCKET }}/pulse/lambda-packages/manifest-${VERSION}.json" \
             /tmp/lambda-manifest.json \
             --region ${{ env.AWS_REGION }}
 
@@ -816,7 +816,7 @@ jobs:
           let manifest;
           try {
             const manifestRaw = aws(
-              `s3 cp "s3://${BUCKET}/lambda-packages/manifest-${VERSION}.json" - --region ${REGION}`
+              `s3 cp "s3://${BUCKET}/pulse/lambda-packages/manifest-${VERSION}.json" - --region ${REGION}`
             );
             manifest = JSON.parse(manifestRaw);
           } catch (err) {
@@ -829,7 +829,7 @@ jobs:
 
           if (manifest) {
             for (const fn of manifest.functions) {
-              const prefix = `lambda-packages/${fn}/`;
+              const prefix = `pulse/lambda-packages/${fn}/`;
               let listing;
               try {
                 listing = aws(
@@ -843,7 +843,7 @@ jobs:
               const parsed = JSON.parse(listing);
               const contents = parsed.Contents || [];
 
-              // Build artifact entries: extract version from key (e.g. lambda-packages/fn/1.2.3.zip → 1.2.3)
+              // Build artifact entries: extract version from key (e.g. pulse/lambda-packages/fn/1.2.3.zip → 1.2.3)
               const artifacts = contents.map(obj => {
                 const filename = obj.Key.split('/').pop();
                 const version = filename.replace(/\.zip$/, '');

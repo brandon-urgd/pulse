@@ -99,12 +99,13 @@ export const handler = async (event) => {
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :iid',
-      FilterExpression: 'isSelfReview = :t AND #st <> :cancelled',
+      FilterExpression: 'isSelfReview = :t AND #st <> :cancelled AND #st <> :discarded',
       ExpressionAttributeNames: { '#st': 'status' },
       ExpressionAttributeValues: {
         ':iid': { S: itemId },
         ':t': { BOOL: true },
         ':cancelled': { S: 'cancelled' },
+        ':discarded': { S: 'discarded' },
       },
     }))
 

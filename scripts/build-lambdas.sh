@@ -5,7 +5,7 @@
 #   ./scripts/build-lambdas.sh [VERSION]
 #
 # If VERSION is not passed, it is derived from the git SHA.
-# Uploads to: s3://${ARTIFACT_BUCKET}/lambda-packages/urgd-pulse-{fn}/{version}.zip
+# Uploads to: s3://${ARTIFACT_BUCKET}/pulse/lambda-packages/urgd-pulse-{fn}/{version}.zip
 #
 # Requirements: 2.5
 
@@ -106,8 +106,8 @@ for lambda_dir in "$LAMBDAS_DIR"/*/; do
   )
   echo "   ✅ Created ZIP: $(basename "$ZIP_FILE")"
 
-  # Upload to S3 at lambda-packages/urgd-pulse-{fn}/{version}.zip
-  S3_KEY="lambda-packages/${lambda_name}/${VERSION}.zip"
+  # Upload to S3 at pulse/lambda-packages/urgd-pulse-{fn}/{version}.zip
+  S3_KEY="pulse/lambda-packages/${lambda_name}/${VERSION}.zip"
   aws s3 cp "$ZIP_FILE" "s3://${ARTIFACT_BUCKET}/${S3_KEY}" \
     --region "$AWS_REGION" \
     --no-progress
@@ -136,13 +136,13 @@ functions = $MANIFEST_FUNCTIONS
 manifest = {
     'version': '${VERSION}',
     'functions': functions,
-    's3_keys': {fn: 'lambda-packages/' + fn + '/${VERSION}.zip' for fn in functions}
+    's3_keys': {fn: 'pulse/lambda-packages/' + fn + '/${VERSION}.zip' for fn in functions}
 }
 print(json.dumps(manifest, indent=2))
 " > "$MANIFEST_FILE"
 
 aws s3 cp "$MANIFEST_FILE" \
-  "s3://${ARTIFACT_BUCKET}/lambda-packages/manifest-${VERSION}.json" \
+  "s3://${ARTIFACT_BUCKET}/pulse/lambda-packages/manifest-${VERSION}.json" \
   --region "$AWS_REGION" \
   --no-progress
-echo "✅ Manifest uploaded → s3://${ARTIFACT_BUCKET}/lambda-packages/manifest-${VERSION}.json"
+echo "✅ Manifest uploaded → s3://${ARTIFACT_BUCKET}/pulse/lambda-packages/manifest-${VERSION}.json"

@@ -43,316 +43,316 @@ Parameters:
 
   HealthCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-health/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-health/latest.zip
     Description: S3 key for urgd-pulse-health Lambda ZIP
 
   BedrockHealthCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-bedrockHealth/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-bedrockHealth/latest.zip
     Description: S3 key for urgd-pulse-bedrockHealth Lambda ZIP
 
   CognitoAuthCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-cognitoAuth/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-cognitoAuth/latest.zip
     Description: S3 key for urgd-pulse-cognitoAuth Lambda ZIP
 
   SessionAuthCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-sessionAuth/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-sessionAuth/latest.zip
     Description: S3 key for urgd-pulse-sessionAuth Lambda ZIP
 
   RegisterCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-register/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-register/latest.zip
     Description: S3 key for urgd-pulse-register Lambda ZIP
 
   CreateTenantCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-createTenant/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-createTenant/latest.zip
     Description: S3 key for urgd-pulse-createTenant Lambda ZIP
 
   GetSettingsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getSettings/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getSettings/latest.zip
     Description: S3 key for urgd-pulse-getSettings Lambda ZIP
 
   UpdateSettingsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-updateSettings/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-updateSettings/latest.zip
     Description: S3 key for urgd-pulse-updateSettings Lambda ZIP
 
   DeleteAccountCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-deleteAccount/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-deleteAccount/latest.zip
     Description: S3 key for urgd-pulse-deleteAccount Lambda ZIP
 
   GetItemsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getItems/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getItems/latest.zip
     Description: S3 key for urgd-pulse-getItems Lambda ZIP
 
   CreateItemCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-createItem/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-createItem/latest.zip
     Description: S3 key for urgd-pulse-createItem Lambda ZIP
 
   GetItemCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getItem/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getItem/latest.zip
     Description: S3 key for urgd-pulse-getItem Lambda ZIP
 
   UpdateItemCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-updateItem/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-updateItem/latest.zip
     Description: S3 key for urgd-pulse-updateItem Lambda ZIP
 
   DeleteItemCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-deleteItem/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-deleteItem/latest.zip
     Description: S3 key for urgd-pulse-deleteItem Lambda ZIP
 
   GetUploadUrlCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getUploadUrl/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getUploadUrl/latest.zip
     Description: S3 key for urgd-pulse-getUploadUrl Lambda ZIP
 
   ShieldCallbackCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-shieldCallback/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-shieldCallback/latest.zip
     Description: S3 key for urgd-pulse-shieldCallback Lambda ZIP
 
   ExtractTextCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-extractText/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-extractText/latest.zip
     Description: S3 key for urgd-pulse-extractText Lambda ZIP
 
   InviteReviewerCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-inviteReviewer/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-inviteReviewer/latest.zip
     Description: S3 key for urgd-pulse-inviteReviewer Lambda ZIP
 
   GetItemSessionsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getItemSessions/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getItemSessions/latest.zip
     Description: S3 key for urgd-pulse-getItemSessions Lambda ZIP
 
   CancelSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-cancelSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-cancelSession/latest.zip
     Description: S3 key for urgd-pulse-cancelSession Lambda ZIP
 
   ResendInviteCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-resendInvite/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-resendInvite/latest.zip
     Description: S3 key for urgd-pulse-resendInvite Lambda ZIP
 
   ExtendDeadlineCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-extendDeadline/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-extendDeadline/latest.zip
     Description: S3 key for urgd-pulse-extendDeadline Lambda ZIP
 
   ValidateSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-validateSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-validateSession/latest.zip
     Description: S3 key for urgd-pulse-validateSession Lambda ZIP
 
   SendReminderCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-sendReminder/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-sendReminder/latest.zip
     Description: S3 key for urgd-pulse-sendReminder Lambda ZIP
 
   ExpireSessionsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-expireSessions/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-expireSessions/latest.zip
     Description: S3 key for urgd-pulse-expireSessions Lambda ZIP
 
   AcceptConfidentialityCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-acceptConfidentiality/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-acceptConfidentiality/latest.zip
     Description: S3 key for urgd-pulse-acceptConfidentiality Lambda ZIP
 
   CreatePublicSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-createPublicSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-createPublicSession/latest.zip
     Description: S3 key for urgd-pulse-createPublicSession Lambda ZIP
 
   GetPublicSessionQrCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getPublicSessionQr/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getPublicSessionQr/latest.zip
     Description: S3 key for urgd-pulse-getPublicSessionQr Lambda ZIP
 
   ExpirePublicSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-expirePublicSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-expirePublicSession/latest.zip
     Description: S3 key for urgd-pulse-expirePublicSession Lambda ZIP
 
   CloseItemCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-closeItem/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-closeItem/latest.zip
     Description: S3 key for urgd-pulse-closeItem Lambda ZIP
 
   ChatCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-chat/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-chat/latest.zip
     Description: S3 key for urgd-pulse-chat Lambda ZIP
 
   GetSessionStateCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getSessionState/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getSessionState/latest.zip
     Description: S3 key for urgd-pulse-getSessionState Lambda ZIP
 
   GetSessionSummaryCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getSessionSummary/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getSessionSummary/latest.zip
     Description: S3 key for urgd-pulse-getSessionSummary Lambda ZIP
 
   GenerateSessionSummaryCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-generateSessionSummary/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-generateSessionSummary/latest.zip
     Description: S3 key for urgd-pulse-generateSessionSummary Lambda ZIP
 
   DeleteSessionTranscriptCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-deleteSessionTranscript/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-deleteSessionTranscript/latest.zip
     Description: S3 key for urgd-pulse-deleteSessionTranscript Lambda ZIP
 
   GetSessionFileCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getSessionFile/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getSessionFile/latest.zip
     Description: S3 key for urgd-pulse-getSessionFile Lambda ZIP
 
   GetDocumentUrlCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getDocumentUrl/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getDocumentUrl/latest.zip
     Description: S3 key for urgd-pulse-getDocumentUrl Lambda ZIP
 
   RemoveDocumentCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-removeDocument/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-removeDocument/latest.zip
     Description: S3 key for urgd-pulse-removeDocument Lambda ZIP
 
   GenerateReportCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-generateReport/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-generateReport/latest.zip
     Description: S3 key for urgd-pulse-generateReport Lambda ZIP
 
   GetReportCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getReport/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getReport/latest.zip
     Description: S3 key for urgd-pulse-getReport Lambda ZIP
 
   RunPulseCheckCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-runPulseCheck/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-runPulseCheck/latest.zip
     Description: S3 key for urgd-pulse-runPulseCheck Lambda ZIP
 
   ProcessPulseCheckCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-processPulseCheck/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-processPulseCheck/latest.zip
     Description: S3 key for urgd-pulse-processPulseCheck Lambda ZIP
 
   GetPulseCheckCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getPulseCheck/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getPulseCheck/latest.zip
     Description: S3 key for urgd-pulse-getPulseCheck Lambda ZIP
 
   SavePCDecisionsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-savePCDecisions/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-savePCDecisions/latest.zip
     Description: S3 key for urgd-pulse-savePCDecisions Lambda ZIP
 
   UsageReportCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-usageReport/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-usageReport/latest.zip
     Description: S3 key for urgd-pulse-usageReport Lambda ZIP
 
   GenerateRevisionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-generateRevision/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-generateRevision/latest.zip
     Description: S3 key for urgd-pulse-generateRevision Lambda ZIP
 
   GetRevisionsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-getRevisions/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-getRevisions/latest.zip
     Description: S3 key for urgd-pulse-getRevisions Lambda ZIP
 
   ProcessRevisionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-processRevision/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-processRevision/latest.zip
     Description: S3 key for urgd-pulse-processRevision Lambda ZIP
 
   SendPulseCheckReadyCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
     Description: S3 key for urgd-pulse-sendPulseCheckReady Lambda ZIP
 
   PreviewSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-previewSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-previewSession/latest.zip
     Description: S3 key for urgd-pulse-previewSession Lambda ZIP
 
   CreateSelfSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-createSelfSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-createSelfSession/latest.zip
     Description: S3 key for urgd-pulse-createSelfSession Lambda ZIP
 
   SubmitReportCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-submitReport/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-submitReport/latest.zip
     Description: S3 key for urgd-pulse-submitReport Lambda ZIP
 
   AdminTenantsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-adminTenants/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-adminTenants/latest.zip
     Description: S3 key for urgd-pulse-adminTenants Lambda ZIP
 
   PublicConfigCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-publicConfig/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-publicConfig/latest.zip
     Description: S3 key for urgd-pulse-publicConfig Lambda ZIP
 
   # Spec 2 — S2 CodeKey parameters
   AnalyzeDocumentCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-analyzeDocument/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-analyzeDocument/latest.zip
     Description: S3 key for urgd-pulse-analyzeDocument Lambda ZIP
 
   SuggestDescriptionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-suggestDescription/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-suggestDescription/latest.zip
     Description: S3 key for urgd-pulse-suggestDescription Lambda ZIP
 
   # Spec 2 — S3 CodeKey parameters
   CloseExpiredItemsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-closeExpiredItems/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-closeExpiredItems/latest.zip
     Description: S3 key for urgd-pulse-closeExpiredItems Lambda ZIP
 
   PurgeTranscriptsCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-purgeTranscripts/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-purgeTranscripts/latest.zip
     Description: S3 key for urgd-pulse-purgeTranscripts Lambda ZIP
 
   EmailSessionSummaryCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-emailSessionSummary/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-emailSessionSummary/latest.zip
     Description: S3 key for urgd-pulse-emailSessionSummary Lambda ZIP
 
   # Spec 2 — S4 CodeKey parameters
   StripeWebhookCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-stripeWebhook/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-stripeWebhook/latest.zip
     Description: S3 key for urgd-pulse-stripeWebhook Lambda ZIP
 
   CreateCheckoutSessionCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-createCheckoutSession/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-createCheckoutSession/latest.zip
     Description: S3 key for urgd-pulse-createCheckoutSession Lambda ZIP
 
   # Session Fast Start CodeKey parameters
   PreGenerateCodeKey:
     Type: String
-    Default: lambda-packages/urgd-pulse-preGenerate/latest.zip
+    Default: pulse/lambda-packages/urgd-pulse-preGenerate/latest.zip
     Description: S3 key for urgd-pulse-preGenerate Lambda ZIP
 
   DeploymentVersion:
