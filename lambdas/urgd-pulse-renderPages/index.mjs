@@ -1,13 +1,14 @@
 // ur/gd pulse — RenderPages Lambda (container-based)
 // Async invocation from ExtractText Lambda.
 // Renders PDF/DOCX pages as PNG images and stores them in S3.
-// DOCX files are converted to PDF via LibreOffice headless before rendering.
+// DOCX files are converted to PDF via @shelf/aws-lambda-libreoffice (uses the
+// LibreOffice binary bundled in the shelf base Docker image).
 // Page count is governed by maxDocumentPages feature flag passed in the event.
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { execSync } from 'child_process'
-import { writeFileSync, readFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
+import { convertTo } from '@shelf/aws-lambda-libreoffice'
+import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -50,38 +51,33 @@ export const handler = async (event) => {
     const ext = key.split('.').pop()?.toLowerCase()
     log('info', 'RenderPages: document read from S3', { tenantId, itemId, sizeBytes: docBytes.length, ext, elapsed: Date.now() - startTime })
 
-    // 2. Prepare working directory
-    const workDir = join(tmpdir(), `renderPages-${itemId}-${Date.now()}`)
-    mkdirSync(workDir, { recursive: true })
+    // 2. Write document to /tmp for processing
+    const docFilename = `document.${ext}`
+    const docPath = join(tmpdir(), docFilename)
+    writeFileSync(docPath, docBytes)
 
     let pdfPath
     if (ext === 'docx') {
-      // 3a. DOCX → PDF via LibreOffice headless
-      const docxPath = join(workDir, `document.docx`)
-      writeFileSync(docxPath, docBytes)
-      log('info', 'RenderPages: converting DOCX to PDF', { tenantId, itemId, elapsed: Date.now() - startTime })
+      // 3a. DOCX → PDF via @shelf/aws-lambda-libreoffice
+      // convertTo() handles LibreOffice binary path, temp dirs, and cleanup.
+      // It writes the PDF to /tmp and returns the path. The original file is deleted by convertTo().
+      log('info', 'RenderPages: converting DOCX to PDF via shelf/libreoffice', { tenantId, itemId, elapsed: Date.now() - startTime })
 
       try {
-        // Paths are constructed from os.tmpdir() + fixed filenames — not user input.
-        execSync(`libreoffice --headless --convert-to pdf --outdir "${workDir}" "${docxPath}"`, { // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
-          timeout: 120000,
-          stdio: 'pipe',
-        })
+        pdfPath = await convertTo(docFilename, 'pdf')
       } catch (convErr) {
         log('error', 'RenderPages: LibreOffice conversion failed', { tenantId, itemId, errorMessage: convErr.message })
         return
       }
 
-      pdfPath = join(workDir, 'document.pdf')
-      if (!existsSync(pdfPath)) {
+      if (!pdfPath || !existsSync(pdfPath)) {
         log('error', 'RenderPages: PDF output not found after conversion', { tenantId, itemId })
         return
       }
-      log('info', 'RenderPages: DOCX converted to PDF', { tenantId, itemId, elapsed: Date.now() - startTime })
+      log('info', 'RenderPages: DOCX converted to PDF', { tenantId, itemId, pdfPath, elapsed: Date.now() - startTime })
     } else {
       // 3b. Already a PDF
-      pdfPath = join(workDir, 'document.pdf')
-      writeFileSync(pdfPath, docBytes)
+      pdfPath = docPath
     }
 
     // 4. Render pages using pdf-to-img
@@ -139,13 +135,9 @@ export const handler = async (event) => {
     const totalElapsed = Date.now() - startTime
     log('info', 'RenderPages: complete', { tenantId, itemId, renderedCount, totalPages, totalElapsed })
 
-    // 8. Cleanup temp files
+    // 8. Cleanup temp files (convertTo already cleans up the DOCX, but PDF may remain)
     try {
-      unlinkSync(pdfPath)
-      if (ext === 'docx') {
-        const docxPath = join(workDir, 'document.docx')
-        if (existsSync(docxPath)) unlinkSync(docxPath)
-      }
+      if (existsSync(pdfPath)) unlinkSync(pdfPath)
     } catch {
       // Non-fatal — Lambda container is ephemeral
     }
