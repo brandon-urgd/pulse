@@ -9938,7 +9938,7 @@ Resources:
       PackageType: Image
       Role: !GetAtt PulseRenderPagesFunctionRole.Arn
       Code:
-        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages-${Environment}:latest'
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages-${Environment}:${DeploymentVersion}'
       Timeout: 300
       MemorySize: 2048
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RenderPages]

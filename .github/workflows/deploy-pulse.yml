@@ -130,6 +130,39 @@ jobs:
           chmod +x scripts/build-lambdas.sh
           ./scripts/build-lambdas.sh "$VERSION"
 
+      - name: Build and push container Lambda images
+        if: env.ENVIRONMENT == 'dev'
+        run: |
+          set -euo pipefail
+
+          # Authenticate Docker to ECR
+          aws ecr get-login-password --region $AWS_REGION | \
+            docker login --username AWS --password-stdin \
+            ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+          # Build and push each container Lambda (identified by Dockerfile)
+          for lambda_dir in lambdas/*/; do
+            if [ -f "$lambda_dir/Dockerfile" ]; then
+              lambda_name=$(basename "$lambda_dir")
+              # ECR repo names are lowercase
+              ecr_name=$(echo "$lambda_name" | tr '[:upper:]' '[:lower:]')
+              ecr_repo="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/urgd-pulse-${ecr_name#urgd-pulse-}-${ENVIRONMENT}"
+
+              echo "🐳 Building container Lambda: $lambda_name"
+
+              # Copy shared/ into the Lambda directory for Docker build context
+              cp -r lambdas/shared "$lambda_dir/shared"
+
+              docker build -t "$ecr_repo:$VERSION" "$lambda_dir"
+              docker push "$ecr_repo:$VERSION"
+
+              # Clean up copied shared/
+              rm -rf "$lambda_dir/shared"
+
+              echo "✅ Pushed $ecr_repo:$VERSION"
+            fi
+          done
+
       - name: Fetch secrets from SSM
         run: |
           set -euo pipefail
