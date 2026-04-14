@@ -9737,46 +9737,11 @@ Resources:
           Value: !Ref Environment
 
   # ══════════════════════════════════════════════════════════════════════════════
-  # Session Fast Start — ECR Repository (RenderPages container image)
+  # Session Fast Start — ECR Repository
+  # ECR repo is created by the CI/CD build step (not CloudFormation).
+  # Repo name: urgd-pulse-renderpages (environment-agnostic, versioned tags).
+  # See deploy-pulse.yml "Build and push container Lambda images" step.
   # ══════════════════════════════════════════════════════════════════════════════
-
-  PulseRenderPagesEcrRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: 'urgd-pulse-renderpages'
-      ImageTagMutability: IMMUTABLE
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: KMS
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [
-              {
-                "rulePriority": 1,
-                "description": "Expire untagged images after 5 days",
-                "selection": {
-                  "tagStatus": "untagged",
-                  "countType": "sinceImagePushed",
-                  "countUnit": "days",
-                  "countNumber": 5
-                },
-                "action": {
-                  "type": "expire"
-                }
-              }
-            ]
-          }
-      Tags:
-        - Key: project
-          Value: pulse
-        - Key: brand
-          Value: urgd
-        - Key: studio
-          Value: orbit
-        - Key: environment
-          Value: !Ref Environment
 
   # ══════════════════════════════════════════════════════════════════════════════
   # Session Fast Start — IAM Roles
@@ -9932,7 +9897,6 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn:
       - PulseRenderPagesLogGroup
-      - PulseRenderPagesEcrRepository
     Properties:
       FunctionName: !Sub 'urgd-pulse-renderPages-${Environment}'
       PackageType: Image
