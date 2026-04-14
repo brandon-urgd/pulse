@@ -352,16 +352,34 @@ export default function Chat() {
           setSessionStatus('not_started')
           setMessages(existingMessages)
 
-          // Session Fast Start: display pre-generated greeting instantly if available
-          if (state.preGeneratedGreeting && existingMessages.length === 0) {
-            const greetingMsg: Message = { role: 'agent', content: state.preGeneratedGreeting }
+          // Session Fast Start: check for pre-generated greeting.
+          // If not ready yet, poll every 2s up to 5 times (10s) before falling back.
+          let greeting = state.preGeneratedGreeting
+          if (!greeting && existingMessages.length === 0) {
+            for (let attempt = 0; attempt < 5; attempt++) {
+              await new Promise(r => setTimeout(r, 2000))
+              try {
+                const pollState = await getSessionState(sessionId, sessionToken!)
+                if (pollState.preGeneratedGreeting) {
+                  greeting = pollState.preGeneratedGreeting
+                  break
+                }
+                // If session moved to in_progress (another tab started it), stop polling
+                if (pollState.status !== 'not_started') break
+              } catch {
+                break
+              }
+            }
+          }
+
+          if (greeting && existingMessages.length === 0) {
+            const greetingMsg: Message = { role: 'agent', content: greeting }
             setMessages([greetingMsg])
             setSessionStatus('in_progress')
-            // Write transcript entries before enabling input — must complete for next message to work
-            await writePreGeneratedTranscript(sessionId, sessionToken!, state.preGeneratedGreeting)
+            await writePreGeneratedTranscript(sessionId, sessionToken!, greeting)
             setIsThinking(false)
           } else {
-            // Fallback: no pre-generated greeting — use existing __session_start__ flow
+            // Fallback: pre-generation didn't complete in time — use existing __session_start__ flow
             await autoSend('__session_start__', existingMessages)
           }
         } else if (state.status === 'in_progress') {
