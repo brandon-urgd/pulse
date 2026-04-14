@@ -278,6 +278,9 @@ async function handleChat(event, responseStream) {
 
     // Session Fast Start: __init_pregenerated__ path — write transcript entries for pre-generated greeting
     // This path does NOT invoke Bedrock — it writes the already-generated greeting to the transcript
+    if (message === '__init_pregenerated__') {
+      log('info', 'Chat: __init_pregenerated__ received', { requestId, sessionId, tenantId, hasGreeting: !!body.preGeneratedGreeting, bodyKeys: Object.keys(body) })
+    }
     if (message === '__init_pregenerated__' && body.preGeneratedGreeting) {
       // Idempotency guard: check if session already has transcript entries
       const existingTranscript = await dynamo.send(new QueryCommand({
