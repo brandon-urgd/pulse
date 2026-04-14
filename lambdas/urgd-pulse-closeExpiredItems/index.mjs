@@ -210,8 +210,28 @@ async function closeItem(itemId, tenantId) {
 
   log('info', 'CloseExpiredItems: sessions processed', { itemId, tenantId, expiredCount, reportTriggered })
 
-  // 4. Trigger runPulseCheck and sendPulseCheckReady (async, fire-and-forget)
-  await triggerPulseCheck(itemId, tenantId)
+  // 4. Trigger runPulseCheck and sendPulseCheckReady — only if there are completed sessions
+  // Items with zero sessions should not fire pulse check emails
+  const completedSessionsResult = await dynamo.send(new QueryCommand({
+    TableName: process.env.SESSIONS_TABLE,
+    IndexName: 'item-index',
+    KeyConditionExpression: 'itemId = :iid',
+    FilterExpression: '#status = :completed AND tenantId = :tid',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: {
+      ':iid': { S: itemId },
+      ':tid': { S: tenantId },
+      ':completed': { S: 'completed' },
+    },
+    Select: 'COUNT',
+  }))
+
+  const completedCount = completedSessionsResult.Count ?? 0
+  if (completedCount > 0) {
+    await triggerPulseCheck(itemId, tenantId)
+  } else {
+    log('info', 'CloseExpiredItems: no completed sessions, skipping pulse check and notification', { itemId, tenantId })
+  }
 }
 
 /**

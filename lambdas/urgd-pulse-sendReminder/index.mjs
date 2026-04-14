@@ -66,13 +66,32 @@ async function getItem(tenantId, itemId) {
  * Sends a reminder email via SES. On failure, publishes alert to SNS.
  */
 async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCode, closeDate, tenantId, sessionId, inviterEmail }) {
-  const closeDateFormatted = new Date(closeDate).toLocaleDateString('en-US', {
+  // Format close date with time, preserving the sender's timezone from the ISO string
+  const closeDateObj = new Date(closeDate)
+  const closeDateFormatted = closeDateObj.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: 'UTC',
   })
+  // Extract time from the original ISO string to show in the sender's local time
+  const offsetMatch = closeDate.match(/([+-]\d{2}):?(\d{2})$/)
+  let closeTimeFormatted = ''
+  if (offsetMatch) {
+    const offsetHours = parseInt(offsetMatch[1], 10)
+    const offsetMinutes = parseInt(offsetMatch[2], 10)
+    const totalOffsetMs = (offsetHours * 60 + (offsetHours < 0 ? -offsetMinutes : offsetMinutes)) * 60000
+    const localDate = new Date(closeDateObj.getTime() + totalOffsetMs)
+    const hours = localDate.getUTCHours()
+    const ampm = hours >= 12 ? 'PM' : 'AM'
+    const h12 = hours % 12 || 12
+    const mins = String(localDate.getUTCMinutes()).padStart(2, '0')
+    const sign = offsetHours >= 0 ? '+' : ''
+    const offsetLabel = offsetMinutes === 0 ? `UTC${sign}${offsetHours}` : `UTC${sign}${offsetHours}:${String(Math.abs(offsetMinutes)).padStart(2, '0')}`
+    closeTimeFormatted = ` at ${h12}:${mins} ${ampm} (${offsetLabel})`
+  }
 
   const subject = `Reminder: Your review of "${itemName}" is due soon`
   const textBody = [
-    `This is a reminder that your review of "${itemName}" is due on ${closeDateFormatted}.`,
+    `This is a reminder that your review of "${itemName}" is due on ${closeDateFormatted}${closeTimeFormatted}.`,
     '',
     `Direct link: ${sessionLink}`,
     `Pulse Code: ${pulseCode}`,
@@ -90,7 +109,7 @@ async function sendReminderEmail({ reviewerEmail, itemName, sessionLink, pulseCo
 <head><meta charset="UTF-8"><title>Pulse Reminder</title></head>
 <body style="max-width:600px;margin:0 auto;padding:24px;color:#111827;font-family:'Rubik',sans-serif;background:#ffffff;">
   <h2 style="font-family:'Archivo',sans-serif;font-size:22px;font-weight:700;color:#111827;margin:0 0 16px;">Your review is due soon</h2>
-  <p style="font-size:16px;line-height:1.6;margin:0 0 12px;">This is a reminder that your review of <strong>${itemName}</strong> is due on <strong>${closeDateFormatted}</strong>.</p>
+  <p style="font-size:16px;line-height:1.6;margin:0 0 12px;">This is a reminder that your review of <strong>${itemName}</strong> is due on <strong>${closeDateFormatted}${closeTimeFormatted}</strong>.</p>
   <table cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
     <tr>
       <td style="background-color:#7a9e87;border-radius:8px;padding:12px 24px;">
