@@ -141,12 +141,13 @@ jobs:
             ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
           # Build and push each container Lambda (identified by Dockerfile)
+          # ECR repos are environment-agnostic (single repo, versioned tags) — same as S3 for ZIPs.
           for lambda_dir in lambdas/*/; do
             if [ -f "$lambda_dir/Dockerfile" ]; then
               lambda_name=$(basename "$lambda_dir")
-              # ECR repo names are lowercase
+              # ECR repo names must be lowercase
               ecr_name=$(echo "$lambda_name" | tr '[:upper:]' '[:lower:]')
-              ecr_repo="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/urgd-pulse-${ecr_name#urgd-pulse-}-${ENVIRONMENT}"
+              ecr_repo="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ecr_name}"
 
               echo "🐳 Building container Lambda: $lambda_name"
 

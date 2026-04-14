@@ -9743,7 +9743,7 @@ Resources:
   PulseRenderPagesEcrRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub 'urgd-pulse-renderpages-${Environment}'
+      RepositoryName: 'urgd-pulse-renderpages'
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
@@ -9938,7 +9938,7 @@ Resources:
       PackageType: Image
       Role: !GetAtt PulseRenderPagesFunctionRole.Arn
       Code:
-        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages-${Environment}:${DeploymentVersion}'
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages:${DeploymentVersion}'
       Timeout: 300
       MemorySize: 2048
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RenderPages]
