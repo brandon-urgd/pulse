@@ -9940,7 +9940,7 @@ Resources:
       Code:
         ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/urgd-pulse-renderpages:${DeploymentVersion}'
       Timeout: 300
-      MemorySize: 2048
+      MemorySize: 3008
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, RenderPages]
       DeadLetterConfig:
         TargetArn: !GetAtt PulseRenderPagesDLQ.Arn
@@ -9950,6 +9950,7 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
+          HOME: '/tmp'
       Tags:
         - Key: project
           Value: pulse

@@ -1,9 +1,4 @@
-FROM public.ecr.aws/lambda/nodejs:22
-
-# Install LibreOffice headless for DOCX → PDF conversion
-RUN dnf install -y libreoffice-core libreoffice-writer && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+FROM public.ecr.aws/shelf/lambda-libreoffice-base:26.2-node22-x86_64
 
 # Copy package files and install dependencies
 COPY package.json package-lock.json* ${LAMBDA_TASK_ROOT}/
