@@ -131,7 +131,7 @@ jobs:
           ./scripts/build-lambdas.sh "$VERSION"
 
       - name: Build and push container Lambda images
-        if: env.ENVIRONMENT == 'dev'
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
 
