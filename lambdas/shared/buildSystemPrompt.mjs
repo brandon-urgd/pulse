@@ -46,7 +46,7 @@ function computeTimeAllocations(sections, depthPrefs, timeLimitMinutes) {
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -131,6 +131,12 @@ This is your primary steering signal. Shape your questions around it. Periodical
     prompt += `This is an image feedback session. The image was provided once at the start of this session. It does not change between messages. Never describe it as a "new angle," "different view," "full picture," or suggest the image has changed in any way. You saw the complete image at the start — reference it naturally without re-describing it each turn.
 
 When describing the image, use everyday language. Say "the patterned wood floor" not "herringbone parquet." Say "the small bathroom" not "the powder room." Say "the dark tile" not "zellige tile." If the reviewer uses a specific term, you can mirror it — but don't assume vocabulary. The reviewer is a regular person giving their honest reaction.
+
+`
+  } else if (nativeDocumentAvailable) {
+    // Native PDF/DOCX document block + page images are sent as content blocks on the first user message.
+    // The model has full access to the document via those blocks — no need to duplicate the extracted text here.
+    prompt += `The document has been provided as a native file attachment and page images. You have full access to its content, layout, and visual elements. Reference it directly — do not ask the reviewer to describe what's in the document.
 
 `
   } else {

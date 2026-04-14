@@ -157,6 +157,19 @@ export const handler = async (event) => {
       }
     }
 
+    // 5b. Pre-load native document bytes to determine nativeDocumentAvailable flag
+    let nativeDocBytes = null
+    if (itemType === 'document' && documentKey) {
+      const ext = documentKey.split('.').pop()?.toLowerCase()
+      const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+      if (docMediaTypes[ext]) {
+        nativeDocBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
+        if (!nativeDocBytes) {
+          log('warn', 'PreGenerate: original document not available from S3, falling back to extracted text in prompt', { tenantId, sessionId, documentKey })
+        }
+      }
+    }
+
     // 6. Build system prompt — same params as Chat Lambda's __session_start__ path
     const systemPrompt = buildSystemPrompt({
       itemName, itemDescription, itemContent, itemType,
@@ -164,6 +177,7 @@ export const handler = async (event) => {
       windingDown: undefined, message: '__session_start__', isSpecial: true,
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
+      nativeDocumentAvailable: !!nativeDocBytes,
     })
 
     // 7. Build Bedrock message — single user message with [__session_start__]
@@ -177,18 +191,10 @@ export const handler = async (event) => {
       })
     }
 
-    // Attach native document for PDF/DOCX items (send-once pattern)
-    if (itemType === 'document' && documentKey) {
+    // Attach native document for PDF/DOCX items (using pre-loaded bytes)
+    if (nativeDocBytes) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
-      const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
-      if (docMediaTypes[ext]) {
-        const docBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
-        if (docBytes) {
-          userContent.push({ document: { format: ext, name: 'document', source: { bytes: docBytes } } })
-        } else {
-          log('warn', 'PreGenerate: original document not available from S3', { tenantId, sessionId, documentKey })
-        }
-      }
+      userContent.push({ document: { format: ext, name: 'document', source: { bytes: nativeDocBytes } } })
     }
 
     // Attach page images if available

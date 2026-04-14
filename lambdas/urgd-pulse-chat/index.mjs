@@ -443,12 +443,32 @@ async function handleChat(event, responseStream) {
     // R8: Detect self-review sessions for prompt identity injection
     const isSelfReview = session.isSelfReview?.BOOL === true
 
+    // Pre-load native document bytes to determine if we can skip itemContent in the system prompt.
+    // This avoids sending the document text redundantly when the native PDF/DOCX block is available.
+    const isFirstTurn = history.length === 0
+    let nativeDocBytes = null
+    if (isFirstTurn && itemType === 'document' && documentKey) {
+      const ext = documentKey.split('.').pop()?.toLowerCase()
+      const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+      if (docMediaTypes[ext]) {
+        try {
+          nativeDocBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
+        } catch (err) {
+          log('warn', 'Chat: failed to read original document from S3 for native context', { requestId, sessionId, tenantId, documentKey, errorName: err?.name })
+        }
+        if (!nativeDocBytes) {
+          log('warn', 'Chat: original document not available from S3, proceeding with extracted text only', { requestId, sessionId, tenantId, documentKey })
+        }
+      }
+    }
+
     const systemPrompt = buildSystemPrompt({
       itemName, itemDescription, itemContent, itemType,
       totalSections, currentSection, closingState,
       windingDown, message, isSpecial,
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
+      nativeDocumentAvailable: !!nativeDocBytes,
     })
 
     // Build messages for Bedrock
@@ -524,40 +544,21 @@ async function handleChat(event, responseStream) {
     // 5.4/5.5: Native document attachment — send-once pattern for PDF/DOCX items.
     // On first turn (no prior transcript), attach original file as document content block.
     // On subsequent turns, the document is already in conversation history — no re-attachment.
-    const isFirstTurn = history.length === 0
-    if (isFirstTurn && itemType === 'document' && documentKey) {
+    // nativeDocBytes was pre-loaded above (before system prompt building).
+    if (isFirstTurn && itemType === 'document' && documentKey && nativeDocBytes) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
-      const docMediaTypes = {
-        pdf: 'application/pdf',
-        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      }
-      const mediaType = docMediaTypes[ext]
-
-      if (mediaType) {
-        let docBytes = null
-        try {
-          docBytes = await getS3Bytes(process.env.DATA_BUCKET, documentKey)
-        } catch (err) {
-          log('warn', 'Chat: failed to read original document from S3 for native context', { requestId, sessionId, tenantId, documentKey, errorName: err?.name })
-        }
-        if (!docBytes) {
-          log('warn', 'Chat: original document not available from S3, proceeding with extracted text only', { requestId, sessionId, tenantId, documentKey })
-        }
-        if (docBytes) {
-          const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
-          if (firstUserIdx !== -1) {
-            const firstMsg = coalescedMessages[firstUserIdx]
-            const textContent = Array.isArray(firstMsg.content)
-              ? (firstMsg.content.find(b => b.text)?.text || '')
-              : (typeof firstMsg.content === 'string' ? firstMsg.content : '')
-            coalescedMessages[firstUserIdx] = {
-              role: 'user',
-              content: [
-                { document: { format: ext, name: 'document', source: { bytes: docBytes } } },
-                { text: textContent },
-              ],
-            }
-          }
+      const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+      if (firstUserIdx !== -1) {
+        const firstMsg = coalescedMessages[firstUserIdx]
+        const textContent = Array.isArray(firstMsg.content)
+          ? (firstMsg.content.find(b => b.text)?.text || '')
+          : (typeof firstMsg.content === 'string' ? firstMsg.content : '')
+        coalescedMessages[firstUserIdx] = {
+          role: 'user',
+          content: [
+            { document: { format: ext, name: 'document', source: { bytes: nativeDocBytes } } },
+            { text: textContent },
+          ],
         }
       }
     }
