@@ -107,17 +107,16 @@ export async function writePreGeneratedTranscript(
   sessionToken: string,
   preGeneratedGreeting: string
 ): Promise<void> {
-  try {
-    await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionToken}`,
-      },
-      body: JSON.stringify({ message: '__init_pregenerated__', preGeneratedGreeting }),
-    })
-  } catch {
-    // Best-effort — failure is non-blocking
+  const res = await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ message: '__init_pregenerated__', preGeneratedGreeting }),
+  })
+  if (!res.ok) {
+    console.warn('writePreGeneratedTranscript: non-ok response', res.status)
   }
 }
 

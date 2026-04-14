@@ -357,9 +357,9 @@ export default function Chat() {
             const greetingMsg: Message = { role: 'agent', content: state.preGeneratedGreeting }
             setMessages([greetingMsg])
             setSessionStatus('in_progress')
+            // Write transcript entries before enabling input — must complete for next message to work
+            await writePreGeneratedTranscript(sessionId, sessionToken!, state.preGeneratedGreeting)
             setIsThinking(false)
-            // Best-effort: write transcript entries in the background
-            writePreGeneratedTranscript(sessionId, sessionToken!, state.preGeneratedGreeting)
           } else {
             // Fallback: no pre-generated greeting — use existing __session_start__ flow
             await autoSend('__session_start__', existingMessages)
