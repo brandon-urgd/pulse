@@ -445,7 +445,11 @@ async function handleChat(event, responseStream) {
 
     // Pre-load native document bytes to determine if we can skip itemContent in the system prompt.
     // This avoids sending the document text redundantly when the native PDF/DOCX block is available.
-    const isFirstTurn = history.length === 0
+    // Two-Phase Session Start: the template greeting is already in the transcript as an assistant
+    // message, so history.length > 0 on the reviewer's first real message. Check for the first
+    // user message in history instead of checking if history is empty.
+    const hasUserMessage = history.some(m => m.role === 'user')
+    const isFirstTurn = !hasUserMessage
     let nativeDocBytes = null
     if (isFirstTurn && itemType === 'document' && documentKey) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
