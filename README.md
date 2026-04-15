@@ -100,17 +100,18 @@ See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and S
 
 ### v1.1 — April 2026
 
-Quality-of-life iteration. No new infrastructure.
+Session start redesign + platform hardening.
 
-- **Smarter session pacing** — AI allocates conversation time based on section word count × depth preference instead of equal time per section
+- **Instant session greeting** — template greetings stored on item records at document-ready time. Reviewers see the opening message the moment the chat page loads — zero Bedrock latency, zero cost per session start
+- **Streaming-first architecture** — all auto-send signals (`__session_start__`, `__session_resume__`, `__session_end__`) now use the Lambda Function URL streaming path instead of API Gateway, eliminating 504 timeout risk
+- **Two-phase session flow** — Phase 1 displays the template greeting instantly; Phase 2 streams the AI's first substantive response when the reviewer is ready. Replaces the PreGenerate Lambda approach that took 23-27 seconds
 - **Native document context** — PDF and DOCX files are sent directly to the model (Converse API), so the AI sees formatting, layout, and images — not just extracted text
+- **Smarter session pacing** — AI allocates conversation time based on section word count × depth preference instead of equal time per section
 - **"Anything else?" closing turn** — AI asks one open-ended question before the summary, giving reviewers a chance to surface unprompted thoughts
-- **Weighted progress bar** — PulseLine reflects content coverage, not just section count
-- **Markdown revision rendering** — revision output renders as formatted text instead of raw markdown syntax
-- **Progressive patience messages** — three-stage reassurance messages during long operations (45s, 90s, 150s) instead of one generic message
-- **Corrected onboarding CTA** — "Explore an example" opens the items list with the example item modal, not the Pulse Check page
-- **Full quote display** — Pulse Check synthesis lists show quotes in full without click-to-reveal
-- **Bedrock Converse migration** — all 8 Bedrock Lambdas migrated from InvokeModel to Converse/ConverseStream API
+- **CORS preflight coverage** — 10 missing OPTIONS methods added to API Gateway for PUT/DELETE/PATCH resources
+- **Security hardening** — input validation on template greeting writes, path traversal guard in renderPages, ConditionExpression guards on session status transitions
+- **PreGenerate retirement** — Lambda invocations removed from AcceptConfidentiality and CreateSelfSession; IAM permissions and env vars cleaned up from CloudFormation. Lambda code retained for potential future use
+- **75 new tests** — 7 property-based tests (fast-check), 8 unit test suites, 1 frontend test suite covering the full two-phase flow
 
 ### v1.0 — March 2026
 
