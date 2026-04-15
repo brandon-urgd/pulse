@@ -20,7 +20,7 @@ const FROM_ADDRESS = 'Pulse <pulse@urgdstudios.com>'
 /**
  * Builds the invitation email HTML body with a Gmail-compatible table-based button.
  */
-function buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, sessionLink, pulseCode, appUrl, inviterEmail }) {
+function buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, closeTimeFormatted, sessionLink, pulseCode, appUrl, inviterEmail }) {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><title>Pulse Invitation</title></head>
@@ -29,7 +29,7 @@ function buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, session
   <p style="font-size: 16px; margin-top: 0;">
     <strong>${inviterDisplay}</strong> has invited you to provide feedback on <strong>${itemName}</strong>.
   </p>
-  ${closeDateFormatted ? `<p style="font-size: 14px; color: #555; margin-top: 0;">Feedback will close on <strong>${closeDateFormatted}</strong>.</p>` : ''}
+  ${closeDateFormatted ? `<p style="font-size: 14px; color: #555; margin-top: 0;">Feedback will close on <strong>${closeDateFormatted}${closeTimeFormatted || ''}</strong>.</p>` : ''}
   ${inviterEmail ? `<p style="font-size: 14px; color: #555;">For questions, contact <a href="mailto:${inviterEmail}" style="color:#4a7c59;">${inviterEmail}</a>.</p>` : ''}
   <table cellpadding="0" cellspacing="0" border="0" style="margin: 28px 0;">
     <tr>
@@ -141,9 +141,31 @@ export const handler = async (event) => {
 
     const inviterDisplay = inviterName ?? 'Someone'
     const replyTo = inviterEmail ?? FROM_ADDRESS
-    const closeDateFormatted = closeDate
-      ? new Date(closeDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-      : null
+    let closeDateFormatted = null
+    let closeTimeFormatted = ''
+    if (closeDate) {
+      const closeDateObj = new Date(closeDate)
+      closeDateFormatted = closeDateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+      // Extract timezone offset — handle Z (UTC), ±HH:MM, or no offset (treat as UTC)
+      const isUTC = closeDate.endsWith('Z')
+      const offsetMatch = closeDate.match(/([+-]\d{2}):?(\d{2})$/)
+      if (isUTC || offsetMatch) {
+        const offsetHours = isUTC ? 0 : parseInt(offsetMatch[1], 10)
+        const offsetMinutes = isUTC ? 0 : parseInt(offsetMatch[2], 10)
+        const totalOffsetMs = (offsetHours * 60 + (offsetHours < 0 ? -offsetMinutes : offsetMinutes)) * 60000
+        const localDate = new Date(closeDateObj.getTime() + totalOffsetMs)
+        const hours = localDate.getUTCHours()
+        const ampm = hours >= 12 ? 'PM' : 'AM'
+        const h12 = hours % 12 || 12
+        const mins = String(localDate.getUTCMinutes()).padStart(2, '0')
+        // Skip time display for midnight UTC (date-only close dates stored as T00:00:00.000Z)
+        if (!(hours === 0 && localDate.getUTCMinutes() === 0 && isUTC)) {
+          const sign = offsetHours >= 0 ? '+' : ''
+          const offsetLabel = isUTC ? 'UTC' : (offsetMinutes === 0 ? `UTC${sign}${offsetHours}` : `UTC${sign}${offsetHours}:${String(Math.abs(offsetMinutes)).padStart(2, '0')}`)
+          closeTimeFormatted = ` at ${h12}:${mins} ${ampm} (${offsetLabel})`
+        }
+      }
+    }
 
     // Build email content
     const subject = `${inviterDisplay} invited you to provide feedback on "${itemName}"`
@@ -151,7 +173,7 @@ export const handler = async (event) => {
 
     const textBody = [
       `${inviterDisplay} has invited you to provide feedback on "${itemName}".`,
-      ...(closeDateFormatted ? [`Feedback will close on ${closeDateFormatted}.`] : []),
+      ...(closeDateFormatted ? [`Feedback will close on ${closeDateFormatted}${closeTimeFormatted}.`] : []),
       '',
       `Start your review: ${sessionLink}`,
       '',
@@ -164,7 +186,7 @@ export const handler = async (event) => {
       'Privacy Policy: https://www.urgdstudios.com/privacy | Terms: https://www.urgdstudios.com/terms',
     ].join('\n')
 
-    const htmlBody = buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, sessionLink, pulseCode, appUrl, inviterEmail })
+    const htmlBody = buildInviteHtml({ inviterDisplay, itemName, closeDateFormatted, closeTimeFormatted, sessionLink, pulseCode, appUrl, inviterEmail })
 
     // Try to load QR code from S3
     let qrCodeBuffer = null
