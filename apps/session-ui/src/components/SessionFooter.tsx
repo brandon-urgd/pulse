@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import ReportSheet from './ReportSheet'
+import { APP_VERSION } from '../config/version'
 
 interface Props {
   sessionId?: string
@@ -194,7 +195,7 @@ function SessionAboutModal({ onClose }: { onClose: () => void }) {
     >
       <div style={aboutCardStyle}>
         <p style={aboutWordmarkStyle} id="session-about-title">pulse</p>
-        <p style={aboutVersionStyle}>Version 1.0</p>
+        <p style={aboutVersionStyle}>Version {APP_VERSION}</p>
         <p style={aboutDescStyle}>
           Pulse is a feedback tool. You upload your work, invite people to review it, and Pulse
           guides each conversation so you get structured, thoughtful feedback — not just "looks good."
