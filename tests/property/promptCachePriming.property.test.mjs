@@ -3,7 +3,7 @@
 // Validates: Requirements 1.1, 6.4
 //
 // For any item type (document, image, markdown/text) and for any valid system prompt,
-// the Bedrock request's `system` array SHALL end with a `{ cachePoint: {} }` object.
+// the Bedrock request's `system` array SHALL end with a `{ cachePoint: { type: 'default' } }` object.
 
 import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
@@ -74,7 +74,7 @@ const boolOrUndefined = fc.oneof(fc.constant(true), fc.constant(false), fc.const
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('Feature: prompt-cache-priming, Property 1: system prompt cache point is always present', () => {
-  it('for any item type and system prompt, systemBlocks ends with { cachePoint: {} }', () => {
+  it('for any item type and system prompt, systemBlocks ends with a cachePoint', () => {
     fc.assert(
       fc.property(
         itemTypeArb,
@@ -110,15 +110,15 @@ describe('Feature: prompt-cache-priming, Property 1: system prompt cache point i
           // Build systemBlocks exactly as the Chat Lambda does
           const systemBlocks = [
             { text: systemPrompt },
-            { cachePoint: {} },
+            { cachePoint: { type: 'default' } },
           ]
 
           // Property: system array has at least 2 elements
           expect(systemBlocks.length).toBeGreaterThanOrEqual(2)
 
-          // Property: last element is { cachePoint: {} }
+          // Property: last element is { cachePoint: { type: 'default' } }
           const lastBlock = systemBlocks[systemBlocks.length - 1]
-          expect(lastBlock).toEqual({ cachePoint: {} })
+          expect(lastBlock).toEqual({ cachePoint: { type: 'default' } })
 
           // Property: first element contains the system prompt text
           expect(systemBlocks[0]).toHaveProperty('text')
@@ -138,7 +138,7 @@ describe('Feature: prompt-cache-priming, Property 1: system prompt cache point i
 // **Validates: Requirements 1.2**
 //
 // For any document session with a native document block and page images,
-// the first user message's content array SHALL contain a `{ cachePoint: {} }`
+// the first user message's content array SHALL contain a `{ cachePoint: { type: 'default' } }`
 // object positioned after all document and image blocks and before the text block.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -188,13 +188,13 @@ describe('Feature: prompt-cache-priming, Property 2: document cache point placem
       // This is inside the pageCount > 0 block in the Lambda
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     } else {
       // pageCount === 0 path: separate cache point insertion block in the Lambda
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     }
 
@@ -270,7 +270,7 @@ describe('Feature: prompt-cache-priming, Property 2: document cache point placem
 // **Validates: Requirements 1.3**
 //
 // For any session turn where no document block is attached (subsequent turns),
-// the messages array SHALL NOT contain any `{ cachePoint: {} }` objects —
+// the messages array SHALL NOT contain any `{ cachePoint: { type: 'default' } }` objects —
 // only the system-level cache point is present.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -433,12 +433,12 @@ describe('Feature: prompt-cache-priming, Property 4: cache point count invariant
 
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     } else {
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     }
 
@@ -536,7 +536,7 @@ describe('Feature: prompt-cache-priming, Property 4: cache point count invariant
 
           const systemBlocks = [
             { text: systemPrompt },
-            { cachePoint: {} },
+            { cachePoint: { type: 'default' } },
           ]
 
           // Build messages based on turn type and item type
@@ -622,13 +622,13 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
    * Simulates the priming call's request building logic (mirrors primeCacheAsync in index.mjs).
    *
    * The priming call builds:
-   *   system: [{ text: systemPrompt }, { cachePoint: {} }]
-   *   messages: [{ role: 'user', content: [document, ...images, { cachePoint: {} }, { text: '[cache_priming]' }] }]
+   *   system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }]
+   *   messages: [{ role: 'user', content: [document, ...images, { cachePoint: { type: 'default' } }, { text: '[cache_priming]' }] }]
    */
   function buildPrimingRequest({ systemPrompt, docFormat, nativeDocBytes, pageCount, tenantId, itemId }) {
     const systemBlocks = [
       { text: systemPrompt },
-      { cachePoint: {} },
+      { cachePoint: { type: 'default' } },
     ]
 
     const userContent = []
@@ -643,7 +643,7 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
     }
 
     // Cache point after document + images
-    userContent.push({ cachePoint: {} })
+    userContent.push({ cachePoint: { type: 'default' } })
 
     // Minimal user message (placeholder — response is discarded)
     userContent.push({ text: '[cache_priming]' })
@@ -659,8 +659,8 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
    * (mirrors the Chat Lambda's first-turn message building in index.mjs).
    *
    * The first real call builds:
-   *   system: [{ text: systemPrompt }, { cachePoint: {} }]
-   *   messages: [{ role: 'user', content: [document, ...images, { cachePoint: {} }, { text: userMessage }] }]
+   *   system: [{ text: systemPrompt }, { cachePoint: { type: 'default' } }]
+   *   messages: [{ role: 'user', content: [document, ...images, { cachePoint: { type: 'default' } }, { text: userMessage }] }]
    *
    * Two-Phase Session Start: the template greeting is already in the transcript
    * as an assistant message, so the first real call's messages start with:
@@ -671,7 +671,7 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
   function buildFirstRealRequest({ systemPrompt, docFormat, nativeDocBytes, pageCount, tenantId, itemId, userMessage }) {
     const systemBlocks = [
       { text: systemPrompt },
-      { cachePoint: {} },
+      { cachePoint: { type: 'default' } },
     ]
 
     // Step 1: Native document attachment — coalescedMessages[firstUserIdx].content = [document, text]
@@ -695,13 +695,13 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
       // Step 3: Insert cachePoint before text block (inside pageCount > 0 block in Lambda)
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     } else {
       // pageCount === 0 path: separate cache point insertion block in the Lambda
       const cacheTextIdx = existingContent.findIndex(b => b.text)
       if (cacheTextIdx > 0) {
-        existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
       }
     }
 
@@ -813,8 +813,8 @@ describe('Feature: prompt-cache-priming, Property 5: priming call prefix matches
           expect(priming.systemBlocks).toHaveLength(2)
           expect(real.systemBlocks).toHaveLength(2)
           expect(priming.systemBlocks[0].text).toBe(real.systemBlocks[0].text)
-          expect(priming.systemBlocks[1]).toEqual({ cachePoint: {} })
-          expect(real.systemBlocks[1]).toEqual({ cachePoint: {} })
+          expect(priming.systemBlocks[1]).toEqual({ cachePoint: { type: 'default' } })
+          expect(real.systemBlocks[1]).toEqual({ cachePoint: { type: 'default' } })
 
           // 2. Both have exactly one user message
           expect(priming.messages).toHaveLength(1)

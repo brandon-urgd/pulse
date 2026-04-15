@@ -193,7 +193,6 @@ if [ -n "$ENVIRONMENT" ]; then
     "urgd-pulse-sendReminder-${ENVIRONMENT}"
     "urgd-pulse-shieldCallback-${ENVIRONMENT}"
     "urgd-pulse-usageReport-${ENVIRONMENT}"
-    "urgd-pulse-preGenerate-${ENVIRONMENT}"
     "urgd-pulse-renderPages-${ENVIRONMENT}"
   )
   for fn in "${LAMBDA_FUNCTIONS[@]}"; do

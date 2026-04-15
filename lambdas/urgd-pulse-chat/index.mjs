@@ -170,7 +170,7 @@ async function primeCacheAsync({ systemPrompt, nativeDocBytes, documentKey, page
   }
 
   // Cache point after document + images
-  userContent.push({ cachePoint: {} })
+  userContent.push({ cachePoint: { type: 'default' } })
 
   // Minimal user message (required by Converse API)
   userContent.push({ text: '[cache_priming]' })
@@ -179,7 +179,7 @@ async function primeCacheAsync({ systemPrompt, nativeDocBytes, documentKey, page
     modelId: process.env.BEDROCK_MODEL_ID,
     system: [
       { text: systemPrompt },
-      { cachePoint: {} },
+      { cachePoint: { type: 'default' } },
     ],
     messages: [{ role: 'user', content: userContent }],
     inferenceConfig: { maxTokens: 1 },
@@ -761,7 +761,7 @@ async function handleChat(event, responseStream) {
         if (nativeDocBytes) {
           const cacheTextIdx = existingContent.findIndex(b => b.text)
           if (cacheTextIdx > 0) {
-            existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+            existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
           }
         }
 
@@ -780,7 +780,7 @@ async function handleChat(event, responseStream) {
           : [{ text: coalescedMessages[firstUserIdx].content }]
         const cacheTextIdx = existingContent.findIndex(b => b.text)
         if (cacheTextIdx > 0) {
-          existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+          existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
         }
         coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
       }
@@ -818,7 +818,7 @@ async function handleChat(event, responseStream) {
     // System prompt with cache point — enables Bedrock prompt caching on all turns
     const systemBlocks = [
       { text: systemPrompt },
-      { cachePoint: {} },
+      { cachePoint: { type: 'default' } },
     ]
 
     const bedrockStart = Date.now()
