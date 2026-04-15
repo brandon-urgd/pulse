@@ -590,6 +590,7 @@ export default function Chat() {
     const nextMessages = [...messages, userMsg]
     setMessages(nextMessages)
     setInputValue('')
+    setIsThinking(true)
     setIsStreaming(true)
     setStreamingText('')
     startTimer()
@@ -603,6 +604,7 @@ export default function Chat() {
 
       await consumeStream(response, {
         onToken: (tokenText) => {
+          setIsThinking(false)
           setStreamingText((prev) => prev + tokenText)
         },
         onSection: (n) => {
@@ -618,6 +620,7 @@ export default function Chat() {
           if (status === 401 || status === 403 || status === 410) {
             setIsStreaming(false)
             setStreamingText('')
+            setIsThinking(false)
             handleSendError(status, nextMessages)
             return
           }
@@ -632,6 +635,7 @@ export default function Chat() {
           ])
           setIsStreaming(false)
           setStreamingText('')
+          setIsThinking(false)
         },
       })
 
@@ -642,6 +646,7 @@ export default function Chat() {
         setMessages(finalMessages)
         setStreamingText('')
         setIsStreaming(false)
+        setIsThinking(false)
 
         // Check if session is complete (the [SESSION_COMPLETE] tag was detected)
         // We detect this by checking if the raw stream contained the tag
@@ -664,6 +669,7 @@ export default function Chat() {
       const status = (err as Error & { status?: number }).status
       setIsStreaming(false)
       setStreamingText('')
+      setIsThinking(false)
       handleSendError(status, nextMessages)
     }
   }
