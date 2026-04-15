@@ -6,6 +6,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { buildTemplateGreeting } from './shared/greetingTemplates.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME'])
@@ -157,11 +158,35 @@ export const handler = async (event) => {
       Math.abs(b - rawMinutes) < Math.abs(best - rawMinutes) ? b : best
     , BRACKETS[0])
 
-    // Update documentStatus to "ready", store extractedKey and recommendation
+    // Fetch item record to get itemName for template greeting
+    let itemName = 'your document'
+    try {
+      const itemResult = await dynamo.send(new GetItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          itemId: { S: itemId },
+        },
+        ProjectionExpression: 'itemName',
+      }))
+      const rawName = itemResult.Item?.itemName?.S
+      if (rawName && rawName.trim().length > 0) {
+        itemName = rawName.trim()
+      } else {
+        log('warn', 'ExtractText: itemName missing or empty, using fallback', { tenantId, itemId })
+      }
+    } catch (fetchErr) {
+      log('warn', 'ExtractText: failed to fetch itemName, using fallback', { tenantId, itemId, errorName: fetchErr.name })
+    }
+
+    const templateGreeting = buildTemplateGreeting('document', itemName)
+
+    // Update documentStatus to "ready", store extractedKey, recommendation, and template greeting
     await updateDocumentStatus(tenantId, itemId, 'ready', {
       extractedKey: { S: extractedKey },
       recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
       itemType: { S: 'document' },
+      templateGreeting: { S: templateGreeting },
     })
 
     log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })

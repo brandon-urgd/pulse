@@ -46,7 +46,7 @@ function computeTimeAllocations(sections, depthPrefs, timeLimitMinutes) {
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable, templateGreeting }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -104,6 +104,15 @@ Asking good questions:
 - Keep questions short and specific. One sentence. Give the reviewer something concrete to react to.
 
 `
+
+  // ── Greeting context (two-phase session start) ──
+  if (templateGreeting) {
+    prompt += `GREETING CONTEXT: You already delivered the following greeting to the reviewer:
+"${templateGreeting}"
+The reviewer has read this and is now responding. Do NOT re-introduce yourself, repeat the greeting, or welcome them again. Continue naturally from where the greeting left off — acknowledge their readiness and begin the substantive review.
+
+`
+  }
 
   // ── Item context ──
   prompt += `The item being reviewed:

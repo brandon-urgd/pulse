@@ -4,10 +4,10 @@ import { useSession } from '../context/SessionContext'
 import {
   deleteSessionTranscript,
   getSessionState,
+  initTemplateGreeting,
   reportSessionCompletion,
   sendChatMessage,
   sendChatMessageStreaming,
-  writePreGeneratedTranscript,
 } from '../api/session'
 import { consumeStream } from '../hooks/useStreaming'
 import ChatBubble from '../components/ChatBubble'
@@ -352,34 +352,16 @@ export default function Chat() {
           setSessionStatus('not_started')
           setMessages(existingMessages)
 
-          // Session Fast Start: check for pre-generated greeting.
-          // If not ready yet, poll every 2s up to 5 times (10s) before falling back.
-          let greeting = state.preGeneratedGreeting
-          if (!greeting && existingMessages.length === 0) {
-            for (let attempt = 0; attempt < 5; attempt++) {
-              await new Promise(r => setTimeout(r, 2000))
-              try {
-                const pollState = await getSessionState(sessionId, sessionToken!)
-                if (pollState.preGeneratedGreeting) {
-                  greeting = pollState.preGeneratedGreeting
-                  break
-                }
-                // If session moved to in_progress (another tab started it), stop polling
-                if (pollState.status !== 'not_started') break
-              } catch {
-                break
-              }
-            }
-          }
-
-          if (greeting && existingMessages.length === 0) {
-            const greetingMsg: Message = { role: 'agent', content: greeting }
+          if (state.templateGreeting && existingMessages.length === 0) {
+            // Two-Phase Session Start: display template greeting instantly
+            const greetingMsg: Message = { role: 'agent', content: state.templateGreeting }
             setMessages([greetingMsg])
             setSessionStatus('in_progress')
-            await writePreGeneratedTranscript(sessionId, sessionToken!, greeting)
             setIsThinking(false)
+            // Best-effort: write transcript entry + transition session to in_progress
+            initTemplateGreeting(sessionId, sessionToken!, state.templateGreeting).catch(() => {})
           } else {
-            // Fallback: pre-generation didn't complete in time — use existing __session_start__ flow
+            // Legacy fallback: no templateGreeting — send __session_start__ via streaming
             await autoSend('__session_start__', existingMessages)
           }
         } else if (state.status === 'in_progress') {
@@ -432,29 +414,87 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, sessionToken])
 
-  // ── Auto-send helper ────────────────────────────────────────────────────────
+  // ── Auto-send helper (streaming) ──────────────────────────────────────────
   const autoSend = useCallback(
     async (signal: string, currentMessages: Message[]) => {
       if (!sessionToken) return
       setIsThinking(true)
+      setIsStreaming(true)
+      setStreamingText('')
       try {
-        const resp = await sendChatMessage(sessionId, sessionToken, signal)
-        const newMsg: Message = { role: 'agent', content: resp.message, section: resp.section }
-        setMessages([...currentMessages, newMsg])
-        setCurrentSection(resp.section)
-        setSessionStatus('in_progress')
-        if (resp.closingState) setClosingState(resp.closingState)
-        if (resp.sessionComplete) {
-          setSessionStatus('complete')
+        const response = await sendChatMessageStreaming(sessionId, sessionToken, signal)
+        let fullText = ''
+        let sessionComplete = false
+
+        await consumeStream(response, {
+          onToken: (tokenText) => {
+            setIsThinking(false)
+            setStreamingText((prev) => prev + tokenText)
+          },
+          onSection: (n) => {
+            setCurrentSection(n)
+          },
+          onComplete: (completedText) => {
+            fullText = completedText
+            sessionComplete = true
+          },
+          onError: (err) => {
+            const status = (err as Error & { status?: number }).status
+            if (status === 401 || status === 403 || status === 410) {
+              setIsStreaming(false)
+              setStreamingText('')
+              setIsThinking(false)
+              handleSendError(status, currentMessages)
+              return
+            }
+            // Preserve partial text as an agent message, then show error
+            const partialText = fullText || ''
+            const partialMessages = partialText
+              ? [...currentMessages, { role: 'agent' as const, content: partialText }]
+              : currentMessages
+            setMessages([
+              ...partialMessages,
+              { role: 'error' as const, content: err.message },
+            ])
+            setIsStreaming(false)
+            setStreamingText('')
+            setIsThinking(false)
+            // Ensure session is in_progress so the End Session button appears
+            setSessionStatus('in_progress')
+          },
+        })
+
+        if (sessionComplete) {
+          const agentMsg: Message = { role: 'agent', content: fullText }
+          const finalMessages = [...currentMessages, agentMsg]
+          setMessages(finalMessages)
+          setStreamingText('')
+          setIsStreaming(false)
+          setIsThinking(false)
+          setSessionStatus('in_progress')
+
+          // Refresh state for closingState and completion detection
+          try {
+            const state = await getSessionState(sessionId, sessionToken)
+            if (state.closingState) setClosingState(state.closingState)
+            if (state.status === 'completed' || state.status === 'complete') {
+              setSessionStatus('complete')
+              if (timerRef.current) clearInterval(timerRef.current)
+              setMessages([...finalMessages, { role: 'content', content: '__completion__' }])
+            }
+          } catch {
+            // Best-effort state refresh
+          }
         }
       } catch (err) {
         const status = (err as Error & { status?: number }).status
+        setIsStreaming(false)
+        setStreamingText('')
+        setIsThinking(false)
         // Ensure session is in_progress so the End Session button appears
         // even after a failed auto-send — reviewer needs a way out
         setSessionStatus('in_progress')
         handleSendError(status, currentMessages)
-      } finally {
-        setIsThinking(false)
       }
     },
     [sessionId, sessionToken]

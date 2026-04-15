@@ -12,8 +12,9 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient {
     send(...args) { return dynamoSendSpy(...args) }
   }
+  class GetItemCommand { constructor(input) { this.input = input } }
   class UpdateItemCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, UpdateItemCommand }
 })
 
 // Mock S3 with a readable stream body
@@ -24,6 +25,13 @@ vi.mock('@aws-sdk/client-s3', () => {
   class GetObjectCommand { constructor(input) { this.input = input } }
   class PutObjectCommand { constructor(input) { this.input = input } }
   return { S3Client, GetObjectCommand, PutObjectCommand }
+})
+
+// Mock Lambda client (used for analyzeDocument and renderPages invocations)
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send() { return Promise.resolve({}) } }
+  class InvokeCommand { constructor(input) { this.input = input } }
+  return { LambdaClient, InvokeCommand }
 })
 
 // Mock pdf-parse
@@ -62,7 +70,13 @@ describe('urgd-pulse-extractText', () => {
     s3SendSpy.mockReset()
     vi.mocked(pdfParse).mockReset()
     vi.mocked(mammoth.extractRawText).mockReset()
-    dynamoSendSpy.mockResolvedValue({})
+    // Default: GetItemCommand returns item with itemName, UpdateItemCommand succeeds
+    dynamoSendSpy.mockImplementation((cmd) => {
+      if (cmd.constructor.name === 'GetItemCommand') {
+        return Promise.resolve({ Item: { itemName: { S: 'Test Document' } } })
+      }
+      return Promise.resolve({})
+    })
     s3SendSpy.mockResolvedValue({})
   })
 
@@ -89,13 +103,15 @@ describe('urgd-pulse-extractText', () => {
       expect(putCall.input.Body).toBe('# Extracted PDF Content\n\nSome text here.')
       expect(putCall.input.ContentType).toBe('text/markdown')
 
-      // Should set documentStatus to "ready"
-      expect(dynamoSendSpy).toHaveBeenCalledOnce()
-      const dynamoCall = dynamoSendSpy.mock.calls[0][0]
-      expect(dynamoCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
-      expect(dynamoCall.input.ExpressionAttributeValues[':extractedKey'].S).toBe(
+      // Should set documentStatus to "ready" with templateGreeting
+      const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
+      const updateCall = dynamoCalls.find(c => c.constructor.name === 'UpdateItemCommand')
+      expect(updateCall).toBeDefined()
+      expect(updateCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
+      expect(updateCall.input.ExpressionAttributeValues[':extractedKey'].S).toBe(
         'pulse/tenant-abc/items/item-xyz/extracted.md'
       )
+      expect(updateCall.input.ExpressionAttributeValues[':templateGreeting'].S).toContain('Test Document')
     })
   })
 
@@ -121,10 +137,12 @@ describe('urgd-pulse-extractText', () => {
       expect(putCall.input.Key).toBe('pulse/tenant-abc/items/item-xyz/extracted.md')
       expect(putCall.input.Body).toBe('Extracted DOCX text content.')
 
-      // Should set documentStatus to "ready"
-      expect(dynamoSendSpy).toHaveBeenCalledOnce()
-      const dynamoCall = dynamoSendSpy.mock.calls[0][0]
-      expect(dynamoCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
+      // Should set documentStatus to "ready" with templateGreeting
+      const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
+      const updateCall = dynamoCalls.find(c => c.constructor.name === 'UpdateItemCommand')
+      expect(updateCall).toBeDefined()
+      expect(updateCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
+      expect(updateCall.input.ExpressionAttributeValues[':templateGreeting'].S).toContain('Test Document')
     })
   })
 

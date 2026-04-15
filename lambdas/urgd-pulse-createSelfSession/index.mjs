@@ -6,7 +6,6 @@
 // Generates a session token directly and returns { sessionId, sessionUrl }.
 
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
@@ -15,9 +14,6 @@ import { randomUUID } from 'crypto'
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
-const lambdaClient = process.env.PRE_GENERATE_FUNCTION_ARN
-  ? new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
-  : null
 
 /**
  * Build initial sectionCoverage map from item's feedbackSections (5.5).
@@ -238,20 +234,6 @@ export const handler = async (event) => {
     }))
 
     log('info', 'CreateSelfSession: session created', { requestId, tenantId, itemId, sessionId })
-
-    // Fire-and-forget: invoke PreGenerate Lambda to pre-generate the greeting
-    if (lambdaClient && process.env.PRE_GENERATE_FUNCTION_ARN) {
-      try {
-        await lambdaClient.send(new InvokeCommand({
-          FunctionName: process.env.PRE_GENERATE_FUNCTION_ARN,
-          InvocationType: 'Event',
-          Payload: JSON.stringify({ tenantId, sessionId }),
-        }))
-        log('info', 'CreateSelfSession: preGenerate invoked', { requestId, tenantId, sessionId })
-      } catch (invokeErr) {
-        log('warn', 'CreateSelfSession: failed to invoke preGenerate', { requestId, tenantId, sessionId, errorName: invokeErr.name })
-      }
-    }
 
     // Update item sessionCount (and activate if draft)
     const isFirstSession = itemStatus === 'draft'

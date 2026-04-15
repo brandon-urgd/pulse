@@ -41,6 +41,12 @@ export const handler = async (event) => {
     return
   }
 
+  // Validate key does not contain path traversal sequences
+  if (key.includes('..') || key.includes('\0')) {
+    log('error', 'RenderPages: invalid key — path traversal detected', { tenantId, itemId, key })
+    return
+  }
+
   const limit = maxDocumentPages || 20
   log('info', 'RenderPages: starting', { tenantId, itemId, key, maxDocumentPages: limit })
   const startTime = Date.now()
@@ -52,6 +58,12 @@ export const handler = async (event) => {
     log('info', 'RenderPages: document read from S3', { tenantId, itemId, sizeBytes: docBytes.length, ext, elapsed: Date.now() - startTime })
 
     // 2. Write document to /tmp for processing
+    // Validate extension to prevent path traversal — only allow known document types
+    const ALLOWED_EXTENSIONS = ['pdf', 'docx']
+    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+      log('error', 'RenderPages: unsupported or missing file extension', { tenantId, itemId, ext })
+      return
+    }
     const docFilename = `document.${ext}`
     const docPath = join(tmpdir(), docFilename)
     writeFileSync(docPath, docBytes)

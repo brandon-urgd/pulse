@@ -74,10 +74,11 @@ export const handler = async (event) => {
       messages = messages.slice(0, -1)
     }
 
-    // 3. Get item record to build files array
+    // 3. Get item record to build files array and templateGreeting
     let files = []
     let itemType = 'document'
     let imageUrl = null
+    let templateGreetingValue = null
     if (itemId && tenantId) {
       try {
         const itemResult = await dynamo.send(new GetItemCommand({
@@ -90,6 +91,7 @@ export const handler = async (event) => {
           const documentKey = item.documentKey?.S
           const documentStatus = item.documentStatus?.S
           itemType = item.itemType?.S || 'document'
+          templateGreetingValue = item.templateGreeting?.S || null
 
           // 4. Build files array
           if (documentKey && documentStatus !== 'none' && documentStatus) {
@@ -133,8 +135,8 @@ export const handler = async (event) => {
 
     log('info', 'GetSessionState: success', { requestId, sessionId, tenantId })
 
-    // Include preGeneratedGreeting only for not_started sessions to avoid payload bloat
-    const preGeneratedGreeting = status === 'not_started' ? (session.preGeneratedGreeting?.S || null) : null
+    // Include templateGreeting from item record only for not_started sessions
+    const templateGreeting = status === 'not_started' ? (templateGreetingValue || null) : null
 
     return createResponse(200, {
       data: {
@@ -147,7 +149,7 @@ export const handler = async (event) => {
         closingState,
         itemType,
         imageUrl,
-        ...(preGeneratedGreeting ? { preGeneratedGreeting } : {}),
+        ...(templateGreeting ? { templateGreeting } : {}),
       },
     }, {}, origin)
   } catch (err) {

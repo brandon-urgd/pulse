@@ -36,7 +36,7 @@ const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__', '__init_pregenerated__']
+const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__', '__template_init__']
 
 async function getS3Text(bucket, key) {
   try {
@@ -276,31 +276,38 @@ async function handleChat(event, responseStream) {
 
     const itemId = session.itemId?.S
 
-    // Session Fast Start: __init_pregenerated__ path — write transcript entries for pre-generated greeting
-    // This path does NOT invoke Bedrock — it writes the already-generated greeting to the transcript
-    if (message === '__init_pregenerated__') {
-      log('info', 'Chat: __init_pregenerated__ received', { requestId, sessionId, tenantId, hasGreeting: !!body.preGeneratedGreeting, bodyKeys: Object.keys(body) })
-    }
-    if (message === '__init_pregenerated__' && body.preGeneratedGreeting) {
+    // Two-Phase Session Start: __template_init__ path — write transcript entry for template greeting
+    // This path does NOT invoke Bedrock — it writes the template greeting to the transcript
+    if (message === '__template_init__' && body.templateGreeting) {
+      // Validate templateGreeting is a string and within reasonable bounds
+      const greeting = typeof body.templateGreeting === 'string' ? body.templateGreeting.slice(0, 2000) : null
+      if (!greeting) {
+        const resp = errorResponse(400, 'templateGreeting must be a non-empty string', {}, origin)
+        if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
+        return resp
+      }
+      log('info', 'Chat: __template_init__ received', { requestId, sessionId, tenantId, greetingLength: greeting.length })
+
       // Idempotency guard: check if session already has transcript entries
+      // ConsistentRead prevents duplicate writes from near-simultaneous requests
       const existingTranscript = await dynamo.send(new QueryCommand({
         TableName: process.env.TRANSCRIPTS_TABLE,
         KeyConditionExpression: 'sessionId = :sid',
         ExpressionAttributeValues: { ':sid': { S: sessionId } },
         Limit: 1,
+        ConsistentRead: true,
       }))
       if (existingTranscript.Items && existingTranscript.Items.length > 0) {
-        log('info', 'Chat: __init_pregenerated__ skipped — transcript already exists', { requestId, sessionId, tenantId })
-        const resp = createResponse(200, { data: { greeting: body.preGeneratedGreeting, alreadyInitialized: true } }, {}, origin)
+        log('info', 'Chat: __template_init__ skipped — transcript already exists', { requestId, sessionId, tenantId })
+        const resp = createResponse(200, { data: { greeting, alreadyInitialized: true } }, {}, origin)
         if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
         return resp
       }
 
       const now = new Date().toISOString()
-      const reviewerMsgId = ulid()
       const agentMsgId = ulid()
 
-      // Atomic write: reviewer [__session_start__] + agent greeting + session status update
+      // Atomic write: agent greeting transcript entry + session status update
       await dynamo.send(new TransactWriteItemsCommand({
         TransactItems: [
           {
@@ -308,21 +315,9 @@ async function handleChat(event, responseStream) {
               TableName: process.env.TRANSCRIPTS_TABLE,
               Item: {
                 sessionId: { S: sessionId },
-                messageId: { S: reviewerMsgId },
-                role: { S: 'reviewer' },
-                content: { S: '[__session_start__]' },
-                timestamp: { S: now },
-              },
-            },
-          },
-          {
-            Put: {
-              TableName: process.env.TRANSCRIPTS_TABLE,
-              Item: {
-                sessionId: { S: sessionId },
                 messageId: { S: agentMsgId },
                 role: { S: 'agent' },
-                content: { S: body.preGeneratedGreeting },
+                content: { S: greeting },
                 timestamp: { S: now },
               },
             },
@@ -332,9 +327,11 @@ async function handleChat(event, responseStream) {
               TableName: process.env.SESSIONS_TABLE,
               Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
               UpdateExpression: 'SET #status = :status, startedAt = :startedAt, updatedAt = :now',
+              ConditionExpression: '#status = :not_started',
               ExpressionAttributeNames: { '#status': 'status' },
               ExpressionAttributeValues: {
                 ':status': { S: 'in_progress' },
+                ':not_started': { S: 'not_started' },
                 ':startedAt': { S: now },
                 ':now': { S: now },
               },
@@ -343,9 +340,9 @@ async function handleChat(event, responseStream) {
         ],
       }))
 
-      log('info', 'Chat: __init_pregenerated__ transcript written', { requestId, sessionId, tenantId, greetingLength: body.preGeneratedGreeting.length })
+      log('info', 'Chat: __template_init__ transcript written', { requestId, sessionId, tenantId, greetingLength: greeting.length })
 
-      const resp = createResponse(200, { data: { greeting: body.preGeneratedGreeting } }, {}, origin)
+      const resp = createResponse(200, { data: { greeting } }, {}, origin)
       if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
       return resp
     }
@@ -394,6 +391,7 @@ async function handleChat(event, responseStream) {
     let coverageMap = null
     let documentKey = null
     let pageCount = 0
+    let templateGreeting = null
 
     if (itemId && tenantId) {
       try {
@@ -411,6 +409,8 @@ async function handleChat(event, responseStream) {
           if (itemResult.Item.coverageMap?.M) {
             coverageMap = unmarshalMap(itemResult.Item.coverageMap)
           }
+          // Two-Phase Session Start: Read templateGreeting from item record
+          templateGreeting = itemResult.Item.templateGreeting?.S || null
         }
       } catch {
         // Non-fatal
@@ -469,6 +469,7 @@ async function handleChat(event, responseStream) {
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
       nativeDocumentAvailable: !!nativeDocBytes,
+      templateGreeting,
     })
 
     // Build messages for Bedrock
@@ -777,6 +778,10 @@ async function handleChat(event, responseStream) {
 
     // 11. Session state updates
     const isFirstMessage = message === '__session_start__'
+    // Two-Phase Session Start: also transition to in_progress when a non-special message
+    // arrives for a not_started session. This handles the case where initTemplateGreeting
+    // failed (best-effort) but the user sent a message anyway.
+    const needsStatusTransition = isFirstMessage || (status === 'not_started' && !isSpecial)
     const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]') || newClosingState === 'closed'
 
     if (!isPreview) {
@@ -804,7 +809,7 @@ async function handleChat(event, responseStream) {
         updateValues[':sc'] = marshalSectionCoverage(sectionCoverage)
       }
 
-      if (isFirstMessage) {
+      if (needsStatusTransition) {
         updateExprParts.push('#status = :status', 'startedAt = :startedAt')
         updateNames['#status'] = 'status'
         updateValues[':status'] = { S: 'in_progress' }

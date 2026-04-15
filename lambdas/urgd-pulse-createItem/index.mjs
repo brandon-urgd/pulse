@@ -8,6 +8,7 @@ import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } fro
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
 import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
+import { buildTemplateGreeting } from './shared/greetingTemplates.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
@@ -217,6 +218,13 @@ export const handler = async (event) => {
     if (resolvedItemType === 'image') {
       dynamoItem.totalSections = { N: '1' }
       dynamoItem.recommendedTimeLimitMinutes = { N: '7' }
+    }
+
+    // Store templateGreeting for markdown/text items (two-phase-session-start — R3.1, R3.2)
+    if (documentStatus === 'ready') {
+      const greetingName = itemName.trim() || 'your document'
+      const greeting = buildTemplateGreeting('document', greetingName)
+      dynamoItem.templateGreeting = { S: greeting }
     }
 
     await dynamo.send(new PutItemCommand({

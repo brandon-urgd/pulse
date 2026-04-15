@@ -64,7 +64,7 @@ export interface SessionStateResponse {
   closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
   itemType?: 'document' | 'image'
   imageUrl?: string | null
-  preGeneratedGreeting?: string | null
+  templateGreeting?: string | null
 }
 
 export interface ChatResponse {
@@ -99,13 +99,14 @@ function makeError(body: { message?: string }, fallback: string, status: number)
 }
 
 /**
- * Write pre-generated greeting transcript entries via the __init_pregenerated__ path.
+ * Initialize template greeting transcript entry via the __template_init__ path.
+ * Writes the greeting as an agent transcript entry and transitions session to in_progress.
  * Best-effort — failure does not block the greeting display (optimistic UI).
  */
-export async function writePreGeneratedTranscript(
+export async function initTemplateGreeting(
   sessionId: string,
   sessionToken: string,
-  preGeneratedGreeting: string
+  templateGreeting: string
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
     method: 'POST',
@@ -113,10 +114,10 @@ export async function writePreGeneratedTranscript(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${sessionToken}`,
     },
-    body: JSON.stringify({ message: '__init_pregenerated__', preGeneratedGreeting }),
+    body: JSON.stringify({ message: '__template_init__', templateGreeting }),
   })
   if (!res.ok) {
-    console.warn('writePreGeneratedTranscript: non-ok response', res.status)
+    console.warn('initTemplateGreeting: non-ok response', res.status)
   }
 }
 

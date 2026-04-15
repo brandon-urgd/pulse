@@ -17,8 +17,20 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'lambdas/shared/features.mjs'),
       },
       {
+        find: /^\.\/shared\/greetingTemplates\.mjs$/,
+        replacement: path.resolve(__dirname, 'lambdas/shared/greetingTemplates.mjs'),
+      },
+      {
         find: /^\.\/shared\/tiers\.mjs$/,
         replacement: path.resolve(__dirname, 'lambdas/shared/tiers.mjs'),
+      },
+      {
+        find: /^\.\/shared\/counters\.mjs$/,
+        replacement: path.resolve(__dirname, 'lambdas/shared/counters.mjs'),
+      },
+      {
+        find: /^\.\/shared\/scheduleClose\.mjs$/,
+        replacement: path.resolve(__dirname, 'lambdas/shared/scheduleClose.mjs'),
       },
     ],
   },
