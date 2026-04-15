@@ -141,6 +141,66 @@ function marshalCoverageMap(coverageMap) {
 
 
 /**
+ * Async priming call — warms the Bedrock prompt cache during __template_init__.
+ * Builds the same content blocks as the first real turn (document + page images + cache points),
+ * calls Bedrock ConverseCommand with maxTokens: 1, and logs the result.
+ * The response content is discarded — only the cache write matters.
+ */
+async function primeCacheAsync({ systemPrompt, nativeDocBytes, documentKey, pageCount, tenantId, itemId, sessionId, requestId }) {
+  const primingStart = Date.now()
+
+  // Build the same content blocks as the first real turn
+  const userContent = []
+
+  // Document block
+  const ext = documentKey.split('.').pop()?.toLowerCase()
+  userContent.push({ document: { format: ext, name: 'document', source: { bytes: nativeDocBytes } } })
+
+  // Page images (same order as first real turn)
+  for (let p = 1; p <= pageCount; p++) {
+    const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
+    try {
+      const pageBytes = await getS3Bytes(process.env.DATA_BUCKET, pageKey)
+      if (pageBytes) {
+        userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+      }
+    } catch {
+      log('warn', 'Chat: priming — failed to read page image, skipping', { requestId, sessionId, page: p })
+    }
+  }
+
+  // Cache point after document + images
+  userContent.push({ cachePoint: {} })
+
+  // Minimal user message (required by Converse API)
+  userContent.push({ text: '[cache_priming]' })
+
+  const primingResponse = await bedrock.send(new ConverseCommand({
+    modelId: process.env.BEDROCK_MODEL_ID,
+    system: [
+      { text: systemPrompt },
+      { cachePoint: {} },
+    ],
+    messages: [{ role: 'user', content: userContent }],
+    inferenceConfig: { maxTokens: 1 },
+  }))
+
+  const primingLatency = Date.now() - primingStart
+  const cacheWriteTokens = primingResponse.usage?.cacheWriteInputTokens || 0
+  const cacheReadTokens = primingResponse.usage?.cacheReadInputTokens || 0
+
+  log('info', 'Chat: priming call completed', {
+    requestId, sessionId, tenantId,
+    primingLatencyMs: primingLatency,
+    cacheWriteInputTokens: cacheWriteTokens,
+    cacheReadInputTokens: cacheReadTokens,
+    inputTokens: primingResponse.usage?.inputTokens || 0,
+    outputTokens: primingResponse.usage?.outputTokens || 0,
+  })
+}
+
+
+/**
  * Core chat handler logic — shared between streaming and non-streaming paths.
  * When invoked via streamifyResponse wrapper, responseStream is always present
  * and return values are ignored — all responses must go through responseStream.
@@ -342,9 +402,112 @@ async function handleChat(event, responseStream) {
 
       log('info', 'Chat: __template_init__ transcript written', { requestId, sessionId, tenantId, greetingLength: greeting.length })
 
+      // Prompt Cache Priming: After transcript write and session status update,
+      // fetch the item record, load document bytes, build the system prompt,
+      // and initiate the priming call. The priming Promise starts before the
+      // response is sent and is awaited after — the Lambda runtime keeps the
+      // execution context alive after responseStream.end() until the handler resolves.
+      //
+      // Eligibility: priming is only initiated when ALL conditions are met:
+      //   1. itemType === 'document' (skip image items)
+      //   2. Native document bytes available — PDF/DOCX in S3 (skip markdown/text items)
+      //   3. templateGreeting exists — greeting is truthy (skip legacy items)
+      let primingPromise = null
+      if (greeting && itemId && tenantId) {
+        try {
+          const itemResult = await dynamo.send(new GetItemCommand({
+            TableName: process.env.ITEMS_TABLE,
+            Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          }))
+          const item = itemResult.Item
+          if (item) {
+            const primingItemType = item.itemType?.S || 'document'
+            const primingDocumentKey = item.documentKey?.S || null
+            const primingPageCount = item.pageCount?.N ? parseInt(item.pageCount.N, 10) : 0
+
+            if (primingItemType === 'document' && primingDocumentKey) {
+              const ext = primingDocumentKey.split('.').pop()?.toLowerCase()
+              const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+              if (docMediaTypes[ext]) {
+                const nativeDocBytes = await getS3Bytes(process.env.DATA_BUCKET, primingDocumentKey)
+                if (nativeDocBytes) {
+                  // Read frozenSnapshot and session state for system prompt building
+                  const primingFrozenSnapshot = unmarshalMap(session.frozenSnapshot)
+                  let primingTotalSections
+                  if (primingFrozenSnapshot?.feedbackSections && Array.isArray(primingFrozenSnapshot.feedbackSections)) {
+                    primingTotalSections = primingFrozenSnapshot.feedbackSections.length
+                  } else {
+                    primingTotalSections = parseInt(session.totalSections?.N || '5', 10)
+                  }
+                  const primingCoverageMap = item.coverageMap?.M ? unmarshalMap(item.coverageMap) : null
+                  const primingIsSelfReview = session.isSelfReview?.BOOL === true
+                  const primingTimeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
+
+                  // Build system prompt with the same parameters the first real turn will use
+                  const primingSystemPrompt = buildSystemPrompt({
+                    itemName: item.itemName?.S || 'this item',
+                    itemDescription: item.description?.S || '',
+                    itemContent: '', // Not needed when nativeDocumentAvailable
+                    itemType: primingItemType,
+                    totalSections: primingTotalSections,
+                    currentSection: 1,
+                    closingState: 'exploring',
+                    windingDown: undefined,
+                    message: '',
+                    isSpecial: false,
+                    frozenSnapshot: primingFrozenSnapshot,
+                    coverageMap: primingCoverageMap,
+                    imageBase64: null,
+                    isSelfReview: primingIsSelfReview,
+                    timeLimitMinutes: primingTimeLimitMinutes,
+                    nativeDocumentAvailable: true,
+                    templateGreeting: greeting,
+                  })
+
+                  // Start priming (non-blocking) BEFORE ending the response
+                  primingPromise = primeCacheAsync({
+                    systemPrompt: primingSystemPrompt,
+                    nativeDocBytes,
+                    documentKey: primingDocumentKey,
+                    pageCount: primingPageCount,
+                    tenantId,
+                    itemId,
+                    sessionId,
+                    requestId,
+                  }).catch(err => {
+                    log('warn', 'Chat: priming call failed', {
+                      requestId, sessionId, tenantId,
+                      errorName: err?.name, errorMessage: err?.message,
+                    })
+                  })
+                }
+              }
+            }
+          }
+        } catch (err) {
+          log('warn', 'Chat: priming setup failed', {
+            requestId, sessionId, tenantId,
+            errorName: err?.name, errorMessage: err?.message,
+          })
+        }
+      }
+
+      // Send response to client
       const resp = createResponse(200, { data: { greeting } }, {}, origin)
-      if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
-      return resp
+      if (hasResponseStream) {
+        responseStream.write(JSON.stringify(resp))
+        responseStream.end()
+      }
+
+      // Wait for priming to complete (Lambda stays alive after responseStream.end())
+      if (primingPromise) {
+        await primingPromise
+      }
+
+      if (!hasResponseStream) {
+        return resp
+      }
+      return
     }
 
     // Read frozenSnapshot from session if available (4.4)
@@ -592,6 +755,33 @@ async function handleChat(event, responseStream) {
           }
         }
 
+        // Prompt Cache Priming: Insert document-level cache point after all document/image blocks
+        // and before the text block. This marks the boundary of the cacheable document prefix
+        // so Bedrock can cache the system prompt + document + page images across turns.
+        if (nativeDocBytes) {
+          const cacheTextIdx = existingContent.findIndex(b => b.text)
+          if (cacheTextIdx > 0) {
+            existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+          }
+        }
+
+        coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
+      }
+    }
+
+    // Prompt Cache Priming: Insert document-level cache point when native doc is present
+    // but there are no page images (pageCount === 0). The page images block above handles
+    // the case when pageCount > 0.
+    if (isFirstTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
+      const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+      if (firstUserIdx !== -1) {
+        const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
+          ? [...coalescedMessages[firstUserIdx].content]
+          : [{ text: coalescedMessages[firstUserIdx].content }]
+        const cacheTextIdx = existingContent.findIndex(b => b.text)
+        if (cacheTextIdx > 0) {
+          existingContent.splice(cacheTextIdx, 0, { cachePoint: {} })
+        }
         coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
       }
     }
@@ -625,18 +815,26 @@ async function handleChat(event, responseStream) {
     }
 
     // 8. Invoke Bedrock (Converse/ConverseStream API)
+    // System prompt with cache point — enables Bedrock prompt caching on all turns
+    const systemBlocks = [
+      { text: systemPrompt },
+      { cachePoint: {} },
+    ]
+
     const bedrockStart = Date.now()
 
     let agentText = ''
     let tokensIn = 0
     let tokensOut = 0
+    let cacheReadInputTokens = 0
+    let cacheWriteInputTokens = 0
 
     if (isStreaming) {
       // 4.1: Streaming path — ConverseStream
       try {
         const streamResponse = await bedrock.send(new ConverseStreamCommand({
           modelId: process.env.BEDROCK_MODEL_ID,
-          system: [{ text: systemPrompt }],
+          system: systemBlocks,
           messages: coalescedMessages,
           inferenceConfig: { maxTokens: 1024 },
         }))
@@ -650,6 +848,8 @@ async function handleChat(event, responseStream) {
           if (event.metadata?.usage) {
             tokensIn = event.metadata.usage.inputTokens || 0
             tokensOut = event.metadata.usage.outputTokens || 0
+            cacheReadInputTokens = event.metadata.usage.cacheReadInputTokens || 0
+            cacheWriteInputTokens = event.metadata.usage.cacheWriteInputTokens || 0
           }
         }
 
@@ -673,7 +873,7 @@ async function handleChat(event, responseStream) {
       // Non-streaming fallback (API Gateway proxy) — Converse
       const bedrockResponse = await bedrock.send(new ConverseCommand({
         modelId: process.env.BEDROCK_MODEL_ID,
-        system: [{ text: systemPrompt }],
+        system: systemBlocks,
         messages: coalescedMessages,
         inferenceConfig: { maxTokens: 1024 },
       }))
@@ -681,6 +881,8 @@ async function handleChat(event, responseStream) {
       agentText = bedrockResponse.output?.message?.content?.[0]?.text || ''
       tokensIn = bedrockResponse.usage?.inputTokens || 0
       tokensOut = bedrockResponse.usage?.outputTokens || 0
+      cacheReadInputTokens = bedrockResponse.usage?.cacheReadInputTokens || 0
+      cacheWriteInputTokens = bedrockResponse.usage?.cacheWriteInputTokens || 0
     }
 
     const bedrockLatency = Date.now() - bedrockStart
@@ -930,16 +1132,26 @@ async function handleChat(event, responseStream) {
     }
 
     // 14. Publish CloudWatch metrics
-    await putMetrics([
+    const metrics = [
       { MetricName: 'BedrockLatency', Value: bedrockLatency, Unit: 'Milliseconds' },
       { MetricName: 'BedrockTokensIn', Value: tokensIn, Unit: 'Count' },
       { MetricName: 'BedrockTokensOut', Value: tokensOut, Unit: 'Count' },
       { MetricName: 'ChatMessages', Value: 1, Unit: 'Count' },
-    ])
+    ]
+
+    if (cacheReadInputTokens > 0) {
+      metrics.push({ MetricName: 'CacheReadInputTokens', Value: cacheReadInputTokens, Unit: 'Count' })
+    }
+    if (cacheWriteInputTokens > 0) {
+      metrics.push({ MetricName: 'CacheWriteInputTokens', Value: cacheWriteInputTokens, Unit: 'Count' })
+    }
+
+    await putMetrics(metrics)
 
     log('info', 'Chat: success', {
       requestId, sessionId, tenantId,
       bedrockLatency, tokensIn, tokensOut,
+      cacheReadInputTokens, cacheWriteInputTokens,
       modelId: process.env.BEDROCK_MODEL_ID,
       sessionComplete,
     })

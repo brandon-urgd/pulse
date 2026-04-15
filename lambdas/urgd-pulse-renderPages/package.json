@@ -15,5 +15,8 @@
   },
   "keywords": ["aws", "lambda", "pulse", "pdf", "render", "pages", "urgd"],
   "author": "ur/gd",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "overrides": {
+    "tar": "^7.5.11"
+  }
 }
