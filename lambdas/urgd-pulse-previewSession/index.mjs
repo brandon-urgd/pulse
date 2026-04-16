@@ -145,7 +145,19 @@ export const handler = async (event) => {
             frozenSnapshot: null,
             timeLimitMinutes,
             isSelfReview: false,
-            coverageMap: null,
+            coverageMap: (() => {
+              if (!item.coverageMap?.M) return null
+              const result = {}
+              for (const [k, v] of Object.entries(item.coverageMap.M)) {
+                const m = v.M || {}
+                result[k] = {
+                  sessionCount: m.sessionCount?.N ? Number(m.sessionCount.N) : 0,
+                  avgDepth: m.avgDepth?.S || null,
+                  reviewerIds: (m.reviewerIds?.L || []).map(r => r.S || ''),
+                }
+              }
+              return result
+            })(),
           }),
         }))
       } catch (err) {

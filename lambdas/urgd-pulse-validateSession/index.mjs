@@ -219,10 +219,43 @@ export const handler = async (event) => {
             itemId: itemRecord.itemId?.S || itemId,
             sessionId: activeSessionId,
             requestId,
-            frozenSnapshot: null,
+            frozenSnapshot: (() => {
+              const fs = sessionRecord.frozenSnapshot?.M
+              if (!fs) return null
+              const feedbackSections = (fs.feedbackSections?.L || []).map(s => s.S || s)
+              const sectionDepthPreferences = {}
+              if (fs.sectionDepthPreferences?.M) {
+                for (const [k, v] of Object.entries(fs.sectionDepthPreferences.M)) {
+                  sectionDepthPreferences[k] = v.S || 'explore'
+                }
+              }
+              const sectionMap = fs.sectionMap?.M ? {
+                sections: (fs.sectionMap.M.sections?.L || []).map(s => {
+                  const m = s.M || {}
+                  return {
+                    id: m.id?.S || '',
+                    title: m.title?.S || '',
+                    ...(m.wordCount?.N != null ? { wordCount: Number(m.wordCount.N) } : {}),
+                  }
+                }),
+              } : null
+              return { feedbackSections, sectionDepthPreferences, sectionMap }
+            })(),
             timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
             isSelfReview: isSelfReview || false,
-            coverageMap: null,
+            coverageMap: (() => {
+              if (!itemRecord.coverageMap?.M) return null
+              const result = {}
+              for (const [k, v] of Object.entries(itemRecord.coverageMap.M)) {
+                const m = v.M || {}
+                result[k] = {
+                  sessionCount: m.sessionCount?.N ? Number(m.sessionCount.N) : 0,
+                  avgDepth: m.avgDepth?.S || null,
+                  reviewerIds: (m.reviewerIds?.L || []).map(r => r.S || ''),
+                }
+              }
+              return result
+            })(),
           }),
         }))
       } catch (err) {

@@ -408,12 +408,50 @@ async function handleChat(event, responseStream) {
     // For non-document sessions: based on whether doc bytes loaded (existing behavior)
     const nativeDocumentAvailable = (itemType === 'document' && documentKey && turnNumber >= 3) || !!nativeDocBytes
 
+    // Prompt Cache Alignment: On the document injection turn (turn 3+), the system prompt
+    // must be byte-identical to the priming call's system prompt for a cache hit. The priming
+    // call uses initial-state values (currentSection: 1, closingState: 'exploring', etc.).
+    // If the session state has changed by turn 3, we use the initial-state values in the
+    // system prompt and communicate the actual state via a state-update prefix in the user
+    // message text, which comes AFTER the document-level cache point.
+    const isCacheAlignedTurn = isDocumentInjectionTurn && nativeDocumentAvailable
+    const cacheAlignedCurrentSection = isCacheAlignedTurn ? 1 : currentSection
+    const cacheAlignedClosingState = isCacheAlignedTurn ? 'exploring' : closingState
+    const cacheAlignedWindingDown = isCacheAlignedTurn ? undefined : windingDown
+    const cacheAlignedMessage = isCacheAlignedTurn ? '' : message
+    const cacheAlignedIsSpecial = isCacheAlignedTurn ? false : isSpecial
+
+    // Build the state-update prefix for cache-aligned turns.
+    // This text is injected into the user message AFTER the cache point so it doesn't
+    // affect the cached prefix. It tells the model the actual session state.
+    let stateUpdatePrefix = ''
+    if (isCacheAlignedTurn) {
+      const stateUpdates = []
+      if (currentSection !== 1) {
+        stateUpdates.push(`Current section: ${currentSection} of ${totalSections}`)
+      }
+      if (closingState !== 'exploring') {
+        stateUpdates.push(`Session phase: ${closingState}`)
+      }
+      if (windingDown === 'true') {
+        stateUpdates.push('The session is approaching its suggested time limit.')
+      } else if (windingDown === 'final') {
+        stateUpdates.push('The session is near the end of its suggested time limit.')
+      }
+      if (isSpecial) {
+        stateUpdates.push(`[${message}]`)
+      }
+      if (stateUpdates.length > 0) {
+        stateUpdatePrefix = `[Session state: ${stateUpdates.join('. ')}]\n\n`
+      }
+    }
+
     // Phased Cache Priming: System prompt no longer uses templateGreeting — the model
     // generates its own greeting at turn 1 via __session_start__.
     const systemPrompt = buildSystemPrompt({
       itemName, itemDescription, itemContent, itemType,
-      totalSections, currentSection, closingState,
-      windingDown, message, isSpecial,
+      totalSections, currentSection: cacheAlignedCurrentSection, closingState: cacheAlignedClosingState,
+      windingDown: cacheAlignedWindingDown, message: cacheAlignedMessage, isSpecial: cacheAlignedIsSpecial,
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
       nativeDocumentAvailable,
@@ -424,9 +462,9 @@ async function handleChat(event, responseStream) {
     if (message === '__session_end__') {
       bedrockMessages.push({ role: 'user', content: '[__session_end__]' })
     } else if (!isSpecial) {
-      bedrockMessages.push({ role: 'user', content: message })
+      bedrockMessages.push({ role: 'user', content: stateUpdatePrefix + message })
     } else if (message === '__session_start__' || message === '__session_resume__') {
-      bedrockMessages.push({ role: 'user', content: transcriptContent })
+      bedrockMessages.push({ role: 'user', content: stateUpdatePrefix + transcriptContent })
     }
 
     // Coalesce consecutive same-role messages

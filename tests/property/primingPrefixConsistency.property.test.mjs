@@ -69,6 +69,11 @@ const coverageMapArb = fc.oneof(
   fc.constant({ 'section-1': { sessionCount: 1, avgDepth: 'explore', reviewerIds: ['r1'] } }),
 )
 
+// Session state generators — by turn 3, these may have changed from initial values
+const currentSectionArb = fc.integer({ min: 1, max: 5 })
+const closingStateArb = fc.constantFrom('exploring', 'narrowing', 'closing')
+const windingDownArb = fc.constantFrom(undefined, 'true', 'final')
+
 // Generate fake document bytes (deterministic for a given format)
 function fakeDocBytes(format) {
   return Buffer.from(`fake-${format}-document-bytes`)
@@ -167,6 +172,11 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
    *   - templateGreeting removed (no longer a parameter)
    *   - Document block + page images + cachePoint inserted into first user message
    *
+   * Prompt Cache Alignment: On the document injection turn, the Chat Lambda uses
+   * initial-state values (currentSection: 1, closingState: 'exploring') for the
+   * system prompt to match the priming call. Actual session state is communicated
+   * via a state-update prefix in the user message text AFTER the cache point.
+   *
    * The Chat Lambda builds the first user message content as:
    *   1. Start with [document, text] (native doc attachment)
    *   2. Insert page images before the text block
@@ -176,6 +186,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     itemName, itemDescription, itemContent, itemType, docFormat, nativeDocBytes,
     pageCount, tenantId, itemId,
     frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+    currentSection, closingState, windingDown,
     userMessage, history,
   }) {
     // Determine totalSections from frozenSnapshot (same as Chat Lambda)
@@ -186,20 +197,19 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
       totalSections = 5
     }
 
-    // Build system prompt with same parameters as Chat Lambda at turn 3
-    // At turn 3: currentSection=1 (initial), closingState='exploring' (initial),
-    // nativeDocumentAvailable=true
+    // Prompt Cache Alignment: On the document injection turn, use initial-state values
+    // for the system prompt to match the priming call (same as Chat Lambda).
     const systemPrompt = buildSystemPrompt({
       itemName,
       itemDescription,
       itemContent,
       itemType,
       totalSections,
-      currentSection: 1,
-      closingState: 'exploring',
-      windingDown: undefined,
-      message: userMessage,
-      isSpecial: false,
+      currentSection: 1,       // Cache-aligned: always 1 (matches priming call)
+      closingState: 'exploring', // Cache-aligned: always 'exploring' (matches priming call)
+      windingDown: undefined,    // Cache-aligned: always undefined (matches priming call)
+      message: '',               // Cache-aligned: always '' (matches priming call)
+      isSpecial: false,          // Cache-aligned: always false (matches priming call)
       frozenSnapshot: frozenSnapshot || null,
       coverageMap: coverageMap || null,
       imageBase64: null,
@@ -378,7 +388,10 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
         coverageMapArb,
         turn3HistoryArb,
         userMessageArb,
-        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage) => {
+        currentSectionArb,
+        closingStateArb,
+        windingDownArb,
+        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage, currentSection, closingState, windingDown) => {
           const tenantId = 'tenant-test'
           const itemId = 'item-test'
           const nativeDocBytes = fakeDocBytes(docFormat)
@@ -393,10 +406,11 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription, itemContent, itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId, itemId,
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            currentSection, closingState, windingDown,
             userMessage, history,
           })
 
-          // Property: system prompt text is identical
+          // Property: system prompt text is identical even when session state has changed
           expect(priming.systemBlocks[0].text).toBe(turn3.systemBlocks[0].text)
         },
       ),
@@ -462,7 +476,10 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
         coverageMapArb,
         turn3HistoryArb,
         userMessageArb,
-        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage) => {
+        currentSectionArb,
+        closingStateArb,
+        windingDownArb,
+        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage, currentSection, closingState, windingDown) => {
           const tenantId = 'tenant-test'
           const itemId = 'item-test'
           const nativeDocBytes = fakeDocBytes(docFormat)
@@ -477,6 +494,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription, itemContent, itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId, itemId,
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            currentSection, closingState, windingDown,
             userMessage, history,
           })
 

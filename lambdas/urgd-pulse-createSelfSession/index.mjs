@@ -309,10 +309,44 @@ export const handler = async (event) => {
             requestId,
             frozenSnapshot: item.sectionMap?.M ? {
               feedbackSections: (item.feedbackSections?.L || []).map(s => s.S || s),
+              sectionDepthPreferences: (() => {
+                const prefs = item.sectionDepthPreferences?.M
+                if (!prefs) return {}
+                const result = {}
+                for (const [k, v] of Object.entries(prefs)) {
+                  result[k] = v.S || 'explore'
+                }
+                return result
+              })(),
+              sectionMap: (() => {
+                const sm = item.sectionMap?.M
+                if (!sm) return null
+                const sections = (sm.sections?.L || []).map(s => {
+                  const m = s.M || {}
+                  return {
+                    id: m.id?.S || '',
+                    title: m.title?.S || '',
+                    ...(m.wordCount?.N != null ? { wordCount: Number(m.wordCount.N) } : {}),
+                  }
+                })
+                return { sections }
+              })(),
             } : null,
             timeLimitMinutes: cappedTimeLimitMinutes,
             isSelfReview: true,
-            coverageMap: null,
+            coverageMap: (() => {
+              if (!item.coverageMap?.M) return null
+              const result = {}
+              for (const [k, v] of Object.entries(item.coverageMap.M)) {
+                const m = v.M || {}
+                result[k] = {
+                  sessionCount: m.sessionCount?.N ? Number(m.sessionCount.N) : 0,
+                  avgDepth: m.avgDepth?.S || null,
+                  reviewerIds: (m.reviewerIds?.L || []).map(r => r.S || ''),
+                }
+              }
+              return result
+            })(),
           }),
         }))
       } catch (err) {
