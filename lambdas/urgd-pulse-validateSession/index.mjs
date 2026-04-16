@@ -202,29 +202,32 @@ export const handler = async (event) => {
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
 
-    // Async Lambda invocation — guaranteed to complete (own execution lifecycle)
+    // Async Lambda invocation — await the invoke (fast ~50ms) to ensure the worker is triggered
+    // before the Lambda runtime freezes. The worker runs independently with its own timeout.
     if (itemRecord && activeSessionId && process.env.PRIME_CACHE_FUNCTION_NAME) {
-      lambda.send(new InvokeCommand({
-        FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
-        InvocationType: 'Event',
-        Payload: JSON.stringify({
-          itemName: itemRecord.itemName?.S || '',
-          itemDescription: itemRecord.description?.S || '',
-          itemType: itemRecord.itemType?.S || '',
-          documentKey: itemRecord.documentKey?.S || '',
-          pageCount: parseInt(itemRecord.pageCount?.N || '0', 10),
-          tenantId,
-          itemId: itemRecord.itemId?.S || itemId,
-          sessionId: activeSessionId,
-          requestId,
-          frozenSnapshot: null,
-          timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
-          isSelfReview: isSelfReview || false,
-          coverageMap: null,
-        }),
-      })).catch(err => {
+      try {
+        await lambda.send(new InvokeCommand({
+          FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({
+            itemName: itemRecord.itemName?.S || '',
+            itemDescription: itemRecord.description?.S || '',
+            itemType: itemRecord.itemType?.S || '',
+            documentKey: itemRecord.documentKey?.S || '',
+            pageCount: parseInt(itemRecord.pageCount?.N || '0', 10),
+            tenantId,
+            itemId: itemRecord.itemId?.S || itemId,
+            sessionId: activeSessionId,
+            requestId,
+            frozenSnapshot: null,
+            timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
+            isSelfReview: isSelfReview || false,
+            coverageMap: null,
+          }),
+        }))
+      } catch (err) {
         log('warn', 'Failed to invoke prime cache worker', { requestId, errorName: err.name })
-      })
+      }
     }
 
     return resp

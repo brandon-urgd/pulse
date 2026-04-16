@@ -124,30 +124,33 @@ export const handler = async (event) => {
       },
     }, {}, origin)
 
-    // Async Lambda invocation — guaranteed to complete (own execution lifecycle)
+    // Async Lambda invocation — await the invoke (fast ~50ms) to ensure the worker is triggered
+    // before the Lambda runtime freezes. The worker runs independently with its own timeout.
     if (itemResult.Item && process.env.PRIME_CACHE_FUNCTION_NAME) {
       const item = itemResult.Item
-      lambda.send(new InvokeCommand({
-        FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
-        InvocationType: 'Event',
-        Payload: JSON.stringify({
-          itemName: item.itemName?.S || '',
-          itemDescription: item.description?.S || '',
-          itemType: item.itemType?.S || '',
-          documentKey: item.documentKey?.S || '',
-          pageCount: parseInt(item.pageCount?.N || '0', 10),
-          tenantId,
-          itemId,
-          sessionId,
-          requestId,
-          frozenSnapshot: null,
-          timeLimitMinutes,
-          isSelfReview: false,
-          coverageMap: null,
-        }),
-      })).catch(err => {
+      try {
+        await lambda.send(new InvokeCommand({
+          FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({
+            itemName: item.itemName?.S || '',
+            itemDescription: item.description?.S || '',
+            itemType: item.itemType?.S || '',
+            documentKey: item.documentKey?.S || '',
+            pageCount: parseInt(item.pageCount?.N || '0', 10),
+            tenantId,
+            itemId,
+            sessionId,
+            requestId,
+            frozenSnapshot: null,
+            timeLimitMinutes,
+            isSelfReview: false,
+            coverageMap: null,
+          }),
+        }))
+      } catch (err) {
         log('warn', 'Failed to invoke prime cache worker', { requestId, errorName: err.name })
-      })
+      }
     }
 
     return resp
