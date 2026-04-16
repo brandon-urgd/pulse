@@ -7,6 +7,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
+import { primeCacheAsync } from './shared/primeCacheAsync.mjs'
 import { randomUUID, randomBytes } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
@@ -64,6 +65,13 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
+    // Block preview sessions for closed items — no new AI conversations on closed items
+    const itemStatus = itemResult.Item.status?.S
+    if (itemStatus === 'closed') {
+      log('info', 'PreviewSession: item is closed, rejecting preview', { requestId, tenantId, itemId })
+      return errorResponse(409, 'Item is closed and no longer accepting feedback', {}, origin)
+    }
+
     // Accept optional timeLimitMinutes from query string (GET) or body (1–60 min)
     // Snap to bracket midpoints: 12, 17, 25, 37. Default to 17 (15–20 min) if not set.
     let body = {}
@@ -106,7 +114,7 @@ export const handler = async (event) => {
 
     log('info', 'PreviewSession: created', { requestId, tenantId, itemId, sessionId })
 
-    return createResponse(200, {
+    const resp = createResponse(200, {
       data: {
         previewUrl,
         sessionId,
@@ -114,6 +122,30 @@ export const handler = async (event) => {
         expiresAt: expiresAtIso,
       },
     }, {}, origin)
+
+    // Fire-and-forget priming (async, after response)
+    if (itemResult.Item) {
+      const item = itemResult.Item
+      primeCacheAsync({
+        itemName: item.itemName?.S || '',
+        itemDescription: item.description?.S || '',
+        itemType: item.itemType?.S || '',
+        documentKey: item.documentKey?.S || '',
+        pageCount: parseInt(item.pageCount?.N || '0', 10),
+        tenantId,
+        itemId,
+        sessionId,
+        requestId,
+        frozenSnapshot: null,
+        timeLimitMinutes,
+        isSelfReview: false,
+        coverageMap: null,
+        dataBucket: process.env.DATA_BUCKET,
+        bedrockModelId: process.env.BEDROCK_MODEL_ID,
+      })
+    }
+
+    return resp
   } catch (err) {
     log('error', 'PreviewSession: unexpected error', {
       requestId, tenantId, itemId,

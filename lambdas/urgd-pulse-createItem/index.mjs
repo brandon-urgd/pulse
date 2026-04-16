@@ -8,7 +8,6 @@ import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } fro
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
 import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
-import { buildTemplateGreeting } from './shared/greetingTemplates.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
@@ -220,12 +219,8 @@ export const handler = async (event) => {
       dynamoItem.recommendedTimeLimitMinutes = { N: '7' }
     }
 
-    // Store templateGreeting for markdown/text items (two-phase-session-start — R3.1, R3.2)
-    if (documentStatus === 'ready') {
-      const greetingName = itemName.trim() || 'your document'
-      const greeting = buildTemplateGreeting('document', greetingName)
-      dynamoItem.templateGreeting = { S: greeting }
-    }
+    // For markdown/text items that are immediately ready, no templateGreeting is stored.
+    // The model generates its own greeting at turn 1 via __session_start__.
 
     await dynamo.send(new PutItemCommand({
       TableName: process.env.ITEMS_TABLE,

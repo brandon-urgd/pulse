@@ -1,5 +1,6 @@
-// Unit tests for ExtractText Lambda — template greeting storage
-// Validates: Requirements 1.1, 1.2, 1.3, 2.1, 2.2
+// Unit tests for ExtractText Lambda — templateGreeting removal
+// Validates: Requirement 13.2 (Phased Cache Priming — template greeting infrastructure removal)
+// Updated: templateGreeting is no longer written by the ExtractText Lambda.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
@@ -43,7 +44,6 @@ vi.mock('mammoth', () => ({
 
 import pdfParse from 'pdf-parse'
 import * as mammoth from 'mammoth'
-import { GREETING_TEMPLATES } from '../../lambdas/shared/greetingTemplates.mjs'
 
 const { handler } = await import('../../lambdas/urgd-pulse-extractText/index.mjs')
 
@@ -64,7 +64,7 @@ function findUpdateCall() {
     .find(c => c.constructor.name === 'UpdateItemCommand')
 }
 
-describe('ExtractText Lambda — template greeting storage', () => {
+describe('ExtractText Lambda — templateGreeting no longer written (R13.2)', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
@@ -73,8 +73,8 @@ describe('ExtractText Lambda — template greeting storage', () => {
     s3SendSpy.mockResolvedValue({})
   })
 
-  describe('PDF items include templateGreeting in UpdateItem call (R1.1, R1.3)', () => {
-    it('stores templateGreeting atomically with documentStatus=ready for PDF', async () => {
+  describe('PDF extraction does not write templateGreeting', () => {
+    it('sets documentStatus=ready without templateGreeting for PDF', async () => {
       dynamoSendSpy.mockImplementation((cmd) => {
         if (cmd.constructor.name === 'GetItemCommand') {
           return Promise.resolve({ Item: { itemName: { S: 'My PDF Report' } } })
@@ -92,20 +92,16 @@ describe('ExtractText Lambda — template greeting storage', () => {
       const updateCall = findUpdateCall()
       expect(updateCall).toBeDefined()
 
-      // templateGreeting is in the same UpdateItem call as documentStatus=ready
       const values = updateCall.input.ExpressionAttributeValues
       expect(values[':status'].S).toBe('ready')
-      expect(values[':templateGreeting']).toBeDefined()
-      expect(values[':templateGreeting'].S).toContain('My PDF Report')
-
-      // Verify the update expression includes both status and templateGreeting
-      expect(updateCall.input.UpdateExpression).toContain('documentStatus')
-      expect(updateCall.input.UpdateExpression).toContain('templateGreeting')
+      // templateGreeting should NOT be present
+      expect(values[':templateGreeting']).toBeUndefined()
+      expect(updateCall.input.UpdateExpression).not.toContain('templateGreeting')
     })
   })
 
-  describe('DOCX items include templateGreeting in UpdateItem call (R1.1, R1.3)', () => {
-    it('stores templateGreeting atomically with documentStatus=ready for DOCX', async () => {
+  describe('DOCX extraction does not write templateGreeting', () => {
+    it('sets documentStatus=ready without templateGreeting for DOCX', async () => {
       dynamoSendSpy.mockImplementation((cmd) => {
         if (cmd.constructor.name === 'GetItemCommand') {
           return Promise.resolve({ Item: { itemName: { S: 'My DOCX Paper' } } })
@@ -125,113 +121,8 @@ describe('ExtractText Lambda — template greeting storage', () => {
 
       const values = updateCall.input.ExpressionAttributeValues
       expect(values[':status'].S).toBe('ready')
-      expect(values[':templateGreeting']).toBeDefined()
-      expect(values[':templateGreeting'].S).toContain('My DOCX Paper')
-    })
-  })
-
-  describe('correct template selected based on itemType (R1.2, R2.2)', () => {
-    it('uses document template for PDF/DOCX items', async () => {
-      dynamoSendSpy.mockImplementation((cmd) => {
-        if (cmd.constructor.name === 'GetItemCommand') {
-          return Promise.resolve({ Item: { itemName: { S: 'Design Spec' } } })
-        }
-        return Promise.resolve({})
-      })
-
-      const pdfBuffer = Buffer.from('%PDF-1.4 fake')
-      s3SendSpy.mockResolvedValueOnce({ Body: makeStream(pdfBuffer) })
-      s3SendSpy.mockResolvedValueOnce({})
-      vi.mocked(pdfParse).mockResolvedValueOnce({ text: 'Content here.' })
-
-      await handler(makeEvent({ key: 'pulse/tenant-abc/items/item-xyz/document.pdf' }))
-
-      const updateCall = findUpdateCall()
-      const greeting = updateCall.input.ExpressionAttributeValues[':templateGreeting'].S
-      const expectedGreeting = GREETING_TEMPLATES.document.replace('{itemName}', 'Design Spec')
-      expect(greeting).toBe(expectedGreeting)
-    })
-  })
-
-  describe('fallback when itemName is missing or empty (R1.2)', () => {
-    it('uses "your document" fallback when itemName is missing', async () => {
-      dynamoSendSpy.mockImplementation((cmd) => {
-        if (cmd.constructor.name === 'GetItemCommand') {
-          return Promise.resolve({ Item: {} }) // no itemName field
-        }
-        return Promise.resolve({})
-      })
-
-      const pdfBuffer = Buffer.from('%PDF-1.4 fake')
-      s3SendSpy.mockResolvedValueOnce({ Body: makeStream(pdfBuffer) })
-      s3SendSpy.mockResolvedValueOnce({})
-      vi.mocked(pdfParse).mockResolvedValueOnce({ text: 'Content.' })
-
-      await handler(makeEvent({ key: 'pulse/tenant-abc/items/item-xyz/document.pdf' }))
-
-      const updateCall = findUpdateCall()
-      const greeting = updateCall.input.ExpressionAttributeValues[':templateGreeting'].S
-      expect(greeting).toContain('your document')
-    })
-
-    it('uses "your document" fallback when itemName is empty string', async () => {
-      dynamoSendSpy.mockImplementation((cmd) => {
-        if (cmd.constructor.name === 'GetItemCommand') {
-          return Promise.resolve({ Item: { itemName: { S: '' } } })
-        }
-        return Promise.resolve({})
-      })
-
-      const pdfBuffer = Buffer.from('%PDF-1.4 fake')
-      s3SendSpy.mockResolvedValueOnce({ Body: makeStream(pdfBuffer) })
-      s3SendSpy.mockResolvedValueOnce({})
-      vi.mocked(pdfParse).mockResolvedValueOnce({ text: 'Content.' })
-
-      await handler(makeEvent({ key: 'pulse/tenant-abc/items/item-xyz/document.pdf' }))
-
-      const updateCall = findUpdateCall()
-      const greeting = updateCall.input.ExpressionAttributeValues[':templateGreeting'].S
-      expect(greeting).toContain('your document')
-    })
-
-    it('uses "your document" fallback when itemName is whitespace only', async () => {
-      dynamoSendSpy.mockImplementation((cmd) => {
-        if (cmd.constructor.name === 'GetItemCommand') {
-          return Promise.resolve({ Item: { itemName: { S: '   ' } } })
-        }
-        return Promise.resolve({})
-      })
-
-      const pdfBuffer = Buffer.from('%PDF-1.4 fake')
-      s3SendSpy.mockResolvedValueOnce({ Body: makeStream(pdfBuffer) })
-      s3SendSpy.mockResolvedValueOnce({})
-      vi.mocked(pdfParse).mockResolvedValueOnce({ text: 'Content.' })
-
-      await handler(makeEvent({ key: 'pulse/tenant-abc/items/item-xyz/document.pdf' }))
-
-      const updateCall = findUpdateCall()
-      const greeting = updateCall.input.ExpressionAttributeValues[':templateGreeting'].S
-      expect(greeting).toContain('your document')
-    })
-
-    it('uses "your document" fallback when GetItem for itemName fails', async () => {
-      dynamoSendSpy.mockImplementation((cmd) => {
-        if (cmd.constructor.name === 'GetItemCommand') {
-          return Promise.reject(new Error('DynamoDB error'))
-        }
-        return Promise.resolve({})
-      })
-
-      const pdfBuffer = Buffer.from('%PDF-1.4 fake')
-      s3SendSpy.mockResolvedValueOnce({ Body: makeStream(pdfBuffer) })
-      s3SendSpy.mockResolvedValueOnce({})
-      vi.mocked(pdfParse).mockResolvedValueOnce({ text: 'Content.' })
-
-      await handler(makeEvent({ key: 'pulse/tenant-abc/items/item-xyz/document.pdf' }))
-
-      const updateCall = findUpdateCall()
-      const greeting = updateCall.input.ExpressionAttributeValues[':templateGreeting'].S
-      expect(greeting).toContain('your document')
+      // templateGreeting should NOT be present
+      expect(values[':templateGreeting']).toBeUndefined()
     })
   })
 })

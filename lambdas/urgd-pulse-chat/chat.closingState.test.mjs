@@ -165,7 +165,7 @@ describe('graceful session closing — closingState transitions (Task 36)', () =
       expect(body.data.closingState).toBe('closing')
     })
 
-    it('sets graceMessagesRemaining to 2 when entering closing', async () => {
+    it('sets graceMessagesRemaining to 10 when entering closing', async () => {
       const session = makeSession({ closingState: { S: 'narrowing' } })
       const updateCalls = []
       dynamoSendSpy.mockImplementation((cmd) => {
@@ -188,10 +188,12 @@ describe('graceful session closing — closingState transitions (Task 36)', () =
       }
       await handler(event)
 
-      const updateInput = updateCalls[0]?.input
-      const graceValue = Object.values(updateInput?.ExpressionAttributeValues ?? {})
-        .find(v => v?.N === '2')
-      expect(graceValue).toBeDefined()
+      // Search all update calls for the one that sets graceMessagesRemaining to 10
+      const graceUpdate = updateCalls.find(cmd => {
+        const values = cmd.input?.ExpressionAttributeValues ?? {}
+        return Object.values(values).some(v => v?.N === '10')
+      })
+      expect(graceUpdate).toBeDefined()
     })
   })
 
@@ -219,7 +221,9 @@ describe('graceful session closing — closingState transitions (Task 36)', () =
       // Still in closing (grace remaining: 1)
       expect(body.data.closingState).toBe('closing')
 
-      const updateInput = updateCalls[0]?.input
+      // Find the session state update (the last UpdateItemCommand, not the streamingLock)
+      const sessionUpdate = updateCalls[updateCalls.length - 1]
+      const updateInput = sessionUpdate?.input
       const graceValue = Object.values(updateInput?.ExpressionAttributeValues ?? {})
         .find(v => v?.N === '1')
       expect(graceValue).toBeDefined()

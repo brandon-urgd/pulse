@@ -11,16 +11,20 @@ const sendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient {
-    send(...args) { return sendSpy(...args) }
+    send(cmd) { return sendSpy(cmd) }
   }
-  class GetItemCommand {
-    constructor(input) { this.input = input }
+  class BatchGetItemCommand {
+    constructor(input) { this.input = input; this._cmdType = 'BatchGetItem' }
   }
   class QueryCommand {
-    constructor(input) { this.input = input }
+    constructor(input) { this.input = input; this._cmdType = 'Query' }
   }
-  return { DynamoDBClient, GetItemCommand, QueryCommand }
+  return { DynamoDBClient, BatchGetItemCommand, QueryCommand }
 })
+
+vi.mock('./shared/features.mjs', () => ({
+  resolveAllFeatures: vi.fn(() => ({})),
+}))
 
 const { handler } = await import('./index.mjs')
 
@@ -34,12 +38,6 @@ const TENANT_ITEM = {
     M: {
       maxActiveItems: { N: '1' },
       maxSessionsPerItem: { N: '5' },
-    },
-  },
-  usage: {
-    M: {
-      itemCount: { N: '0' },
-      sessionCount: { N: '0' },
     },
   },
   preferences: {
@@ -57,14 +55,35 @@ const makeEvent = (tenantId = 'tenant-abc') => ({
   },
 })
 
+// The handler makes 3 parallel calls via Promise.all:
+// 1. BatchGetItemCommand (tenants table — tenant record + SYSTEM record)
+// 2. QueryCommand (items table — count active/draft items)
+// 3. QueryCommand (sessions table — count all sessions)
+function mockSuccessfulCalls(tenantItem, itemCount = 1, sessionCount = 3) {
+  sendSpy.mockImplementation((cmd) => {
+    const cmdName = cmd?.constructor?.name
+    if (cmdName === 'BatchGetItemCommand') {
+      return Promise.resolve({
+        Responses: {
+          [process.env.TENANTS_TABLE]: tenantItem ? [tenantItem] : [],
+        },
+      })
+    }
+    if (cmdName === 'QueryCommand') {
+      if (cmd.input.TableName === process.env.ITEMS_TABLE) {
+        return Promise.resolve({ Count: itemCount })
+      }
+      return Promise.resolve({ Count: sessionCount })
+    }
+    return Promise.resolve({})
+  })
+}
+
 describe('urgd-pulse-getSettings', () => {
   beforeEach(() => sendSpy.mockReset())
 
   it('returns 200 with all required fields', async () => {
-    sendSpy
-      .mockResolvedValueOnce({ Item: TENANT_ITEM }) // GetItem tenant
-      .mockResolvedValueOnce({ Count: 1 })           // Query items count
-      .mockResolvedValueOnce({ Count: 3 })           // Query sessions count
+    mockSuccessfulCalls(TENANT_ITEM, 1, 3)
     const res = await handler(makeEvent())
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
@@ -78,10 +97,7 @@ describe('urgd-pulse-getSettings', () => {
   })
 
   it('returns live usage counts from DynamoDB queries', async () => {
-    sendSpy
-      .mockResolvedValueOnce({ Item: TENANT_ITEM })
-      .mockResolvedValueOnce({ Count: 2 }) // 2 active items
-      .mockResolvedValueOnce({ Count: 7 }) // 7 sessions
+    mockSuccessfulCalls(TENANT_ITEM, 2, 7)
     const res = await handler(makeEvent())
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
@@ -90,10 +106,7 @@ describe('urgd-pulse-getSettings', () => {
   })
 
   it('returns 404 when tenant not found', async () => {
-    sendSpy
-      .mockResolvedValueOnce({ Item: undefined })
-      .mockResolvedValueOnce({ Count: 0 })
-      .mockResolvedValueOnce({ Count: 0 })
+    mockSuccessfulCalls(null, 0, 0)
     const res = await handler(makeEvent('unknown-tenant'))
     expect(res.statusCode).toBe(404)
     expect(JSON.parse(res.body).message).toMatch(/not found/i)
@@ -116,7 +129,11 @@ describe('urgd-pulse-getSettings', () => {
   })
 
   it('returns 500 on DynamoDB failure', async () => {
-    sendSpy.mockRejectedValueOnce(new Error('DynamoDB error'))
+    const err = new Error('DynamoDB error')
+    sendSpy
+      .mockRejectedValueOnce(err)
+      .mockRejectedValueOnce(err)
+      .mockRejectedValueOnce(err)
     const res = await handler(makeEvent())
     expect(res.statusCode).toBe(500)
   })
@@ -127,10 +144,7 @@ describe('urgd-pulse-getSettings', () => {
       tier: { S: 'free' },
       onboardingComplete: { BOOL: false },
     }
-    sendSpy
-      .mockResolvedValueOnce({ Item: minimalItem })
-      .mockResolvedValueOnce({ Count: 0 })
-      .mockResolvedValueOnce({ Count: 0 })
+    mockSuccessfulCalls(minimalItem, 0, 0)
     const res = await handler(makeEvent('tenant-min'))
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
@@ -144,19 +158,14 @@ describe('urgd-pulse-getSettings', () => {
       tenantId: { S: 'tenant-list' },
       tier: { S: 'free' },
       onboardingComplete: { BOOL: false },
-      // NULL type
       displayName: { NULL: true },
-      // L (list) type — not used in current response but exercises unmarshal
       features: {
         M: {
           tags: { L: [{ S: 'tag1' }, { S: 'tag2' }] },
         },
       },
     }
-    sendSpy
-      .mockResolvedValueOnce({ Item: itemWithListAndNull })
-      .mockResolvedValueOnce({ Count: 0 })
-      .mockResolvedValueOnce({ Count: 0 })
+    mockSuccessfulCalls(itemWithListAndNull, 0, 0)
     const res = await handler(makeEvent('tenant-list'))
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)

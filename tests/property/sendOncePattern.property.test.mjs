@@ -200,8 +200,10 @@ describe('Property 1: Send-once pattern — no content blocks on subsequent turn
     )
   })
 
-  it('first turn (history.length === 0) attaches document content blocks', async () => {
+  it('document injection turn (turn 3+, 2+ prior user messages) attaches document content blocks', async () => {
     // **Validates: Requirements 3.3, 6.5, 10.3**
+    // Phased Cache Priming: document injection now happens at turn 3+ (2+ prior user messages),
+    // not on the first turn. Turns 1-2 are text-only for fast responses.
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 1, max: 20 }),  // pageCount
@@ -214,26 +216,36 @@ describe('Property 1: Send-once pattern — no content blocks on subsequent turn
           cwSpy.mockResolvedValue({})
           lambdaSpy.mockResolvedValue({})
 
+          // Build transcript with 2 prior user messages (turn 3 = document injection turn)
+          const transcriptItems = [
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-greeting' }, role: { S: 'agent' }, content: { S: 'Welcome!' }, timestamp: { S: '2024-01-01T00:00:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-r0' }, role: { S: 'reviewer' }, content: { S: 'Question 0' }, timestamp: { S: '2024-01-01T00:01:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-a0' }, role: { S: 'agent' }, content: { S: 'Answer 0' }, timestamp: { S: '2024-01-01T00:01:01Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-r1' }, role: { S: 'reviewer' }, content: { S: 'Question 1' }, timestamp: { S: '2024-01-01T00:02:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-a1' }, role: { S: 'agent' }, content: { S: 'Answer 1' }, timestamp: { S: '2024-01-01T00:02:01Z' } },
+          ]
+
           dynamoSpy
             .mockResolvedValueOnce({ Item: makeSessionItem() })       // GetItem session
-            .mockResolvedValueOnce({ Items: [] })                      // Query transcript (empty = first turn)
+            .mockResolvedValueOnce({ Items: transcriptItems })         // Query transcript (2 prior user messages = turn 3)
             .mockResolvedValueOnce({ Item: makeItemRecord({ pageCount: { N: String(pageCount) } }) }) // GetItem item
             .mockResolvedValueOnce({})  // streamingLock
             .mockResolvedValueOnce({})  // TransactWrite
             .mockResolvedValueOnce({})  // session state update
 
-          // S3: extracted text
-          s3Spy.mockResolvedValueOnce(makeS3Body('# Extracted text'))
-          // S3: original document bytes (for native document block)
-          s3Spy.mockResolvedValueOnce(makeS3Body('fake-pdf-bytes'))
-          // S3: page images
-          for (let p = 0; p < pageCount; p++) {
-            s3Spy.mockResolvedValueOnce(makeS3Body('fake-png-bytes'))
-          }
+          // S3: extracted text + original document bytes + page images
+          s3Spy.mockImplementation((cmd) => {
+            const key = cmd.input?.Key || ''
+            if (key.endsWith('extracted.md')) return Promise.resolve(makeS3Body('# Extracted text'))
+            if (key.endsWith('document.md')) return Promise.resolve(makeS3Body('# Document text'))
+            if (key.endsWith('.pdf')) return Promise.resolve(makeS3Body('fake-pdf-bytes'))
+            if (key.includes('/pages/page-')) return Promise.resolve(makeS3Body('fake-png-bytes'))
+            return Promise.reject(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }))
+          })
 
-          bedrockSpy.mockResolvedValueOnce(makeConverseResponse('Welcome to the session!'))
+          bedrockSpy.mockResolvedValueOnce(makeConverseResponse('Here are my thoughts on the formatting...'))
 
-          const event = makeChatEvent('session-xyz', 'tenant-abc', '__session_start__')
+          const event = makeChatEvent('session-xyz', 'tenant-abc', 'What about the formatting?')
           const result = await chatHandler(event)
 
           expect(result.statusCode).toBe(200)

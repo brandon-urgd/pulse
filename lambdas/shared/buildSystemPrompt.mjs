@@ -1,5 +1,5 @@
 // ur/gd pulse — Shared buildSystemPrompt module
-// Extracted from urgd-pulse-chat/index.mjs for reuse by PreGenerate Lambda.
+// Shared by Chat Lambda and entry point Lambdas (validateSession, createSelfSession, previewSession).
 // This module is copied into every Lambda's build directory by build-lambdas.sh.
 
 /**
@@ -46,7 +46,7 @@ function computeTimeAllocations(sections, depthPrefs, timeLimitMinutes) {
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable, templateGreeting }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -60,6 +60,8 @@ function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, t
 - Most responses should be one to three bubbles. Four is the upper end.
 - When a reviewer signals a topic is covered — through agreement, short answers, humor, or explicit redirection — move to the next section or topic. Don't mine a topic past its natural depth. Two to three exchanges on a single thread is usually enough before pivoting.
 - When a reviewer gives a definitive opinion on an element (strong positive or negative with clear reasoning), acknowledge it and move to a new aspect. Don't re-ask about the same element unless the reviewer brings it back up.
+- Never say "I haven't seen the document yet," "I can now see the formatting," "Now that I have the full document," or any similar language that reveals progressive context loading. The conversation should feel continuous and natural at all times.
+- Early turns naturally focus on content and messaging. Later turns naturally deepen into visual and structural specifics. This is a normal conversation progression, not a system transition.
 
 `
 
@@ -105,15 +107,6 @@ Asking good questions:
 
 `
 
-  // ── Greeting context (two-phase session start) ──
-  if (templateGreeting) {
-    prompt += `GREETING CONTEXT: You already delivered the following greeting to the reviewer:
-"${templateGreeting}"
-The reviewer has read this and is now responding. Do NOT re-introduce yourself, repeat the greeting, or welcome them again. Continue naturally from where the greeting left off — acknowledge their readiness and begin the substantive review.
-
-`
-  }
-
   // ── Item context ──
   prompt += `The item being reviewed:
 - Name: "${itemName}"
@@ -146,6 +139,16 @@ When describing the image, use everyday language. Say "the patterned wood floor"
     // Native PDF/DOCX document block + page images are sent as content blocks on the first user message.
     // The model has full access to the document via those blocks — no need to duplicate the extracted text here.
     prompt += `The document has been provided as a native file attachment and page images. You have full access to its content, layout, and visual elements. Reference it directly — do not ask the reviewer to describe what's in the document.
+
+`
+  } else if (itemType === 'document' && itemContent) {
+    // Text-only phase — extracted text available but no visual access
+    prompt += `Document content (text extracted from the original document):
+${itemContent}
+
+Focus your questions on the content, structure, arguments, and messaging. Do not reference specific visual elements, page layouts, formatting details, charts, or anything that requires seeing the original document layout. Do not claim you have seen the document visually or reference "page N" or specific visual positions. Keep the conversation grounded in the substance of the text.
+
+If the reviewer asks about visual elements, page layout, or formatting, redirect to content-level observations. Focus on what the text says rather than how it looks. For example, if they ask about a chart, discuss the data or claims the chart supports based on the surrounding text.
 
 `
   } else {

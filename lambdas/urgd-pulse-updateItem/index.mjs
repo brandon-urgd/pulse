@@ -6,7 +6,6 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
 import { upsertCloseSchedule } from './shared/scheduleClose.mjs'
-import { buildTemplateGreeting } from './shared/greetingTemplates.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME', 'CORS_ALLOWED_ORIGINS'])
@@ -145,14 +144,6 @@ export const handler = async (event) => {
       updateParts.push('#itemName = :itemName')
       expressionNames['#itemName'] = 'itemName'
       expressionValues[':itemName'] = { S: itemName.trim() }
-
-      // Regenerate templateGreeting if the item already has one (two-phase-session-start)
-      if (existing.Item.templateGreeting?.S) {
-        const existingItemType = existing.Item.itemType?.S || 'document'
-        const newGreeting = buildTemplateGreeting(existingItemType, itemName.trim())
-        updateParts.push('templateGreeting = :templateGreeting')
-        expressionValues[':templateGreeting'] = { S: newGreeting }
-      }
     }
 
     if (description !== undefined) {

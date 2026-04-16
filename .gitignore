@@ -31,10 +31,18 @@ vitest.config.*.timestamp*
 
 # ── Environment variables ─────────────────────────────────────────────────────
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# ── Secrets / certificates ────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
 
 # ── IDE / editor ──────────────────────────────────────────────────────────────
 .vscode/

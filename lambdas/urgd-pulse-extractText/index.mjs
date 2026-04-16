@@ -6,7 +6,6 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
-import { buildTemplateGreeting } from './shared/greetingTemplates.mjs'
 
 // Fail-fast env var validation
 requireEnv(['ITEMS_TABLE', 'DATA_BUCKET_NAME'])
@@ -179,14 +178,11 @@ export const handler = async (event) => {
       log('warn', 'ExtractText: failed to fetch itemName, using fallback', { tenantId, itemId, errorName: fetchErr.name })
     }
 
-    const templateGreeting = buildTemplateGreeting('document', itemName)
-
-    // Update documentStatus to "ready", store extractedKey, recommendation, and template greeting
+    // Update documentStatus to "ready", store extractedKey, recommendation
     await updateDocumentStatus(tenantId, itemId, 'ready', {
       extractedKey: { S: extractedKey },
       recommendedTimeLimitMinutes: { N: String(recommendedTimeLimitMinutes) },
       itemType: { S: 'document' },
-      templateGreeting: { S: templateGreeting },
     })
 
     log('info', 'ExtractText: extraction complete', { tenantId, itemId, extractedKey, recommendedTimeLimitMinutes })

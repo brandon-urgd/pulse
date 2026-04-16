@@ -178,7 +178,7 @@ describe('urgd-pulse-inviteReviewer', () => {
       const res = await handler(makeEvent('tenant-abc', 'item-123', { emails: ['x@test.com'] }))
 
       expect(res.statusCode).toBe(403)
-      expect(JSON.parse(res.body).message).toMatch(/session limit/i)
+      expect(JSON.parse(res.body).message).toMatch(/feedback limit/i)
     })
 
     it('returns 403 when paid tenant limit (50) would be exceeded', async () => {

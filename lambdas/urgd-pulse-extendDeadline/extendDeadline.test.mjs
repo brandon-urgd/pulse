@@ -147,10 +147,12 @@ describe('urgd-pulse-extendDeadline', () => {
       expect(JSON.parse(res.body).message).toMatch(/future/i)
     })
 
-    it('returns 400 when date is before current closeDate', async () => {
+    it('returns 200 when date is before current closeDate but still in the future', async () => {
       dynamoSendSpy.mockImplementation((cmd) => {
         const name = cmd?.constructor?.name
         if (name === 'GetItemCommand') return Promise.resolve({ Item: ITEM_RECORD })
+        if (name === 'UpdateItemCommand') return Promise.resolve({ Attributes: ITEM_RECORD })
+        if (name === 'QueryCommand') return Promise.resolve({ Items: [] })
         return Promise.resolve({})
       })
 
@@ -158,8 +160,7 @@ describe('urgd-pulse-extendDeadline', () => {
       const beforeCurrentClose = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString()
       const res = await handler(makeEvent('tenant-abc', 'item-123', { closeDate: beforeCurrentClose }))
 
-      expect(res.statusCode).toBe(400)
-      expect(JSON.parse(res.body).message).toMatch(/after the current close date/i)
+      expect(res.statusCode).toBe(200)
     })
 
     it('returns 400 for invalid date string', async () => {

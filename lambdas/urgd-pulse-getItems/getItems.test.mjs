@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
+vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 

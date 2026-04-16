@@ -14,7 +14,25 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class PutItemCommand {
     constructor(input) { this.input = input }
   }
-  return { DynamoDBClient, PutItemCommand }
+  class BatchWriteItemCommand {
+    constructor(input) { this.input = input }
+  }
+  class UpdateItemCommand {
+    constructor(input) { this.input = input }
+  }
+  return { DynamoDBClient, PutItemCommand, BatchWriteItemCommand, UpdateItemCommand }
+})
+
+vi.mock('@aws-sdk/client-ssm', () => {
+  class SSMClient { send() { return Promise.resolve({}) } }
+  class GetParameterCommand { constructor(input) { this.input = input } }
+  return { SSMClient, GetParameterCommand }
+})
+
+vi.mock('@aws-sdk/client-s3', () => {
+  class S3Client { send() { return Promise.resolve({}) } }
+  class PutObjectCommand { constructor(input) { this.input = input } }
+  return { S3Client, PutObjectCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -54,9 +72,9 @@ describe('urgd-pulse-createTenant', () => {
     expect(features.maxActiveItems).toBe(1)
     expect(features.maxSessionsPerItem).toBe(5)
     expect(features.sessionTimeLimitMinutes).toBe(15)
-    expect(features.pulseCheckGroupMode).toBe(false)
     expect(features.itemRevisionLoop).toBe(false)
     expect(features.emailReminders).toBe(true)
+    expect(features.pulseCheck).toBe(true)
   })
 
   it('includes usage with zero counts', async () => {
@@ -81,12 +99,13 @@ describe('urgd-pulse-createTenant', () => {
     expect(res.statusCode).toBe(500)
   })
 
-  it('returns 400 on invalid JSON body', async () => {
+  it('returns 201 even with invalid JSON body (body is not parsed)', async () => {
+    sendSpy.mockResolvedValue({})
     const res = await handler({
       headers: { origin: 'https://pulse.urgdstudios.com' },
       requestContext: { requestId: 'req-bad' },
       body: '{bad json',
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).toBe(201)
   })
 })

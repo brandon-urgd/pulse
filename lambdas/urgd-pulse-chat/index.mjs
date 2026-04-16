@@ -36,7 +36,7 @@ const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__', '__template_init__']
+const SPECIAL_MESSAGES = ['__session_start__', '__session_resume__', '__session_end__']
 
 async function getS3Text(bucket, key) {
   try {
@@ -137,66 +137,6 @@ function marshalCoverageMap(coverageMap) {
     }
   }
   return { M: m }
-}
-
-
-/**
- * Async priming call — warms the Bedrock prompt cache during __template_init__.
- * Builds the same content blocks as the first real turn (document + page images + cache points),
- * calls Bedrock ConverseCommand with maxTokens: 1, and logs the result.
- * The response content is discarded — only the cache write matters.
- */
-async function primeCacheAsync({ systemPrompt, nativeDocBytes, documentKey, pageCount, tenantId, itemId, sessionId, requestId }) {
-  const primingStart = Date.now()
-
-  // Build the same content blocks as the first real turn
-  const userContent = []
-
-  // Document block
-  const ext = documentKey.split('.').pop()?.toLowerCase()
-  userContent.push({ document: { format: ext, name: 'document', source: { bytes: nativeDocBytes } } })
-
-  // Page images (same order as first real turn)
-  for (let p = 1; p <= pageCount; p++) {
-    const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
-    try {
-      const pageBytes = await getS3Bytes(process.env.DATA_BUCKET, pageKey)
-      if (pageBytes) {
-        userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
-      }
-    } catch {
-      log('warn', 'Chat: priming — failed to read page image, skipping', { requestId, sessionId, page: p })
-    }
-  }
-
-  // Cache point after document + images
-  userContent.push({ cachePoint: { type: 'default' } })
-
-  // Minimal user message (required by Converse API)
-  userContent.push({ text: '[cache_priming]' })
-
-  const primingResponse = await bedrock.send(new ConverseCommand({
-    modelId: process.env.BEDROCK_MODEL_ID,
-    system: [
-      { text: systemPrompt },
-      { cachePoint: { type: 'default' } },
-    ],
-    messages: [{ role: 'user', content: userContent }],
-    inferenceConfig: { maxTokens: 1 },
-  }))
-
-  const primingLatency = Date.now() - primingStart
-  const cacheWriteTokens = primingResponse.usage?.cacheWriteInputTokens || 0
-  const cacheReadTokens = primingResponse.usage?.cacheReadInputTokens || 0
-
-  log('info', 'Chat: priming call completed', {
-    requestId, sessionId, tenantId,
-    primingLatencyMs: primingLatency,
-    cacheWriteInputTokens: cacheWriteTokens,
-    cacheReadInputTokens: cacheReadTokens,
-    inputTokens: primingResponse.usage?.inputTokens || 0,
-    outputTokens: primingResponse.usage?.outputTokens || 0,
-  })
 }
 
 
@@ -336,180 +276,6 @@ async function handleChat(event, responseStream) {
 
     const itemId = session.itemId?.S
 
-    // Two-Phase Session Start: __template_init__ path — write transcript entry for template greeting
-    // This path does NOT invoke Bedrock — it writes the template greeting to the transcript
-    if (message === '__template_init__' && body.templateGreeting) {
-      // Validate templateGreeting is a string and within reasonable bounds
-      const greeting = typeof body.templateGreeting === 'string' ? body.templateGreeting.slice(0, 2000) : null
-      if (!greeting) {
-        const resp = errorResponse(400, 'templateGreeting must be a non-empty string', {}, origin)
-        if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
-        return resp
-      }
-      log('info', 'Chat: __template_init__ received', { requestId, sessionId, tenantId, greetingLength: greeting.length })
-
-      // Idempotency guard: check if session already has transcript entries
-      // ConsistentRead prevents duplicate writes from near-simultaneous requests
-      const existingTranscript = await dynamo.send(new QueryCommand({
-        TableName: process.env.TRANSCRIPTS_TABLE,
-        KeyConditionExpression: 'sessionId = :sid',
-        ExpressionAttributeValues: { ':sid': { S: sessionId } },
-        Limit: 1,
-        ConsistentRead: true,
-      }))
-      if (existingTranscript.Items && existingTranscript.Items.length > 0) {
-        log('info', 'Chat: __template_init__ skipped — transcript already exists', { requestId, sessionId, tenantId })
-        const resp = createResponse(200, { data: { greeting, alreadyInitialized: true } }, {}, origin)
-        if (hasResponseStream) { responseStream.write(JSON.stringify(resp)); responseStream.end(); return }
-        return resp
-      }
-
-      const now = new Date().toISOString()
-      const agentMsgId = ulid()
-
-      // Atomic write: agent greeting transcript entry + session status update
-      await dynamo.send(new TransactWriteItemsCommand({
-        TransactItems: [
-          {
-            Put: {
-              TableName: process.env.TRANSCRIPTS_TABLE,
-              Item: {
-                sessionId: { S: sessionId },
-                messageId: { S: agentMsgId },
-                role: { S: 'agent' },
-                content: { S: greeting },
-                timestamp: { S: now },
-              },
-            },
-          },
-          {
-            Update: {
-              TableName: process.env.SESSIONS_TABLE,
-              Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
-              UpdateExpression: 'SET #status = :status, startedAt = :startedAt, updatedAt = :now',
-              ConditionExpression: '#status = :not_started',
-              ExpressionAttributeNames: { '#status': 'status' },
-              ExpressionAttributeValues: {
-                ':status': { S: 'in_progress' },
-                ':not_started': { S: 'not_started' },
-                ':startedAt': { S: now },
-                ':now': { S: now },
-              },
-            },
-          },
-        ],
-      }))
-
-      log('info', 'Chat: __template_init__ transcript written', { requestId, sessionId, tenantId, greetingLength: greeting.length })
-
-      // Prompt Cache Priming: After transcript write and session status update,
-      // fetch the item record, load document bytes, build the system prompt,
-      // and initiate the priming call. The priming Promise starts before the
-      // response is sent and is awaited after — the Lambda runtime keeps the
-      // execution context alive after responseStream.end() until the handler resolves.
-      //
-      // Eligibility: priming is only initiated when ALL conditions are met:
-      //   1. itemType === 'document' (skip image items)
-      //   2. Native document bytes available — PDF/DOCX in S3 (skip markdown/text items)
-      //   3. templateGreeting exists — greeting is truthy (skip legacy items)
-      let primingPromise = null
-      if (greeting && itemId && tenantId) {
-        try {
-          const itemResult = await dynamo.send(new GetItemCommand({
-            TableName: process.env.ITEMS_TABLE,
-            Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-          }))
-          const item = itemResult.Item
-          if (item) {
-            const primingItemType = item.itemType?.S || 'document'
-            const primingDocumentKey = item.documentKey?.S || null
-            const primingPageCount = item.pageCount?.N ? parseInt(item.pageCount.N, 10) : 0
-
-            if (primingItemType === 'document' && primingDocumentKey) {
-              const ext = primingDocumentKey.split('.').pop()?.toLowerCase()
-              const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
-              if (docMediaTypes[ext]) {
-                const nativeDocBytes = await getS3Bytes(process.env.DATA_BUCKET, primingDocumentKey)
-                if (nativeDocBytes) {
-                  // Read frozenSnapshot and session state for system prompt building
-                  const primingFrozenSnapshot = unmarshalMap(session.frozenSnapshot)
-                  let primingTotalSections
-                  if (primingFrozenSnapshot?.feedbackSections && Array.isArray(primingFrozenSnapshot.feedbackSections)) {
-                    primingTotalSections = primingFrozenSnapshot.feedbackSections.length
-                  } else {
-                    primingTotalSections = parseInt(session.totalSections?.N || '5', 10)
-                  }
-                  const primingCoverageMap = item.coverageMap?.M ? unmarshalMap(item.coverageMap) : null
-                  const primingIsSelfReview = session.isSelfReview?.BOOL === true
-                  const primingTimeLimitMinutes = parseInt(session.timeLimitMinutes?.N || '30', 10)
-
-                  // Build system prompt with the same parameters the first real turn will use
-                  const primingSystemPrompt = buildSystemPrompt({
-                    itemName: item.itemName?.S || 'this item',
-                    itemDescription: item.description?.S || '',
-                    itemContent: '', // Not needed when nativeDocumentAvailable
-                    itemType: primingItemType,
-                    totalSections: primingTotalSections,
-                    currentSection: 1,
-                    closingState: 'exploring',
-                    windingDown: undefined,
-                    message: '',
-                    isSpecial: false,
-                    frozenSnapshot: primingFrozenSnapshot,
-                    coverageMap: primingCoverageMap,
-                    imageBase64: null,
-                    isSelfReview: primingIsSelfReview,
-                    timeLimitMinutes: primingTimeLimitMinutes,
-                    nativeDocumentAvailable: true,
-                    templateGreeting: greeting,
-                  })
-
-                  // Start priming (non-blocking) BEFORE ending the response
-                  primingPromise = primeCacheAsync({
-                    systemPrompt: primingSystemPrompt,
-                    nativeDocBytes,
-                    documentKey: primingDocumentKey,
-                    pageCount: primingPageCount,
-                    tenantId,
-                    itemId,
-                    sessionId,
-                    requestId,
-                  }).catch(err => {
-                    log('warn', 'Chat: priming call failed', {
-                      requestId, sessionId, tenantId,
-                      errorName: err?.name, errorMessage: err?.message,
-                    })
-                  })
-                }
-              }
-            }
-          }
-        } catch (err) {
-          log('warn', 'Chat: priming setup failed', {
-            requestId, sessionId, tenantId,
-            errorName: err?.name, errorMessage: err?.message,
-          })
-        }
-      }
-
-      // Send response to client
-      const resp = createResponse(200, { data: { greeting } }, {}, origin)
-      if (hasResponseStream) {
-        responseStream.write(JSON.stringify(resp))
-        responseStream.end()
-      }
-
-      // Wait for priming to complete (Lambda stays alive after responseStream.end())
-      if (primingPromise) {
-        await primingPromise
-      }
-
-      if (!hasResponseStream) {
-        return resp
-      }
-      return
-    }
-
     // Read frozenSnapshot from session if available (4.4)
     const frozenSnapshot = unmarshalMap(session.frozenSnapshot)
     let sectionCoverage = unmarshalMap(session.sectionCoverage) || {}
@@ -554,7 +320,6 @@ async function handleChat(event, responseStream) {
     let coverageMap = null
     let documentKey = null
     let pageCount = 0
-    let templateGreeting = null
 
     if (itemId && tenantId) {
       try {
@@ -572,8 +337,6 @@ async function handleChat(event, responseStream) {
           if (itemResult.Item.coverageMap?.M) {
             coverageMap = unmarshalMap(itemResult.Item.coverageMap)
           }
-          // Two-Phase Session Start: Read templateGreeting from item record
-          templateGreeting = itemResult.Item.templateGreeting?.S || null
         }
       } catch {
         // Non-fatal
@@ -606,15 +369,20 @@ async function handleChat(event, responseStream) {
     // R8: Detect self-review sessions for prompt identity injection
     const isSelfReview = session.isSelfReview?.BOOL === true
 
-    // Pre-load native document bytes to determine if we can skip itemContent in the system prompt.
-    // This avoids sending the document text redundantly when the native PDF/DOCX block is available.
-    // Two-Phase Session Start: the template greeting is already in the transcript as an assistant
-    // message, so history.length > 0 on the reviewer's first real message. Check for the first
-    // user message in history instead of checking if history is empty.
-    const hasUserMessage = history.some(m => m.role === 'user')
-    const isFirstTurn = !hasUserMessage
+    // Phased Cache Priming: Turn-aware document injection
+    // Count prior user messages in transcript to determine the turn number.
+    // Turn 1 = 0 prior user messages (greeting), Turn 2 = 1 prior, Turn 3+ = 2+ prior.
+    // Phase 1 (turns 1-2): text-only, no native doc — fast responses (3-5s)
+    // Phase 2 (turn 3+): inject native doc from warm cache — full document intelligence
+    const priorUserMessages = history.filter(m => m.role === 'user').length
+    const turnNumber = priorUserMessages + 1
+
+    // Document injection only applies to document sessions with a native document (PDF/DOCX).
+    // Image sessions and text-only sessions are unaffected by turn-awareness.
+    const isDocumentInjectionTurn = turnNumber >= 3
+
     let nativeDocBytes = null
-    if (isFirstTurn && itemType === 'document' && documentKey) {
+    if (isDocumentInjectionTurn && itemType === 'document' && documentKey) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
       const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
       if (docMediaTypes[ext]) {
@@ -629,14 +397,21 @@ async function handleChat(event, responseStream) {
       }
     }
 
+    // nativeDocumentAvailable controls the system prompt phase:
+    // - false for turns 1-2 of document sessions (text-only phase)
+    // - true for turn 3+ of document sessions (full document phase)
+    // - For non-document sessions, this follows existing behavior (based on whether doc bytes loaded)
+    const nativeDocumentAvailable = !!nativeDocBytes
+
+    // Phased Cache Priming: System prompt no longer uses templateGreeting — the model
+    // generates its own greeting at turn 1 via __session_start__.
     const systemPrompt = buildSystemPrompt({
       itemName, itemDescription, itemContent, itemType,
       totalSections, currentSection, closingState,
       windingDown, message, isSpecial,
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
-      nativeDocumentAvailable: !!nativeDocBytes,
-      templateGreeting,
+      nativeDocumentAvailable,
     })
 
     // Build messages for Bedrock
@@ -709,11 +484,12 @@ async function handleChat(event, responseStream) {
       }
     }
 
-    // 5.4/5.5: Native document attachment — send-once pattern for PDF/DOCX items.
-    // On first turn (no prior transcript), attach original file as document content block.
-    // On subsequent turns, the document is already in conversation history — no re-attachment.
+    // Phased Cache Priming: Native document attachment — send-once pattern for PDF/DOCX items.
+    // On document injection turn (turn 3+), attach original file as document content block.
+    // On turns 1-2, the document is not attached — text-only phase for fast responses.
+    // On subsequent turns after injection, the document is already in conversation history.
     // nativeDocBytes was pre-loaded above (before system prompt building).
-    if (isFirstTurn && itemType === 'document' && documentKey && nativeDocBytes) {
+    if (isDocumentInjectionTurn && itemType === 'document' && documentKey && nativeDocBytes) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
@@ -731,8 +507,8 @@ async function handleChat(event, responseStream) {
       }
     }
 
-    // Session Fast Start: Attach page images on first turn (send-once pattern)
-    if (isFirstTurn && itemType === 'document' && pageCount > 0) {
+    // Phased Cache Priming: Attach page images on document injection turn (send-once pattern)
+    if (isDocumentInjectionTurn && itemType === 'document' && pageCount > 0) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
@@ -772,7 +548,7 @@ async function handleChat(event, responseStream) {
     // Prompt Cache Priming: Insert document-level cache point when native doc is present
     // but there are no page images (pageCount === 0). The page images block above handles
     // the case when pageCount > 0.
-    if (isFirstTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
+    if (isDocumentInjectionTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
@@ -985,8 +761,7 @@ async function handleChat(event, responseStream) {
     // 11. Session state updates
     const isFirstMessage = message === '__session_start__'
     // Two-Phase Session Start: also transition to in_progress when a non-special message
-    // arrives for a not_started session. This handles the case where initTemplateGreeting
-    // failed (best-effort) but the user sent a message anyway.
+    // arrives for a not_started session.
     const needsStatusTransition = isFirstMessage || (status === 'not_started' && !isSpecial)
     const sessionComplete = message === '__session_end__' || agentText.includes('[SESSION_COMPLETE]') || newClosingState === 'closed'
 

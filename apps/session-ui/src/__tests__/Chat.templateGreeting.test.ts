@@ -1,10 +1,8 @@
-// Unit tests for Chat.tsx — Template greeting flow
-// Requirements: 4.1, 4.2, 4.4, 8.1, 8.2, 8.5, 9.1, 9.2, 11.1
+// Unit tests for Chat.tsx — Template greeting flow REMOVED
+// Requirements: Requirement 13 (Phased Cache Priming — template greeting infrastructure removal)
 //
-// Since session-ui doesn't have @testing-library/react installed,
-// we test the API layer (initTemplateGreeting, getSessionState,
-// sendChatMessageStreaming) and the session state interface that
-// drives the template greeting logic in Chat.tsx.
+// Updated: initTemplateGreeting and templateGreeting have been removed.
+// The session now sends __session_start__ directly for model-generated greetings.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock fetch globally
@@ -17,7 +15,6 @@ vi.stubEnv('VITE_CHAT_FUNCTION_URL', 'https://fn.test.com/chat')
 
 // Import the API functions under test
 const {
-  initTemplateGreeting,
   getSessionState,
   sendChatMessageStreaming,
 } = await import('../api/session.ts')
@@ -25,14 +22,22 @@ const {
 // Also import consumeStream to verify streaming integration
 const { consumeStream } = await import('../hooks/useStreaming.ts')
 
-describe('Chat.tsx — template greeting flow', () => {
+describe('Chat.tsx — session start flow (template greeting removed)', () => {
   beforeEach(() => {
     fetchSpy.mockReset()
   })
 
-  // ── Requirement 4.1, 4.2: Template greeting displayed instantly ─────────
-  describe('getSessionState — templateGreeting for not_started sessions', () => {
-    it('returns templateGreeting when present for not_started session', async () => {
+  // ── initTemplateGreeting is no longer exported ──────────────────────────
+  describe('initTemplateGreeting removed from API', () => {
+    it('initTemplateGreeting is no longer exported from session API', async () => {
+      const sessionApi = await import('../api/session.ts')
+      expect((sessionApi as any).initTemplateGreeting).toBeUndefined()
+    })
+  })
+
+  // ── templateGreeting removed from SessionStateResponse ──────────────────
+  describe('getSessionState — templateGreeting no longer in response interface', () => {
+    it('returns session state without templateGreeting field', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -43,223 +48,20 @@ describe('Chat.tsx — template greeting flow', () => {
             status: 'not_started',
             timeLimitMinutes: 17,
             files: [],
-            templateGreeting: "Hey! I'm Pulse — an AI feedback guide built by ur/gd Studios. I'm here to walk you through Test Document.",
           },
         }),
       })
 
       const state = await getSessionState('session-1', 'token-abc')
-      expect(state.templateGreeting).toBe(
-        "Hey! I'm Pulse — an AI feedback guide built by ur/gd Studios. I'm here to walk you through Test Document."
-      )
       expect(state.status).toBe('not_started')
       expect(state.messages).toHaveLength(0)
-    })
-
-    it('returns null/undefined templateGreeting for legacy items (no greeting stored)', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 1,
-            totalSections: 3,
-            messages: [],
-            status: 'not_started',
-            timeLimitMinutes: 30,
-            files: [],
-            // No templateGreeting — legacy item
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-2', 'token-def')
-      expect(state.templateGreeting).toBeUndefined()
+      // templateGreeting is no longer part of the interface
+      expect((state as any).templateGreeting).toBeUndefined()
     })
   })
 
-  // ── Requirement 4.4, 11.1: Greeting not re-displayed for in_progress ────
-  describe('getSessionState — in_progress sessions (resume scenario)', () => {
-    it('does not include templateGreeting for in_progress sessions', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 2,
-            totalSections: 5,
-            messages: [
-              { role: 'agent', content: "Hey! I'm Pulse — greeting text here." },
-              { role: 'reviewer', content: "I'm ready to start." },
-              { role: 'agent', content: 'Great, let me review the document.' },
-            ],
-            status: 'in_progress',
-            timeLimitMinutes: 17,
-            files: [],
-            // Backend omits templateGreeting for in_progress sessions
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-3', 'token-ghi')
-      expect(state.templateGreeting).toBeUndefined()
-      expect(state.status).toBe('in_progress')
-      expect(state.messages).toHaveLength(3)
-    })
-
-    it('returns existing transcript messages for resumed sessions', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 1,
-            totalSections: 4,
-            messages: [
-              { role: 'agent', content: "Hey! I'm Pulse — greeting." },
-              { role: 'reviewer', content: 'Ready!' },
-            ],
-            status: 'in_progress',
-            timeLimitMinutes: 20,
-            files: [],
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-4', 'token-jkl')
-      expect(state.messages).toHaveLength(2)
-      expect(state.messages[0].role).toBe('agent')
-      expect(state.messages[1].role).toBe('reviewer')
-    })
-  })
-
-  // ── Requirement 4.1, 4.3: initTemplateGreeting writes transcript ────────
-  describe('initTemplateGreeting', () => {
-    it('sends __template_init__ message with templateGreeting to chat endpoint', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ data: { greeting: 'stored', alreadyInitialized: false } }),
-      })
-
-      await initTemplateGreeting('session-1', 'token-abc', 'Hey! I am Pulse.')
-
-      expect(fetchSpy).toHaveBeenCalledOnce()
-      const [url, options] = fetchSpy.mock.calls[0]
-      expect(url).toContain('/api/session/session-1/chat')
-      expect(options.method).toBe('POST')
-
-      const body = JSON.parse(options.body)
-      expect(body.message).toBe('__template_init__')
-      expect(body.templateGreeting).toBe('Hey! I am Pulse.')
-    })
-
-    it('does not throw on non-ok response (best-effort)', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: true }),
-      })
-
-      // initTemplateGreeting is best-effort — should not throw
-      await expect(initTemplateGreeting('session-1', 'token-abc', 'Hello!')).resolves.toBeUndefined()
-    })
-
-    it('does not throw on network failure (best-effort)', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('Network error'))
-
-      // initTemplateGreeting should propagate the error (caller catches it)
-      await expect(initTemplateGreeting('session-1', 'token-abc', 'Hello!')).rejects.toThrow('Network error')
-    })
-
-    it('includes Authorization header with session token', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      })
-
-      await initTemplateGreeting('session-1', 'my-token', 'Greeting text')
-
-      const [, options] = fetchSpy.mock.calls[0]
-      expect(options.headers.Authorization).toBe('Bearer my-token')
-    })
-  })
-
-  // ── Requirement 8.1, 8.2, 8.5: No __session_start__ when templateGreeting exists ──
-  describe('session state interface — template greeting vs legacy fallback', () => {
-    it('templateGreeting present + empty messages = instant greeting path (no __session_start__)', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 1,
-            totalSections: 5,
-            messages: [],
-            status: 'not_started',
-            timeLimitMinutes: 17,
-            files: [],
-            templateGreeting: 'Hey! I am Pulse.',
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-5', 'token-mno')
-
-      // Chat.tsx logic: if templateGreeting && messages.length === 0 → instant display
-      const shouldDisplayInstantly = !!state.templateGreeting && state.messages.length === 0
-      expect(shouldDisplayInstantly).toBe(true)
-
-      // Should NOT send __session_start__ in this path
-      const shouldSendSessionStart = !state.templateGreeting
-      expect(shouldSendSessionStart).toBe(false)
-    })
-
-    it('no templateGreeting = legacy fallback sends __session_start__ via streaming', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 1,
-            totalSections: 3,
-            messages: [],
-            status: 'not_started',
-            timeLimitMinutes: 30,
-            files: [],
-            // No templateGreeting — legacy item
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-6', 'token-pqr')
-
-      // Chat.tsx logic: no templateGreeting → legacy fallback → autoSend('__session_start__')
-      const shouldFallbackToSessionStart = !state.templateGreeting
-      expect(shouldFallbackToSessionStart).toBe(true)
-    })
-
-    it('preGeneratedGreeting field is no longer in the interface', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: {
-            currentSection: 1,
-            totalSections: 5,
-            messages: [],
-            status: 'not_started',
-            timeLimitMinutes: 17,
-            files: [],
-            templateGreeting: 'New greeting',
-          },
-        }),
-      })
-
-      const state = await getSessionState('session-7', 'token-stu')
-      // The old preGeneratedGreeting field should not be present
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((state as any).preGeneratedGreeting).toBeUndefined()
-      // The new templateGreeting field should be present
-      expect(state.templateGreeting).toBe('New greeting')
-    })
-  })
-
-  // ── Requirement 9.1, 9.2: autoSend uses sendChatMessageStreaming ────────
-  describe('sendChatMessageStreaming — used by autoSend for all signals', () => {
+  // ── Session start always uses __session_start__ ─────────────────────────
+  describe('session start — always sends __session_start__ via streaming', () => {
     it('sends __session_start__ signal via Function URL (streaming)', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: true,
@@ -270,7 +72,6 @@ describe('Chat.tsx — template greeting flow', () => {
 
       expect(fetchSpy).toHaveBeenCalledOnce()
       const [url, options] = fetchSpy.mock.calls[0]
-      // Should use Function URL, not API Gateway
       expect(url).toBe('https://fn.test.com/chat')
       expect(options.method).toBe('POST')
 
@@ -308,19 +109,6 @@ describe('Chat.tsx — template greeting flow', () => {
       expect(body.message).toBe('__session_end__')
     })
 
-    it('does not include Authorization header when using Function URL', async () => {
-      fetchSpy.mockResolvedValueOnce({
-        ok: true,
-        body: null,
-      })
-
-      await sendChatMessageStreaming('session-1', 'token-abc', '__session_start__')
-
-      const [, options] = fetchSpy.mock.calls[0]
-      // Function URL auth is in the body, not the header
-      expect(options.headers.Authorization).toBeUndefined()
-    })
-
     it('throws on non-ok response with error details', async () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false,
@@ -334,7 +122,7 @@ describe('Chat.tsx — template greeting flow', () => {
     })
   })
 
-  // ── Requirement 11.1: consumeStream integration for autoSend ────────────
+  // ── consumeStream integration for autoSend ──────────────────────────────
   describe('consumeStream — streaming response handling for autoSend', () => {
     function makeStreamResponse(chunks: string[]): Response {
       const encoder = new TextEncoder()

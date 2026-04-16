@@ -29,11 +29,11 @@ const PULSE_CHECK_WITH_THEMES = {
   Item: {
     tenantId: { S: 'tenant-1' },
     itemId: { S: 'item-1' },
-    themes: {
+    proposedRevisions: {
       L: [
-        { M: { themeId: { S: 'pricing' }, label: { S: 'Pricing' }, reviewerSignals: { L: [] } } },
-        { M: { themeId: { S: 'timeline' }, label: { S: 'Timeline' }, reviewerSignals: { L: [] } } },
-        { M: { themeId: { S: 'market' }, label: { S: 'Market' }, reviewerSignals: { L: [] } } },
+        { M: { revisionId: { S: 'pricing' } } },
+        { M: { revisionId: { S: 'timeline' } } },
+        { M: { revisionId: { S: 'market' } } },
       ],
     },
   },
@@ -48,7 +48,8 @@ describe('urgd-pulse-savePCDecisions', () => {
     it('accepts valid themeIds and returns decisionsCount', async () => {
       sendSpy
         .mockResolvedValueOnce(PULSE_CHECK_WITH_THEMES) // GetItem
-        .mockResolvedValueOnce({}) // UpdateItem
+        .mockResolvedValueOnce({}) // UpdateItem (ensure map)
+        .mockResolvedValueOnce({}) // UpdateItem (write decisions)
 
       const result = await handler(makeEvent('tenant-1', 'item-1', {
         pricing: { action: 'Accept' },
@@ -63,7 +64,8 @@ describe('urgd-pulse-savePCDecisions', () => {
     it('accepts all three valid action values: Accept, Revise, Override', async () => {
       sendSpy
         .mockResolvedValueOnce(PULSE_CHECK_WITH_THEMES)
-        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({}) // ensure map
+        .mockResolvedValueOnce({}) // write decisions
 
       const result = await handler(makeEvent('tenant-1', 'item-1', {
         pricing: { action: 'Accept' },
@@ -79,7 +81,8 @@ describe('urgd-pulse-savePCDecisions', () => {
     it('partial save: only submitted themeIds are updated', async () => {
       sendSpy
         .mockResolvedValueOnce(PULSE_CHECK_WITH_THEMES)
-        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({}) // ensure map
+        .mockResolvedValueOnce({}) // write decisions
 
       // Only submit 1 of 3 themes
       const result = await handler(makeEvent('tenant-1', 'item-1', {
@@ -90,10 +93,13 @@ describe('urgd-pulse-savePCDecisions', () => {
       const body = JSON.parse(result.body)
       expect(body.data.decisionsCount).toBe(1)
 
-      // Verify UpdateItem was called with only the submitted themeId
-      const updateCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'UpdateItemCommand')
-      const exprNames = updateCall[0].input.ExpressionAttributeNames
-      const themeValues = Object.values(exprNames)
+      // Verify the second UpdateItem was called with only the submitted themeId
+      // The second UpdateItem is the nested write (index 2 in sendSpy calls)
+      const updateCalls = sendSpy.mock.calls.filter(c => c[0]?.constructor?.name === 'UpdateItemCommand')
+      // updateCalls[0] = ensure map, updateCalls[1] = write decisions
+      const writeCall = updateCalls[1]
+      const exprNames = writeCall[0].input.ExpressionAttributeNames
+      const themeValues = Object.values(exprNames).filter(v => v !== 'decisions')
       expect(themeValues).toContain('pricing')
       expect(themeValues).not.toContain('timeline')
       expect(themeValues).not.toContain('market')
@@ -102,14 +108,17 @@ describe('urgd-pulse-savePCDecisions', () => {
     it('stores tenantNote when provided', async () => {
       sendSpy
         .mockResolvedValueOnce(PULSE_CHECK_WITH_THEMES)
-        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({}) // ensure map
+        .mockResolvedValueOnce({}) // write decisions
 
       await handler(makeEvent('tenant-1', 'item-1', {
         pricing: { action: 'Revise', tenantNote: 'Will adjust pricing in Q2' },
       }))
 
-      const updateCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'UpdateItemCommand')
-      const exprValues = updateCall[0].input.ExpressionAttributeValues
+      // The second UpdateItem is the nested write
+      const updateCalls = sendSpy.mock.calls.filter(c => c[0]?.constructor?.name === 'UpdateItemCommand')
+      const writeCall = updateCalls[1]
+      const exprValues = writeCall[0].input.ExpressionAttributeValues
       const decisionValue = Object.values(exprValues).find(v => v.M?.action)
       expect(decisionValue.M.tenantNote.S).toBe('Will adjust pricing in Q2')
     })
@@ -135,7 +144,6 @@ describe('urgd-pulse-savePCDecisions', () => {
 
       expect(result.statusCode).toBe(400)
     })
-
     it('returns 400 for empty decisions object', async () => {
       const result = await handler(makeEvent('tenant-1', 'item-1', {}))
       expect(result.statusCode).toBe(400)

@@ -1,5 +1,6 @@
-// Unit tests for Chat Lambda — __template_init__ handler
-// Validates: Requirements 6.1, 6.4, 8.4
+// Unit tests for Chat Lambda — __template_init__ handler REMOVED
+// Validates: Requirement 13.1 (Phased Cache Priming — template greeting infrastructure removal)
+// Updated: The __template_init__ handler has been removed. These tests verify it is no longer handled.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
@@ -94,7 +95,7 @@ function makeSessionItem(overrides = {}) {
 
 const { handler } = await import('../../lambdas/urgd-pulse-chat/index.mjs')
 
-describe('Chat Lambda — __template_init__ handler', () => {
+describe('Chat Lambda — __template_init__ handler removed (R13.1)', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
@@ -106,108 +107,47 @@ describe('Chat Lambda — __template_init__ handler', () => {
     s3SendSpy.mockRejectedValue(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }))
   })
 
-  describe('__template_init__ writes transcript + updates status atomically (R6.1, R6.4)', () => {
-    it('uses TransactWriteItemsCommand to write greeting transcript and update session status', async () => {
-      const greeting = "Hey! I'm Pulse — an AI feedback guide built by ur/gd Studios. I'm here to walk you through Test Doc."
-
+  describe('__template_init__ is treated as a regular message (R13.1)', () => {
+    it('routes __template_init__ through Bedrock instead of the old handler', async () => {
       dynamoSendSpy
         .mockResolvedValueOnce({ Item: makeSessionItem() }) // GetItem session
-        .mockResolvedValueOnce({ Items: [] }) // Query transcripts (idempotency check — empty)
-        .mockResolvedValueOnce({}) // TransactWriteItemsCommand
+        .mockResolvedValueOnce({ Items: [] }) // Query transcripts (history)
+        .mockResolvedValueOnce({ Item: { // GetItem item
+          tenantId: { S: 'tenant-abc' },
+          itemId: { S: 'item-123' },
+          itemName: { S: 'Test Doc' },
+          itemType: { S: 'document' },
+        }})
+        .mockResolvedValueOnce({}) // UpdateItem streamingLock
+        .mockResolvedValueOnce({}) // TransactWrite (reviewer + agent messages)
+        .mockResolvedValueOnce({}) // UpdateItem session state
+
+      bedrockSendSpy.mockResolvedValue({
+        output: { message: { content: [{ text: 'Agent response' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
+      })
 
       const event = makeEvent('session-xyz', 'tenant-abc', {
         message: '__template_init__',
-        templateGreeting: greeting,
+        templateGreeting: "Hey! I'm Pulse.",
       })
 
       const result = await handler(event)
       expect(result.statusCode).toBe(200)
 
+      // It went through Bedrock (regular message path)
+      expect(bedrockSendSpy).toHaveBeenCalledOnce()
+
       const body = JSON.parse(result.body)
-      expect(body.data.greeting).toBe(greeting)
+      expect(body.data.message).toBe('Agent response')
+      // Old handler response fields are absent
+      expect(body.data.greeting).toBeUndefined()
       expect(body.data.alreadyInitialized).toBeUndefined()
-
-      // Verify TransactWriteItemsCommand was called
-      const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
-      const transactCall = dynamoCalls.find(c => c.constructor.name === 'TransactWriteItemsCommand')
-      expect(transactCall).toBeDefined()
-
-      const items = transactCall.input.TransactItems
-      expect(items).toHaveLength(2)
-
-      // First item: Put transcript entry
-      const putItem = items.find(i => i.Put)
-      expect(putItem.Put.Item.role.S).toBe('agent')
-      expect(putItem.Put.Item.content.S).toBe(greeting)
-      expect(putItem.Put.Item.sessionId.S).toBe('session-xyz')
-      expect(putItem.Put.Item.messageId).toBeDefined()
-      expect(putItem.Put.Item.timestamp).toBeDefined()
-
-      // Second item: Update session status with ConditionExpression
-      const updateItem = items.find(i => i.Update)
-      expect(updateItem.Update.ExpressionAttributeValues[':status'].S).toBe('in_progress')
-      expect(updateItem.Update.ExpressionAttributeValues[':startedAt']).toBeDefined()
-      // Race condition prevention: ConditionExpression prevents overwriting terminal states
-      expect(updateItem.Update.ConditionExpression).toBe('#status = :not_started')
-      expect(updateItem.Update.ExpressionAttributeValues[':not_started'].S).toBe('not_started')
-    })
-
-    it('uses ConsistentRead on idempotency check to prevent duplicate writes', async () => {
-      const greeting = "Hey! I'm Pulse."
-
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: makeSessionItem() }) // GetItem session
-        .mockResolvedValueOnce({ Items: [] }) // Query transcripts
-        .mockResolvedValueOnce({}) // TransactWriteItemsCommand
-
-      const event = makeEvent('session-xyz', 'tenant-abc', {
-        message: '__template_init__',
-        templateGreeting: greeting,
-      })
-
-      await handler(event)
-
-      // Find the Query call (second DynamoDB call)
-      const queryCall = dynamoSendSpy.mock.calls
-        .map(c => c[0])
-        .find(c => c.constructor.name === 'QueryCommand')
-      expect(queryCall).toBeDefined()
-      expect(queryCall.input.ConsistentRead).toBe(true)
-    })
-  })
-
-  describe('idempotency: returns alreadyInitialized when transcript exists (R6.1)', () => {
-    it('returns alreadyInitialized: true when transcript already has entries', async () => {
-      const greeting = "Hey! I'm Pulse — an AI feedback guide."
-
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: makeSessionItem({ status: { S: 'in_progress' } }) }) // GetItem session
-        .mockResolvedValueOnce({ Items: [{ sessionId: { S: 'session-xyz' }, messageId: { S: 'existing-msg' } }] }) // Query transcripts — already has entries
-
-      const event = makeEvent('session-xyz', 'tenant-abc', {
-        message: '__template_init__',
-        templateGreeting: greeting,
-      })
-
-      const result = await handler(event)
-      expect(result.statusCode).toBe(200)
-
-      const body = JSON.parse(result.body)
-      expect(body.data.alreadyInitialized).toBe(true)
-      expect(body.data.greeting).toBe(greeting)
-
-      // TransactWriteItemsCommand should NOT have been called
-      const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
-      const transactCall = dynamoCalls.find(c => c.constructor.name === 'TransactWriteItemsCommand')
-      expect(transactCall).toBeUndefined()
     })
   })
 
   describe('__init_pregenerated__ is no longer handled (R8.4)', () => {
     it('__init_pregenerated__ is not in SPECIAL_MESSAGES and falls through to Bedrock path', async () => {
-      // __init_pregenerated__ is no longer a special message, so it will be treated as a
-      // regular user message and go through the Bedrock path. We verify it does NOT trigger
-      // the template init path (no idempotency check, no TransactWrite for greeting).
       dynamoSendSpy
         .mockResolvedValueOnce({ Item: makeSessionItem() }) // GetItem session
         .mockResolvedValueOnce({ Items: [] }) // Query transcripts (history)
@@ -234,11 +174,9 @@ describe('Chat Lambda — __template_init__ handler', () => {
       const result = await handler(event)
       expect(result.statusCode).toBe(200)
 
-      // It went through Bedrock (regular message path), not the template init path
       expect(bedrockSendSpy).toHaveBeenCalledOnce()
 
       const body = JSON.parse(result.body)
-      // Response is from Bedrock, not the template init handler
       expect(body.data.message).toBe('Agent response')
       expect(body.data.alreadyInitialized).toBeUndefined()
     })

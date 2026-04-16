@@ -96,8 +96,8 @@ describe('Click-to-reveal removal — PulseCheck.tsx source verification', () =>
     }
   })
 
-  it('InlineQuotePreview component still exists in the file (not deleted)', () => {
-    // The component is kept in place per design — it may be used elsewhere
-    expect(source).toContain('function InlineQuotePreview')
+  it('InlineQuotePreview component was removed from the file (refactored out)', () => {
+    // The component was removed during the click-to-reveal refactoring
+    expect(source).not.toContain('InlineQuotePreview')
   })
 })

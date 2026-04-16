@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
+      // Map @pulse/shared to the shared package source
+      {
+        find: /^@pulse\/shared$/,
+        replacement: path.resolve(__dirname, 'apps/shared/src/index.ts'),
+      },
       // Map ./shared/utils.mjs (relative import inside any lambda) to the shared utils
       {
         find: /^\.\/shared\/utils\.mjs$/,
@@ -15,10 +20,6 @@ export default defineConfig({
       {
         find: /^\.\/shared\/features\.mjs$/,
         replacement: path.resolve(__dirname, 'lambdas/shared/features.mjs'),
-      },
-      {
-        find: /^\.\/shared\/greetingTemplates\.mjs$/,
-        replacement: path.resolve(__dirname, 'lambdas/shared/greetingTemplates.mjs'),
       },
       {
         find: /^\.\/shared\/tiers\.mjs$/,
@@ -31,6 +32,14 @@ export default defineConfig({
       {
         find: /^\.\/shared\/scheduleClose\.mjs$/,
         replacement: path.resolve(__dirname, 'lambdas/shared/scheduleClose.mjs'),
+      },
+      {
+        find: /^\.\/shared\/primeCacheAsync\.mjs$/,
+        replacement: path.resolve(__dirname, 'lambdas/shared/primeCacheAsync.mjs'),
+      },
+      {
+        find: /^\.\/shared\/buildSystemPrompt\.mjs$/,
+        replacement: path.resolve(__dirname, 'lambdas/shared/buildSystemPrompt.mjs'),
       },
     ],
   },

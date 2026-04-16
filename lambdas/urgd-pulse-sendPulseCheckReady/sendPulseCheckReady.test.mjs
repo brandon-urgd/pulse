@@ -89,7 +89,7 @@ describe('sendPulseCheckReady handler', () => {
     expect(sesCall.input.Message.Subject.Data).toBe('Your Pulse Check for My Test Document is ready')
   })
 
-  it('sends email from pulse@urgdstudios.com with reply-to no-reply@urgdstudios.com', async () => {
+  it('sends email from pulse@urgdstudios.com with reply-to admin@urgdstudios.com', async () => {
     dynamoSendSpy.mockResolvedValueOnce(makeTenant())
     sesSendSpy.mockResolvedValueOnce({})
 
@@ -97,7 +97,7 @@ describe('sendPulseCheckReady handler', () => {
 
     const sesCall = sesSendSpy.mock.calls[0][0]
     expect(sesCall.input.Source).toContain('pulse@urgdstudios.com')
-    expect(sesCall.input.ReplyToAddresses).toContain('no-reply@urgdstudios.com')
+    expect(sesCall.input.ReplyToAddresses).toContain('admin@urgdstudios.com')
   })
 
   it('sends email to the tenant email address', async () => {

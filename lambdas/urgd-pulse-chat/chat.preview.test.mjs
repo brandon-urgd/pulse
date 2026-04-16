@@ -249,8 +249,9 @@ describe('urgd-pulse-chat — preview mode', () => {
         .mockResolvedValueOnce({ Item: makeSession() })
         .mockResolvedValueOnce({ Items: [] })
         .mockResolvedValueOnce(makeItemRecord())
+        .mockResolvedValueOnce({})  // streamingLock UpdateItem
         .mockResolvedValueOnce({})  // TransactWriteItems
-        .mockResolvedValueOnce({})  // UpdateItem
+        .mockResolvedValueOnce({})  // UpdateItem session state
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Normal response'))
 
@@ -258,7 +259,8 @@ describe('urgd-pulse-chat — preview mode', () => {
 
       const { UpdateItemCommand } = await import('@aws-sdk/client-dynamodb')
       const updateCalls = sendSpy.mock.calls.filter(([cmd]) => cmd instanceof UpdateItemCommand)
-      expect(updateCalls).toHaveLength(1)
+      // 2 UpdateItem calls: streamingLock + session state update
+      expect(updateCalls).toHaveLength(2)
     })
   })
 })

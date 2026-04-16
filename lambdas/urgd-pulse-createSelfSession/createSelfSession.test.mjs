@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
+vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('APP_URL', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
@@ -17,6 +18,29 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class UpdateItemCommand { constructor(input) { this.input = input } }
   return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand }
 })
+
+vi.mock('@aws-sdk/client-s3', () => {
+  class S3Client { send() { return Promise.resolve({}) } }
+  class GetObjectCommand { constructor(input) { this.input = input } }
+  return { S3Client, GetObjectCommand }
+})
+
+vi.mock('@aws-sdk/client-bedrock-runtime', () => {
+  class BedrockRuntimeClient { send() { return Promise.resolve({ output: { message: { content: [{ text: '' }] } }, usage: {} }) } }
+  class ConverseCommand { constructor(input) { this.input = input } }
+  return { BedrockRuntimeClient, ConverseCommand }
+})
+
+vi.mock('./shared/features.mjs', () => ({
+  resolveFeature: vi.fn((tenantRecord, featureName, systemRecord) => {
+    if (featureName === 'maxSessionsPerItem') return { allowed: true, limit: 5 }
+    return { allowed: true, limit: 100 }
+  }),
+}))
+
+vi.mock('./shared/counters.mjs', () => ({
+  checkAndIncrement: vi.fn(() => Promise.resolve({ allowed: true, newCount: 1 })),
+}))
 
 const { handler } = await import('./index.mjs')
 
@@ -54,15 +78,46 @@ beforeEach(() => {
   dynamoSendSpy.mockReset()
 })
 
+// Helper: set up DynamoDB mocks that handle the full handler flow
+function setupMocks(itemRecord, sessionCount = 0) {
+  dynamoSendSpy.mockImplementation((cmd) => {
+    const name = cmd?.constructor?.name
+    if (name === 'GetItemCommand') {
+      const table = cmd.input?.TableName
+      if (table === process.env.TENANTS_TABLE) {
+        // Tenant or SYSTEM record for feature flag check / counter read
+        const key = cmd.input?.Key?.tenantId?.S
+        if (key === 'SYSTEM') {
+          return Promise.resolve({ Item: { tenantId: { S: 'SYSTEM' }, serviceFlags: { M: {} } } })
+        }
+        return Promise.resolve({
+          Item: {
+            tenantId: { S: 'tenant-abc' },
+            tier: { S: 'free' },
+            features: { M: {} },
+            serviceFlags: { M: {} },
+          },
+        })
+      }
+      if (table === process.env.ITEMS_TABLE) {
+        return Promise.resolve({ Item: itemRecord })
+      }
+      return Promise.resolve({ Item: null })
+    }
+    if (name === 'QueryCommand') {
+      return Promise.resolve({ Count: sessionCount })
+    }
+    if (name === 'PutItemCommand' || name === 'UpdateItemCommand') {
+      return Promise.resolve({})
+    }
+    return Promise.resolve({})
+  })
+}
+
 describe('urgd-pulse-createSelfSession', () => {
   describe('success cases', () => {
     it('creates session with isSelfReview: true for a draft item', async () => {
-      // GetItem (item) → QueryCommand (session count) → PutItem (session) → UpdateItem (item)
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: DRAFT_ITEM })   // GetItem item
-        .mockResolvedValueOnce({ Count: 0 })            // QueryCommand session count
-        .mockResolvedValueOnce({})                      // PutItem session
-        .mockResolvedValueOnce({})                      // UpdateItem item
+      setupMocks(DRAFT_ITEM, 0)
 
       const result = await handler(makeEvent())
       const body = JSON.parse(result.body)
@@ -78,11 +133,7 @@ describe('urgd-pulse-createSelfSession', () => {
     })
 
     it('creates session with isSelfReview: true for an active item', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: ACTIVE_ITEM })
-        .mockResolvedValueOnce({ Count: 2 })
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({})
+      setupMocks(ACTIVE_ITEM, 2)
 
       const result = await handler(makeEvent())
       const body = JSON.parse(result.body)
@@ -95,11 +146,7 @@ describe('urgd-pulse-createSelfSession', () => {
     })
 
     it('does not send email — no SES calls', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: DRAFT_ITEM })
-        .mockResolvedValueOnce({ Count: 0 })
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({})
+      setupMocks(DRAFT_ITEM, 0)
 
       await handler(makeEvent())
 
@@ -112,22 +159,14 @@ describe('urgd-pulse-createSelfSession', () => {
     })
 
     it('counts toward session limit — session count is checked before creation', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: ACTIVE_ITEM })
-        .mockResolvedValueOnce({ Count: 4 })  // 4 existing, limit is 5 → allowed
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({})
+      setupMocks(ACTIVE_ITEM, 4)
 
       const result = await handler(makeEvent())
       expect(result.statusCode).toBe(201)
     })
 
     it('returns valid sessionUrl containing the sessionId', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: DRAFT_ITEM })
-        .mockResolvedValueOnce({ Count: 0 })
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({})
+      setupMocks(DRAFT_ITEM, 0)
 
       const result = await handler(makeEvent())
       const body = JSON.parse(result.body)
@@ -137,11 +176,7 @@ describe('urgd-pulse-createSelfSession', () => {
     })
 
     it('activates draft item to active on first session', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: DRAFT_ITEM })
-        .mockResolvedValueOnce({ Count: 0 })
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({})
+      setupMocks(DRAFT_ITEM, 0)
 
       await handler(makeEvent())
 
@@ -156,9 +191,7 @@ describe('urgd-pulse-createSelfSession', () => {
 
   describe('session limit enforcement', () => {
     it('returns 403 when at session limit', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: ACTIVE_ITEM })
-        .mockResolvedValueOnce({ Count: 5 })  // at limit
+      setupMocks(ACTIVE_ITEM, 5)
 
       const result = await handler(makeEvent())
       expect(result.statusCode).toBe(403)
@@ -169,8 +202,7 @@ describe('urgd-pulse-createSelfSession', () => {
 
   describe('item status validation', () => {
     it('returns 409 for closed items', async () => {
-      dynamoSendSpy
-        .mockResolvedValueOnce({ Item: CLOSED_ITEM })
+      setupMocks(CLOSED_ITEM)
 
       const result = await handler(makeEvent())
       expect(result.statusCode).toBe(409)
@@ -178,7 +210,7 @@ describe('urgd-pulse-createSelfSession', () => {
 
     it('returns 409 for revised items', async () => {
       const revisedItem = { ...DRAFT_ITEM, status: { S: 'revised' } }
-      dynamoSendSpy.mockResolvedValueOnce({ Item: revisedItem })
+      setupMocks(revisedItem)
 
       const result = await handler(makeEvent())
       expect(result.statusCode).toBe(409)
@@ -209,7 +241,7 @@ describe('urgd-pulse-createSelfSession', () => {
     })
 
     it('returns 404 when item does not exist', async () => {
-      dynamoSendSpy.mockResolvedValueOnce({ Item: null })
+      setupMocks(null)
 
       const result = await handler(makeEvent())
       expect(result.statusCode).toBe(404)
@@ -217,7 +249,7 @@ describe('urgd-pulse-createSelfSession', () => {
 
     it('returns 404 when item belongs to a different tenant', async () => {
       const otherTenantItem = { ...DRAFT_ITEM, tenantId: { S: 'other-tenant' } }
-      dynamoSendSpy.mockResolvedValueOnce({ Item: otherTenantItem })
+      setupMocks(otherTenantItem)
 
       const result = await handler(makeEvent('tenant-abc'))
       expect(result.statusCode).toBe(404)

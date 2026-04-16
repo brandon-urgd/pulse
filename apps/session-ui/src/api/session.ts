@@ -64,7 +64,6 @@ export interface SessionStateResponse {
   closingState?: 'exploring' | 'narrowing' | 'closing' | 'closed'
   itemType?: 'document' | 'image'
   imageUrl?: string | null
-  templateGreeting?: string | null
 }
 
 export interface ChatResponse {
@@ -96,29 +95,6 @@ function makeError(body: { message?: string }, fallback: string, status: number)
   const err = new Error(body.message ?? fallback) as Error & { status: number }
   err.status = status
   return err
-}
-
-/**
- * Initialize template greeting transcript entry via the __template_init__ path.
- * Writes the greeting as an agent transcript entry and transitions session to in_progress.
- * Best-effort — failure does not block the greeting display (optimistic UI).
- */
-export async function initTemplateGreeting(
-  sessionId: string,
-  sessionToken: string,
-  templateGreeting: string
-): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/session/${sessionId}/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${sessionToken}`,
-    },
-    body: JSON.stringify({ message: '__template_init__', templateGreeting }),
-  })
-  if (!res.ok) {
-    console.warn('initTemplateGreeting: non-ok response', res.status)
-  }
 }
 
 export async function sendChatMessage(

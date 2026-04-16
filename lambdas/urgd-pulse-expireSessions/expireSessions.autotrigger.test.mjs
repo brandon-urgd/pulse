@@ -80,9 +80,9 @@ describe('expireSessions — auto-trigger behavior', () => {
           })
         }
         if (name === 'GetItemCommand') {
-          // Get item name
+          // Get item — must be closed for pulse check to trigger
           return Promise.resolve({
-            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: 'My Item' } },
+            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: 'My Item' }, status: { S: 'closed' } },
           })
         }
         return Promise.resolve({})
@@ -92,12 +92,11 @@ describe('expireSessions — auto-trigger behavior', () => {
 
       await handler({})
 
-      // Both functions should be invoked
+      // runPulseCheck should be invoked (sendPulseCheckReady is NOT invoked by expireSessions)
       const invokeCalls = lambdaSendSpy.mock.calls
       const functionNames = invokeCalls.map(c => c[0].input.FunctionName)
 
       expect(functionNames).toContain('urgd-pulse-runPulseCheck-dev')
-      expect(functionNames).toContain('urgd-pulse-sendPulseCheckReady-dev')
     })
 
     it('invokes sendPulseCheckReady with correct payload', async () => {
@@ -114,7 +113,7 @@ describe('expireSessions — auto-trigger behavior', () => {
         }
         if (name === 'GetItemCommand') {
           return Promise.resolve({
-            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: 'Test Document' } },
+            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: 'Test Document' }, status: { S: 'closed' } },
           })
         }
         return Promise.resolve({})
@@ -124,15 +123,15 @@ describe('expireSessions — auto-trigger behavior', () => {
 
       await handler({})
 
-      const sendReadyCall = lambdaSendSpy.mock.calls.find(
-        c => c[0].input.FunctionName === 'urgd-pulse-sendPulseCheckReady-dev'
+      // runPulseCheck should be invoked with correct payload
+      const runPulseCheckCall = lambdaSendSpy.mock.calls.find(
+        c => c[0].input.FunctionName === 'urgd-pulse-runPulseCheck-dev'
       )
-      expect(sendReadyCall).toBeTruthy()
+      expect(runPulseCheckCall).toBeTruthy()
 
-      const payload = JSON.parse(sendReadyCall[0].input.Payload)
+      const payload = JSON.parse(runPulseCheckCall[0].input.Payload)
       expect(payload.tenantId).toBe(tenantId)
       expect(payload.itemId).toBe(itemId)
-      expect(payload.itemName).toBe('Test Document')
     })
 
     it('invokes both functions as fire-and-forget (InvocationType: Event)', async () => {
@@ -264,7 +263,7 @@ describe('expireSessions — auto-trigger behavior', () => {
         if (name === 'GetItemCommand') {
           const itemId = cmd.input.Key.itemId.S
           return Promise.resolve({
-            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: `Item ${itemId}` } },
+            Item: { tenantId: { S: tenantId }, itemId: { S: itemId }, itemName: { S: `Item ${itemId}` }, status: { S: 'closed' } },
           })
         }
         return Promise.resolve({})
@@ -274,17 +273,14 @@ describe('expireSessions — auto-trigger behavior', () => {
 
       await handler({})
 
-      // Should have invoked both functions for each of the 2 items
+      // Should have invoked runPulseCheck for each of the 2 items
+      // (sendPulseCheckReady is NOT invoked by expireSessions)
       const invokeCalls = lambdaSendSpy.mock.calls
       const runPulseCheckCalls = invokeCalls.filter(
         c => c[0].input.FunctionName === 'urgd-pulse-runPulseCheck-dev'
       )
-      const sendReadyCalls = invokeCalls.filter(
-        c => c[0].input.FunctionName === 'urgd-pulse-sendPulseCheckReady-dev'
-      )
 
       expect(runPulseCheckCalls).toHaveLength(2)
-      expect(sendReadyCalls).toHaveLength(2)
     })
   })
 

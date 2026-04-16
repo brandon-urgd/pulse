@@ -16,6 +16,15 @@
     "test:coverage": "vitest --run --coverage"
   },
   "devDependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1030.0",
+    "@aws-sdk/client-cloudwatch": "^3.1030.0",
+    "@aws-sdk/client-dynamodb": "^3.1030.0",
+    "@aws-sdk/client-lambda": "^3.1030.0",
+    "@aws-sdk/client-s3": "^3.1030.0",
+    "@aws-sdk/client-scheduler": "^3.1030.0",
+    "@aws-sdk/client-ssm": "^3.1030.0",
+    "@aws-sdk/s3-request-presigner": "^3.1030.0",
+    "@shelf/aws-lambda-libreoffice": "^9.0.1",
     "@vitest/coverage-v8": "^4.1.0",
     "fast-check": "^4.6.0",
     "vitest": "^4.1.0"

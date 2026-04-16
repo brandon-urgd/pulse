@@ -17,6 +17,7 @@ vi.stubEnv('AWS_REGION', 'us-west-2')
 // ── Shared send spy + key capture ─────────────────────────────────────────────
 const sendSpy = vi.fn()
 let lastGetItemKey = null
+let lastBatchGetKeys = null
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient {
@@ -28,13 +29,28 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
       this.input = input
     }
   }
+  class BatchGetItemCommand {
+    constructor(input) {
+      // Capture the first non-SYSTEM key from the batch request
+      const tables = input.RequestItems || {}
+      for (const keys of Object.values(tables)) {
+        const keyList = keys.Keys || []
+        for (const key of keyList) {
+          if (key.tenantId?.S && key.tenantId.S !== 'SYSTEM') {
+            lastBatchGetKeys = key
+          }
+        }
+      }
+      this.input = input
+    }
+  }
   class QueryCommand {
     constructor(input) { this.input = input }
   }
   class UpdateItemCommand {
     constructor(input) { this.input = input }
   }
-  return { DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand }
+  return { DynamoDBClient, GetItemCommand, BatchGetItemCommand, QueryCommand, UpdateItemCommand }
 })
 
 const { handler: getSettings } = await import('../urgd-pulse-getSettings/index.mjs')
@@ -50,13 +66,15 @@ describe('Property 9: JWT tenantId Extraction Invariant', () => {
   beforeEach(() => {
     sendSpy.mockReset()
     lastGetItemKey = null
+    lastBatchGetKeys = null
   })
 
   it('getSettings uses tenantId from authorizer context, not from request body', async () => {
     await fc.assert(
       fc.asyncProperty(twoDifferentUuids, async ([authTenantId, bodyTenantId]) => {
         lastGetItemKey = null
-        sendSpy.mockResolvedValue({ Item: undefined })
+        lastBatchGetKeys = null
+        sendSpy.mockResolvedValue({ Responses: {}, Count: 0 })
 
         await getSettings({
           headers: { origin: 'https://pulse.urgdstudios.com' },
@@ -69,8 +87,10 @@ describe('Property 9: JWT tenantId Extraction Invariant', () => {
         })
 
         // The DynamoDB key must use the authorizer tenantId, not the body one
-        expect(lastGetItemKey?.tenantId?.S).toBe(authTenantId)
-        expect(lastGetItemKey?.tenantId?.S).not.toBe(bodyTenantId)
+        // getSettings uses BatchGetItemCommand, so check lastBatchGetKeys
+        const capturedKey = lastBatchGetKeys || lastGetItemKey
+        expect(capturedKey?.tenantId?.S).toBe(authTenantId)
+        expect(capturedKey?.tenantId?.S).not.toBe(bodyTenantId)
       }),
       { numRuns: 100 }
     )
@@ -116,8 +136,9 @@ describe('Property 9: JWT tenantId Extraction Invariant', () => {
     await fc.assert(
       fc.asyncProperty(twoDifferentUuids, async ([tenantA, tenantB]) => {
         lastGetItemKey = null
+        lastBatchGetKeys = null
         // Simulate tenant B's record exists in DynamoDB
-        sendSpy.mockResolvedValue({ Item: { tenantId: { S: tenantB } } })
+        sendSpy.mockResolvedValue({ Responses: {}, Count: 0 })
 
         await getSettings({
           headers: { origin: 'https://pulse.urgdstudios.com' },
@@ -128,7 +149,8 @@ describe('Property 9: JWT tenantId Extraction Invariant', () => {
         })
 
         // DynamoDB was queried with tenantA's key — not tenantB's
-        expect(lastGetItemKey?.tenantId?.S).toBe(tenantA)
+        const capturedKey = lastBatchGetKeys || lastGetItemKey
+        expect(capturedKey?.tenantId?.S).toBe(tenantA)
       }),
       { numRuns: 100 }
     )

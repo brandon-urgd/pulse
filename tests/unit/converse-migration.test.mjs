@@ -287,8 +287,8 @@ describe('Chat Lambda — Converse migration', () => {
     expect(bedrockCall.name).not.toBe('InvokeModelWithResponseStreamCommand')
   })
 
-  // ── R5.4: First turn with PDF includes document content block ──
-  it('attaches document content block on first turn for PDF items', async () => {
+  // ── R5.4: Phased Cache Priming — first turn is text-only, no document block ──
+  it('does NOT attach document content block on first turn (text-only phase)', async () => {
     const pdfBytes = Buffer.from('fake-pdf-content')
     mockChatHappyPath({
       documentKey: 'pulse/tenant-abc/items/item-123/document.pdf',
@@ -308,17 +308,14 @@ describe('Chat Lambda — Converse migration', () => {
     const firstUserMsg = messages.find(m => m.role === 'user')
     expect(firstUserMsg).toBeDefined()
 
-    // Content should be an array with document block + text block
+    // Content should NOT have a document block (text-only phase, turns 1-2)
     expect(Array.isArray(firstUserMsg.content)).toBe(true)
     const docBlock = firstUserMsg.content.find(b => b.document)
-    expect(docBlock).toBeDefined()
-    expect(docBlock.document.format).toBe('pdf')
-    expect(docBlock.document.name).toBe('document')
-    expect(docBlock.document.source.bytes).toEqual(pdfBytes)
+    expect(docBlock).toBeUndefined()
   })
 
-  // ── R5.4: First turn with DOCX includes document content block ──
-  it('attaches document content block on first turn for DOCX items', async () => {
+  // ── R5.4: Phased Cache Priming — first turn DOCX is also text-only ──
+  it('does NOT attach document content block on first turn for DOCX items (text-only phase)', async () => {
     const docxBytes = Buffer.from('fake-docx-content')
     const itemRecord = makeItemRecord({
       documentKey: { S: 'pulse/tenant-abc/items/item-123/document.docx' },
@@ -334,7 +331,6 @@ describe('Chat Lambda — Converse migration', () => {
 
     chatS3Spy
       .mockResolvedValueOnce(makeS3Body('# Extracted text'))
-      .mockResolvedValueOnce(makeS3BytesBody(docxBytes))
 
     chatBedrockSpy.mockResolvedValueOnce(makeConverseResponse('Agent response'))
 
@@ -345,8 +341,8 @@ describe('Chat Lambda — Converse migration', () => {
     const bedrockCall = chatBedrockSpy.mock.calls[0][0]
     const firstUserMsg = bedrockCall.input.messages.find(m => m.role === 'user')
     const docBlock = firstUserMsg.content.find(b => b.document)
-    expect(docBlock).toBeDefined()
-    expect(docBlock.document.format).toBe('docx')
+    // Text-only phase — no document block on turn 1
+    expect(docBlock).toBeUndefined()
   })
 
   // ── R5.5: Second turn does NOT include document content block ──

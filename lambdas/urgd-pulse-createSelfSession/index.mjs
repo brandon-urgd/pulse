@@ -9,6 +9,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateIte
 import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
+import { primeCacheAsync } from './shared/primeCacheAsync.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
@@ -238,17 +239,28 @@ export const handler = async (event) => {
     // Update item sessionCount (and activate if draft)
     const isFirstSession = itemStatus === 'draft'
     if (isFirstSession) {
-      await dynamo.send(new UpdateItemCommand({
-        TableName: process.env.ITEMS_TABLE,
-        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-        UpdateExpression: 'SET #status = :active, lockedAt = :now, updatedAt = :now ADD sessionCount :n',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':active': { S: 'active' },
-          ':now': { S: now },
-          ':n': { N: '1' },
-        },
-      }))
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.ITEMS_TABLE,
+          Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          UpdateExpression: 'SET #status = :active, lockedAt = :now, updatedAt = :now ADD sessionCount :n',
+          ConditionExpression: '#status = :draft',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':active': { S: 'active' },
+            ':draft': { S: 'draft' },
+            ':now': { S: now },
+            ':n': { N: '1' },
+          },
+        }))
+      } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+          // Item was already activated by a concurrent request — safe to continue
+          log('info', 'CreateSelfSession: item already activated concurrently', { requestId, tenantId, itemId })
+        } else {
+          throw err
+        }
+      }
     } else {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.ITEMS_TABLE,
@@ -269,12 +281,38 @@ export const handler = async (event) => {
 
     log('info', 'CreateSelfSession: completed', { requestId, tenantId, itemId, sessionId })
 
-    return createResponse(201, {
+    const resp = createResponse(201, {
       data: {
         sessionId,
         sessionUrl,
       },
     }, {}, origin)
+
+    // Fire-and-forget priming (async, after response)
+    if (itemResult.Item) {
+      const item = itemResult.Item
+      primeCacheAsync({
+        itemName: item.itemName?.S || '',
+        itemDescription: item.description?.S || '',
+        itemType: item.itemType?.S || '',
+        documentKey: item.documentKey?.S || '',
+        pageCount: parseInt(item.pageCount?.N || '0', 10),
+        tenantId,
+        itemId,
+        sessionId,
+        requestId,
+        frozenSnapshot: item.sectionMap?.M ? {
+          feedbackSections: (item.feedbackSections?.L || []).map(s => s.S || s),
+        } : null,
+        timeLimitMinutes: cappedTimeLimitMinutes,
+        isSelfReview: true,
+        coverageMap: null,
+        dataBucket: process.env.DATA_BUCKET,
+        bedrockModelId: process.env.BEDROCK_MODEL_ID,
+      })
+    }
+
+    return resp
   } catch (err) {
     log('error', 'CreateSelfSession: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
     return errorResponse(500, 'Failed to create self-review session', {}, origin)

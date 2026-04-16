@@ -1,8 +1,8 @@
 // Unit test for APP_VERSION constant
-// Validates: Requirement 10.1
+// Validates: Requirement 10.1, 15.1
 
 import { describe, it, expect } from 'vitest'
-import { APP_VERSION } from '../../apps/admin-ui/src/config/version'
+import { APP_VERSION } from '../../apps/shared/src/version'
 
 describe('APP_VERSION', () => {
   it('equals 1.1', () => {

@@ -354,6 +354,11 @@ Parameters:
     Default: 'local'
     Description: Git commit SHA injected at deploy time to force API Gateway redeployment
 
+  BedrockModelId:
+    Type: String
+    Default: 'us.anthropic.claude-sonnet-4-6'
+    Description: Bedrock model ID (cross-region inference profile) used by all AI-calling Lambdas
+
   QuarantineBucketName:
     Type: String
     Default: ''
@@ -1802,7 +1807,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -1812,7 +1817,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
 
   PulseCognitoAuthFunctionRole:
     Type: AWS::IAM::Role
@@ -1946,7 +1951,7 @@ Resources:
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
       Tags:
         - Key: project
           Value: pulse
@@ -4182,6 +4187,27 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                 Resource: !GetAtt PulseItemsTable.Arn
+              # Phased cache priming — Bedrock InvokeModel for async priming call
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              # Phased cache priming — S3 read for native document bytes and page images
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
 
   PulseAcceptConfidentialityFunctionRole:
     Type: AWS::IAM::Role
@@ -4617,7 +4643,7 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref ValidateSessionCodeKey
-      Timeout: 30
+      Timeout: 90
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, ValidateSession]
       TracingConfig:
@@ -4626,7 +4652,11 @@ Resources:
         Variables:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           ITEMS_TABLE: !Ref PulseItemsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          DATA_BUCKET: !Ref PulseDataBucket
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
       Tags:
         - Key: project
           Value: pulse
@@ -5616,7 +5646,7 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -5627,7 +5657,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -5758,7 +5788,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -5768,7 +5798,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               # Spec 2 — S3: SES permission for emailing session summaries to invited reviewers
               # checkov:skip=CKV_AWS_111: SES SendEmail does not support resource-level ARN constraints
               - Effect: Allow
@@ -5917,7 +5947,7 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           SES_FROM_EMAIL: !Sub 'noreply@${FrontendDomainName}'
       Tags:
         - Key: project
@@ -5955,7 +5985,7 @@ Resources:
           TRANSCRIPTS_TABLE: !Ref PulseTranscriptsTable
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           GENERATE_SESSION_SUMMARY_FUNCTION_NAME: !Ref PulseGenerateSessionSummaryFunction
           GENERATE_REPORT_FUNCTION_NAME: !Ref PulseGenerateReportFunction
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
@@ -6773,7 +6803,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -6783,7 +6813,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -6876,7 +6906,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -6886,7 +6916,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -7047,7 +7077,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
         - Key: project
@@ -7115,7 +7145,7 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
           PROCESS_FUNCTION_NAME: !Sub 'urgd-pulse-processPulseCheck-${Environment}'
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
@@ -7177,7 +7207,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -7187,7 +7217,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -7223,7 +7253,7 @@ Resources:
           REPORTS_TABLE: !Ref PulseReportsTable
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           ITEMS_TABLE: !Ref PulseItemsTable
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
@@ -7651,7 +7681,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -7661,7 +7691,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
@@ -7921,7 +7951,7 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           REVISIONS_TABLE: !Ref PulseRevisionsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
         - Key: project
@@ -8079,6 +8109,27 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt PulseSessionsTable.Arn
+              # Phased cache priming — Bedrock InvokeModel for async priming call
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              # Phased cache priming — S3 read for native document bytes and page images
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
 
   PulsePreviewSessionFunction:
     Type: AWS::Lambda::Function
@@ -8091,7 +8142,7 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref PreviewSessionCodeKey
-      Timeout: 30
+      Timeout: 90
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PreviewSession]
       TracingConfig:
@@ -8101,10 +8152,14 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           ITEMS_TABLE: !Ref PulseItemsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          DATA_BUCKET: !Ref PulseDataBucket
           APP_URL: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
       Tags:
         - Key: project
           Value: pulse
@@ -8211,6 +8266,27 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt PulseTenantsTable.Arn
+              # Phased cache priming — Bedrock InvokeModel for async priming call
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              # Phased cache priming — S3 read for native document bytes and page images
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
 
   PulseCreateSelfSessionFunction:
     Type: AWS::Lambda::Function
@@ -8223,7 +8299,7 @@ Resources:
       Code:
         S3Bucket: urgd-applicationdata
         S3Key: !Ref CreateSelfSessionCodeKey
-      Timeout: 30
+      Timeout: 90
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, CreateSelfSession]
       TracingConfig:
@@ -8233,10 +8309,14 @@ Resources:
           SESSIONS_TABLE: !Ref PulseSessionsTable
           ITEMS_TABLE: !Ref PulseItemsTable
           TENANTS_TABLE: !Ref PulseTenantsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          DATA_BUCKET: !Ref PulseDataBucket
           APP_URL: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
       Tags:
         - Key: project
           Value: pulse
@@ -8659,7 +8739,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -8669,7 +8749,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
       Tags:
         - Key: project
           Value: pulse
@@ -8723,7 +8803,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
@@ -8733,7 +8813,7 @@ Resources:
                   - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
                 Condition:
                   StringEquals:
-                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6'
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
       Tags:
         - Key: project
           Value: pulse
@@ -8798,7 +8878,7 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           ENVIRONMENT: !Ref Environment
           VERSION: !Ref DeploymentVersion
       Tags:
@@ -8835,7 +8915,7 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
-          BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-6'
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           ENVIRONMENT: !Ref Environment
           VERSION: !Ref DeploymentVersion

@@ -96,6 +96,10 @@ function mockHappyPath() {
   // S3: extracted.md not found, document.md found
   s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
   s3SendSpy.mockResolvedValueOnce(makeS3TextBody('# Original Document'))
+  // DynamoDB: GetItem item record (for documentKey/pageCount)
+  dynamoSendSpy.mockResolvedValueOnce({
+    Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } },
+  })
   // DynamoDB: pulse check
   dynamoSendSpy.mockResolvedValueOnce(makePulseCheck())
   // Bedrock response
@@ -123,6 +127,10 @@ describe('processRevision handler (worker)', () => {
     // S3: document found
     s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
     s3SendSpy.mockResolvedValueOnce(makeS3TextBody('# Original'))
+    // DynamoDB: GetItem item record
+    dynamoSendSpy.mockResolvedValueOnce({
+      Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } },
+    })
     // DynamoDB: pulse check
     dynamoSendSpy.mockResolvedValueOnce(makePulseCheck())
     // Bedrock: AccessDeniedException
@@ -152,6 +160,10 @@ describe('processRevision handler (worker)', () => {
   it('Bedrock ThrottlingException results in failed status and BedrockErrors metric', async () => {
     s3SendSpy.mockRejectedValueOnce(new Error('NoSuchKey'))
     s3SendSpy.mockResolvedValueOnce(makeS3TextBody('# Original'))
+    // DynamoDB: GetItem item record
+    dynamoSendSpy.mockResolvedValueOnce({
+      Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } },
+    })
     dynamoSendSpy.mockResolvedValueOnce(makePulseCheck())
     const err = new Error('Throttled')
     err.name = 'ThrottlingException'

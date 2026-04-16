@@ -4,6 +4,7 @@
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { primeCacheAsync } from './shared/primeCacheAsync.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
@@ -89,14 +90,23 @@ export const handler = async (event) => {
 
     // Discarded session recovery — reset to not_started so reviewer gets a clean restart
     if (status === 'discarded') {
-      await dynamo.send(new UpdateItemCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        Key: { tenantId: { S: tenantId }, sessionId: { S: foundSessionId } },
-        UpdateExpression: 'SET #status = :status REMOVE discardedAt',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':status': { S: 'not_started' } },
-      }))
-      log('info', 'ValidateSession: discarded session recovered', { requestId, sessionId: foundSessionId, tenantId })
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.SESSIONS_TABLE,
+          Key: { tenantId: { S: tenantId }, sessionId: { S: foundSessionId } },
+          UpdateExpression: 'SET #status = :status REMOVE discardedAt',
+          ConditionExpression: '#status = :discarded',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':status': { S: 'not_started' }, ':discarded': { S: 'discarded' } },
+        }))
+        log('info', 'ValidateSession: discarded session recovered', { requestId, sessionId: foundSessionId, tenantId })
+      } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+          log('warn', 'ValidateSession: discarded session status changed concurrently', { requestId, sessionId: foundSessionId, tenantId })
+          return errorResponse(409, 'Session state changed — please try again', {}, origin)
+        }
+        throw err
+      }
       // Continue with normal validation flow — session is now not_started
     }
 
@@ -120,6 +130,7 @@ export const handler = async (event) => {
 
     // Load item context — also enforces closed-item gate
     let itemContext = {}
+    let itemRecord = null
     if (itemId && tenantId) {
       try {
         const itemResult = await dynamo.send(new GetItemCommand({
@@ -131,6 +142,7 @@ export const handler = async (event) => {
         }))
 
         if (itemResult.Item) {
+          itemRecord = itemResult.Item
           const itemStatus = itemResult.Item.status?.S
           // Block new session entry if item is closed — in_progress sessions can finish naturally
           if (itemStatus === 'closed' && status === 'not_started') {
@@ -179,7 +191,7 @@ export const handler = async (event) => {
 
     log('info', 'ValidateSession: success', { requestId, sessionId: activeSessionId, tenantId })
 
-    return createResponse(200, {
+    const resp = createResponse(200, {
       sessionToken,
       sessionId: activeSessionId,
       tenantId,
@@ -188,6 +200,29 @@ export const handler = async (event) => {
       isPreview: isPreview || undefined,
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
+
+    // Fire-and-forget priming (async, after response)
+    if (itemRecord && activeSessionId) {
+      primeCacheAsync({
+        itemName: itemRecord.itemName?.S || '',
+        itemDescription: itemRecord.description?.S || '',
+        itemType: itemRecord.itemType?.S || '',
+        documentKey: itemRecord.documentKey?.S || '',
+        pageCount: parseInt(itemRecord.pageCount?.N || '0', 10),
+        tenantId,
+        itemId: itemRecord.itemId?.S || itemId,
+        sessionId: activeSessionId,
+        requestId,
+        frozenSnapshot: null,
+        timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
+        isSelfReview: isSelfReview || false,
+        coverageMap: null,
+        dataBucket: process.env.DATA_BUCKET,
+        bedrockModelId: process.env.BEDROCK_MODEL_ID,
+      })
+    }
+
+    return resp
   } catch (err) {
     log('error', 'ValidateSession: unexpected error', { requestId, errorName: err.name })
     return errorResponse(500, 'Failed to validate session', {}, origin)

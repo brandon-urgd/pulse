@@ -37,7 +37,7 @@ vi.mock('./shared/features.mjs', () => ({
 // ── Generators ───────────────────────────────────────────────────────────────
 const counterArb = fc.record({
   count: fc.nat({ max: 1000 }),
-  periodStart: fc.date({ min: new Date('2024-01-01'), max: new Date('2030-12-31') }).map(d => d.toISOString()),
+  periodStart: fc.date({ min: new Date('2024-01-01T00:00:00Z'), max: new Date('2030-12-31T00:00:00Z') }).map(d => d.toISOString()),
 })
 
 const usageCountersArb = fc.oneof(

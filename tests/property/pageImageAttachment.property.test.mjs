@@ -144,6 +144,9 @@ describe('Property 4: Page images attached completely and in order', () => {
 
   it('all page images are attached in order and count equals pageCount', async () => {
     // **Validates: Requirements 6.2, 6.3**
+    // Phased Cache Priming: document and page image injection now happens at turn 3+
+    // (2+ prior user messages), not on the first turn. This test uses 2 prior user
+    // messages to trigger document injection.
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 1, max: 20 }),  // pageCount
@@ -156,27 +159,42 @@ describe('Property 4: Page images attached completely and in order', () => {
           cwSpy.mockResolvedValue({})
           lambdaSpy.mockResolvedValue({})
 
+          // Build transcript with 2 prior user messages (turn 3 = document injection turn)
+          const transcriptItems = [
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-greeting' }, role: { S: 'agent' }, content: { S: 'Welcome!' }, timestamp: { S: '2024-01-01T00:00:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-r0' }, role: { S: 'reviewer' }, content: { S: 'Question 0' }, timestamp: { S: '2024-01-01T00:01:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-a0' }, role: { S: 'agent' }, content: { S: 'Answer 0' }, timestamp: { S: '2024-01-01T00:01:01Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-r1' }, role: { S: 'reviewer' }, content: { S: 'Question 1' }, timestamp: { S: '2024-01-01T00:02:00Z' } },
+            { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-a1' }, role: { S: 'agent' }, content: { S: 'Answer 1' }, timestamp: { S: '2024-01-01T00:02:01Z' } },
+          ]
+
           dynamoSpy
             .mockResolvedValueOnce({ Item: makeSessionItem() })       // GetItem session
-            .mockResolvedValueOnce({ Items: [] })                      // Query transcript (first turn)
+            .mockResolvedValueOnce({ Items: transcriptItems })         // Query transcript (2 prior user messages = turn 3)
             .mockResolvedValueOnce({ Item: makeItemRecord({ pageCount: { N: String(pageCount) } }) }) // GetItem item
             .mockResolvedValueOnce({})  // streamingLock
             .mockResolvedValueOnce({})  // TransactWrite
             .mockResolvedValueOnce({})  // session state update
 
-          // S3: extracted text
-          s3Spy.mockResolvedValueOnce(makeS3Body('# Extracted text'))
-          // S3: original document bytes (for native document block)
-          s3Spy.mockResolvedValueOnce(makeS3Body('fake-pdf-bytes'))
-          // S3: each page image returns unique content to verify ordering
-          for (let p = 1; p <= pageCount; p++) {
-            const pageContent = `page-${String(p).padStart(3, '0')}-data`
-            s3Spy.mockResolvedValueOnce(makeS3Body(pageContent))
-          }
+          // S3: extracted text + original document bytes + page images
+          s3Spy.mockImplementation((cmd) => {
+            const key = cmd.input?.Key || ''
+            if (key.endsWith('extracted.md')) return Promise.resolve(makeS3Body('# Extracted text'))
+            if (key.endsWith('document.md')) return Promise.resolve(makeS3Body('# Document text'))
+            if (key.endsWith('.pdf')) return Promise.resolve(makeS3Body('fake-pdf-bytes'))
+            if (key.includes('/pages/page-')) {
+              // Extract page number from key to return unique content for ordering verification
+              const match = key.match(/page-(\d+)\.png/)
+              const pageNum = match ? parseInt(match[1], 10) : 0
+              const pageContent = `page-${String(pageNum).padStart(3, '0')}-data`
+              return Promise.resolve(makeS3Body(pageContent))
+            }
+            return Promise.reject(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }))
+          })
 
-          bedrockSpy.mockResolvedValueOnce(makeConverseResponse('Welcome!'))
+          bedrockSpy.mockResolvedValueOnce(makeConverseResponse('Here are my thoughts on the formatting...'))
 
-          const event = makeChatEvent('session-xyz', 'tenant-abc', '__session_start__')
+          const event = makeChatEvent('session-xyz', 'tenant-abc', 'What about the formatting?')
           const result = await chatHandler(event)
 
           expect(result.statusCode).toBe(200)

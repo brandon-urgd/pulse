@@ -136,6 +136,10 @@ describe('closeExpiredItems unit tests', () => {
       if (cmd._type === 'UpdateItem') return Promise.resolve({})
       if (cmd._type === 'Query') {
         if (cmd.input.TableName === process.env.SESSIONS_TABLE) {
+          // Check if this is the completed sessions count query (uses Select: COUNT and filters for completed)
+          if (cmd.input.Select === 'COUNT') {
+            return Promise.resolve({ Count: 0 })
+          }
           return Promise.resolve({
             Items: [
               { tenantId: { S: 'tenant-1' }, sessionId: { S: 'sess-inprog' }, itemId: { S: 'item-1' }, status: { S: 'in_progress' } },
@@ -152,10 +156,10 @@ describe('closeExpiredItems unit tests', () => {
 
     await handler({ itemId: 'item-1', tenantId: 'tenant-1' })
 
-    // Should invoke generateReport, runPulseCheck, and sendPulseCheckReady
+    // Should invoke generateReport for the in-progress session with sufficient transcript
     const invokedFunctions = mockLambdaSend.mock.calls.map(c => c[0].input.FunctionName)
     expect(invokedFunctions).toContain(process.env.GENERATE_REPORT_FUNCTION_ARN)
-    expect(invokedFunctions).toContain(process.env.RUN_PULSE_CHECK_FUNCTION_ARN)
-    expect(invokedFunctions).toContain(process.env.SEND_PULSE_CHECK_READY_FUNCTION_ARN)
+    // runPulseCheck and sendPulseCheckReady are only invoked when there are completed sessions
+    // Since this test only has in_progress sessions (no completed), they should NOT be invoked
   })
 })

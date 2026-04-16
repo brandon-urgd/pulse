@@ -1,5 +1,8 @@
-// Unit tests for prompt cache priming — __template_init__ priming call structure
-// Validates: Requirements 3.1, 3.2, 3.3, 3.5, 7.1, 7.2
+// Unit tests for prompt cache priming — Chat Lambda no longer handles priming
+// Validates: Requirement 13.1 (Phased Cache Priming — template greeting infrastructure removal)
+// Updated: Priming has moved to entry point Lambdas (validateSession, createSelfSession, previewSession).
+// The Chat Lambda's __template_init__ handler and primeCacheAsync function have been removed.
+// Entry point priming tests are in tests/unit/entrypoint-priming.test.mjs.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
@@ -15,9 +18,6 @@ const s3SendSpy = vi.fn()
 const bedrockSendSpy = vi.fn()
 const cloudwatchSendSpy = vi.fn()
 const lambdaSendSpy = vi.fn()
-
-// Track console.warn calls for priming failure logging verification
-const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
@@ -59,8 +59,6 @@ vi.mock('ulid', () => ({
 
 const { handler } = await import('../../lambdas/urgd-pulse-chat/index.mjs')
 
-// --- Helpers ---
-
 function makeEvent(body) {
   return {
     headers: { origin: 'https://pulse.urgdstudios.com' },
@@ -88,195 +86,87 @@ function makeSessionItem(overrides = {}) {
   }
 }
 
-function makeDocumentItemRecord(overrides = {}) {
-  return {
-    Item: {
-      tenantId: { S: 'tenant-prime' },
-      itemId: { S: 'item-doc-1' },
-      itemName: { S: 'Test PDF Document' },
-      description: { S: 'A test PDF for priming' },
-      itemType: { S: 'document' },
-      documentKey: { S: 'pulse/tenant-prime/items/item-doc-1/document.pdf' },
-      pageCount: { N: '2' },
-      ...overrides,
-    },
-  }
-}
-
-function makePrimingBedrockResponse() {
-  return {
-    output: { message: { content: [{ text: '' }] } },
-    usage: {
-      inputTokens: 5000,
-      outputTokens: 1,
-      cacheWriteInputTokens: 4800,
-      cacheReadInputTokens: 0,
-    },
-  }
-}
-
-/** Creates a fake S3 readable stream from a Buffer */
-function fakeS3Body(buf) {
-  return {
-    Body: {
-      async *[Symbol.asyncIterator]() { yield buf },
-    },
-  }
-}
-
-const FAKE_PDF_BYTES = Buffer.from('%PDF-1.4 fake document content')
-const FAKE_PAGE_BYTES = Buffer.from('fake-png-page-image')
-
-/**
- * Sets up S3 mock to return document bytes and page images.
- * The S3 mock routes based on the key in the GetObjectCommand input.
- */
-function setupS3ForDocumentPriming() {
-  s3SendSpy.mockImplementation((cmd) => {
-    const key = cmd.input?.Key || ''
-    if (key.endsWith('.pdf')) {
-      return Promise.resolve(fakeS3Body(FAKE_PDF_BYTES))
-    }
-    if (key.includes('/pages/page-')) {
-      return Promise.resolve(fakeS3Body(FAKE_PAGE_BYTES))
-    }
-    return Promise.reject(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }))
-  })
-}
-
-/**
- * Sets up DynamoDB mocks for a standard __template_init__ flow that triggers priming.
- * Call order: GetItem session → Query transcripts → TransactWrite → GetItem item (for priming)
- */
-function setupDynamoForPriming(sessionOverrides = {}, itemOverrides = {}) {
-  dynamoSendSpy
-    .mockResolvedValueOnce({ Item: makeSessionItem(sessionOverrides) }) // GetItem session
-    .mockResolvedValueOnce({ Items: [] })                               // Query transcripts (empty — first init)
-    .mockResolvedValueOnce({})                                          // TransactWriteItemsCommand
-    .mockResolvedValueOnce(makeDocumentItemRecord(itemOverrides))       // GetItem item (for priming)
-}
-
-describe('Prompt Cache Priming — unit tests', () => {
+describe('Prompt Cache Priming — Chat Lambda no longer handles priming (R13.1)', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
     bedrockSendSpy.mockReset()
     cloudwatchSendSpy.mockReset()
     lambdaSendSpy.mockReset()
-    consoleWarnSpy.mockClear()
     cloudwatchSendSpy.mockResolvedValue({})
     lambdaSendSpy.mockResolvedValue({})
     s3SendSpy.mockRejectedValue(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' }))
   })
 
-  describe('priming uses ConverseCommand (not ConverseStreamCommand)', () => {
-    it('calls Bedrock with ConverseCommand for the priming call', async () => {
-      setupDynamoForPriming()
-      setupS3ForDocumentPriming()
-      bedrockSendSpy.mockResolvedValueOnce(makePrimingBedrockResponse())
+  describe('__template_init__ no longer triggers priming in Chat Lambda', () => {
+    it('__template_init__ is treated as a regular message — goes through Bedrock, not priming', async () => {
+      dynamoSendSpy
+        .mockResolvedValueOnce({ Item: makeSessionItem() }) // GetItem session
+        .mockResolvedValueOnce({ Items: [] }) // Query transcripts
+        .mockResolvedValueOnce({ Item: { // GetItem item
+          tenantId: { S: 'tenant-prime' },
+          itemId: { S: 'item-doc-1' },
+          itemName: { S: 'Test PDF Document' },
+          itemType: { S: 'document' },
+          documentKey: { S: 'pulse/tenant-prime/items/item-doc-1/document.pdf' },
+          pageCount: { N: '2' },
+        }})
+        .mockResolvedValueOnce({}) // UpdateItem streamingLock
+        .mockResolvedValueOnce({}) // TransactWrite
+        .mockResolvedValueOnce({}) // UpdateItem session state
+
+      bedrockSendSpy.mockResolvedValue({
+        output: { message: { content: [{ text: 'Agent response' }] } },
+        usage: { inputTokens: 100, outputTokens: 50 },
+      })
 
       const event = makeEvent({
         message: '__template_init__',
-        templateGreeting: "Hey! I'm Pulse — here to guide your review of Test PDF Document.",
+        templateGreeting: "Hey! I'm Pulse — here to guide your review.",
       })
 
       const result = await handler(event)
       expect(result.statusCode).toBe(200)
 
-      // Verify Bedrock was called exactly once (the priming call)
+      // Bedrock was called once — for the regular chat response, not priming
       expect(bedrockSendSpy).toHaveBeenCalledTimes(1)
 
-      // Verify the command is ConverseCommand, not ConverseStreamCommand
-      const { ConverseCommand, ConverseStreamCommand } = await import('@aws-sdk/client-bedrock-runtime')
+      // The Bedrock call uses maxTokens: 1024 (regular chat), not maxTokens: 1 (priming)
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-      expect(bedrockCall).toBeInstanceOf(ConverseCommand)
-      expect(bedrockCall).not.toBeInstanceOf(ConverseStreamCommand)
+      expect(bedrockCall.input.inferenceConfig.maxTokens).toBe(1024)
+
+      // Response is a regular chat response, not the old priming response
+      const body = JSON.parse(result.body)
+      expect(body.data.message).toBe('Agent response')
+      expect(body.data.greeting).toBeUndefined()
     })
   })
 
-  describe('priming call has maxTokens: 1', () => {
-    it('sets inferenceConfig.maxTokens to 1 to minimize cost', async () => {
-      setupDynamoForPriming()
-      setupS3ForDocumentPriming()
-      bedrockSendSpy.mockResolvedValueOnce(makePrimingBedrockResponse())
+  describe('Chat Lambda uses BEDROCK_MODEL_ID for regular calls', () => {
+    it('uses BEDROCK_MODEL_ID environment variable for Bedrock calls', async () => {
+      dynamoSendSpy
+        .mockResolvedValueOnce({ Item: makeSessionItem() }) // GetItem session
+        .mockResolvedValueOnce({ Items: [] }) // Query transcripts
+        .mockResolvedValueOnce({ Item: { // GetItem item
+          tenantId: { S: 'tenant-prime' },
+          itemId: { S: 'item-doc-1' },
+          itemName: { S: 'Test Doc' },
+          itemType: { S: 'document' },
+        }})
+        .mockResolvedValueOnce({}) // UpdateItem streamingLock
+        .mockResolvedValueOnce({}) // TransactWrite
+        .mockResolvedValueOnce({}) // UpdateItem session state
 
-      const event = makeEvent({
-        message: '__template_init__',
-        templateGreeting: "Hey! I'm Pulse — here to guide your review.",
+      bedrockSendSpy.mockResolvedValue({
+        output: { message: { content: [{ text: 'Response' }] } },
+        usage: { inputTokens: 10, outputTokens: 5 },
       })
 
-      const result = await handler(event)
-      expect(result.statusCode).toBe(200)
-
-      const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-      expect(bedrockCall.input.inferenceConfig).toBeDefined()
-      expect(bedrockCall.input.inferenceConfig.maxTokens).toBe(1)
-    })
-  })
-
-  describe('priming call uses same modelId as real calls', () => {
-    it('uses BEDROCK_MODEL_ID environment variable for the priming call', async () => {
-      setupDynamoForPriming()
-      setupS3ForDocumentPriming()
-      bedrockSendSpy.mockResolvedValueOnce(makePrimingBedrockResponse())
-
-      const event = makeEvent({
-        message: '__template_init__',
-        templateGreeting: "Hey! I'm Pulse — here to guide your review.",
-      })
-
-      const result = await handler(event)
-      expect(result.statusCode).toBe(200)
+      const event = makeEvent({ message: '__session_start__' })
+      await handler(event)
 
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
       expect(bedrockCall.input.modelId).toBe('us.anthropic.claude-sonnet-4-6')
-    })
-  })
-
-  describe('priming failure logs warning but response is still 200', () => {
-    it('returns 200 when priming call throws ThrottlingException', async () => {
-      setupDynamoForPriming()
-      setupS3ForDocumentPriming()
-
-      const throttleErr = Object.assign(new Error('Rate exceeded'), { name: 'ThrottlingException' })
-      bedrockSendSpy.mockRejectedValueOnce(throttleErr)
-
-      const event = makeEvent({
-        message: '__template_init__',
-        templateGreeting: "Hey! I'm Pulse — here to guide your review.",
-      })
-
-      const result = await handler(event)
-
-      // Response is still 200 — priming failure does not affect the client
-      expect(result.statusCode).toBe(200)
-      const body = JSON.parse(result.body)
-      expect(body.data.greeting).toBe("Hey! I'm Pulse — here to guide your review.")
-
-      // Verify a warning was logged about the priming failure
-      const warnCalls = consoleWarnSpy.mock.calls.map(c => c[0])
-      const primingWarn = warnCalls.find(msg =>
-        typeof msg === 'string' && msg.includes('priming call failed')
-      )
-      expect(primingWarn).toBeDefined()
-    })
-
-    it('returns 200 when priming call throws a generic error', async () => {
-      setupDynamoForPriming()
-      setupS3ForDocumentPriming()
-
-      bedrockSendSpy.mockRejectedValueOnce(new Error('Bedrock unavailable'))
-
-      const event = makeEvent({
-        message: '__template_init__',
-        templateGreeting: "Hey! I'm Pulse — here to guide your review.",
-      })
-
-      const result = await handler(event)
-
-      expect(result.statusCode).toBe(200)
-      const body = JSON.parse(result.body)
-      expect(body.data.greeting).toBe("Hey! I'm Pulse — here to guide your review.")
     })
   })
 })

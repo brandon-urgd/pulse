@@ -19,7 +19,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class GetItemCommand { constructor(input) { this.input = input } }
   class PutItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand }
+  class UpdateItemCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -83,11 +84,24 @@ describe('urgd-pulse-createItem — sections and image type', () => {
   })
 
   function setupDynamoMocks({ activeCount = 0 } = {}) {
-    dynamoSendSpy
-      .mockResolvedValueOnce(makeTenantRecord()) // GetItem tenant
-      .mockResolvedValueOnce(makeSystemRecord()) // GetItem SYSTEM
-      .mockResolvedValueOnce({ Count: activeCount }) // QueryCommand existing items
-      .mockResolvedValueOnce({}) // PutItemCommand
+    let callIndex = 0
+    dynamoSendSpy.mockImplementation((cmd) => {
+      const name = cmd?.constructor?.name
+      if (name === 'GetItemCommand') {
+        callIndex++
+        if (callIndex === 1) return Promise.resolve(makeTenantRecord()) // tenant
+        if (callIndex === 2) return Promise.resolve(makeSystemRecord()) // SYSTEM
+        // Counter read or other GetItem calls
+        return Promise.resolve({ Item: null })
+      }
+      if (name === 'QueryCommand') {
+        return Promise.resolve({ Count: activeCount })
+      }
+      if (name === 'PutItemCommand' || name === 'UpdateItemCommand') {
+        return Promise.resolve({})
+      }
+      return Promise.resolve({})
+    })
   }
 
   describe('analyzeDocument invoked async when document content provided (non-image)', () => {

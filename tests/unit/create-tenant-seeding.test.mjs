@@ -12,13 +12,20 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(cmd) { return mockDynamoSend(cmd) } }
   class PutItemCommand { constructor(input) { this.input = input; this._type = 'PutItem' } }
   class BatchWriteItemCommand { constructor(input) { this.input = input; this._type = 'BatchWrite' } }
-  return { DynamoDBClient, PutItemCommand, BatchWriteItemCommand }
+  class UpdateItemCommand { constructor(input) { this.input = input; this._type = 'UpdateItem' } }
+  return { DynamoDBClient, PutItemCommand, BatchWriteItemCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
   class S3Client { send(cmd) { return mockS3Send(cmd) } }
   class PutObjectCommand { constructor(input) { this.input = input; this._type = 'PutObject' } }
   return { S3Client, PutObjectCommand }
+})
+
+vi.mock('@aws-sdk/client-ssm', () => {
+  class SSMClient { send() { return Promise.resolve({}) } }
+  class GetParameterCommand { constructor(input) { this.input = input } }
+  return { SSMClient, GetParameterCommand }
 })
 
 vi.mock('./shared/utils.mjs', () => ({
@@ -64,6 +71,22 @@ vi.mock('fs', () => ({
       status: 'closed',
       itemType: 'document',
       documentStatus: 'processed',
+      sessionCount: 1,
+      totalSections: 4,
+      recommendedTimeLimitMinutes: 17,
+      sectionMap: {
+        sections: [
+          { id: 'sec-1', title: 'Introduction', classification: 'substantive' },
+          { id: 'sec-2', title: 'Market Analysis', classification: 'substantive' },
+        ],
+        totalSubstantiveSections: 2,
+      },
+      feedbackSections: ['sec-1', 'sec-2'],
+      sectionDepthPreferences: { 'sec-1': 'deep', 'sec-2': 'standard' },
+      coverageMap: {
+        'sec-1': { sessionCount: 1, avgDepth: 'deep' },
+        'sec-2': { sessionCount: 1, avgDepth: 'standard' },
+      },
     },
     session: {
       reviewerName: 'Alex Rivera',
@@ -89,12 +112,26 @@ vi.mock('fs', () => ({
     pulseCheck: {
       verdict: 'promising',
       narrative: 'Reviewers see strong potential.',
-      themes: [{ name: 'Innovation', summary: 'Fresh approach', sentiment: 'positive', quotes: ['Great idea'] }],
+      themes: [
+        {
+          themeId: 'theme-innovation',
+          label: 'Innovation',
+          reviewerSignals: [{ signalType: 'conviction', quote: 'Great idea' }],
+        },
+      ],
       sharedConviction: ['Strong vision'],
       repeatedTension: ['Pricing'],
       openQuestions: ['Market size?'],
-      reviewerVerdicts: [{ reviewerName: 'Alex Rivera', verdict: 'promising', energy: 'high', conversationShape: 'exploratory' }],
-      proposedRevisions: [{ title: 'Clarify pricing', description: 'Add pricing section', sourceThemeIds: ['theme-1'] }],
+      reviewerVerdicts: [{ verdict: 'promising', energy: 'high', isSelfReview: false }],
+      proposedRevisions: [
+        {
+          revisionId: 'rev-1',
+          proposal: 'Clarify pricing',
+          rationale: 'Add pricing section',
+          revisionType: 'line-edit',
+          sourceThemeIds: ['theme-innovation'],
+        },
+      ],
       sessionCount: 1,
       incompleteCount: 0,
       status: 'completed',

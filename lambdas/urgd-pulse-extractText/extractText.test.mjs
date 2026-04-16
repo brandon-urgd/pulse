@@ -103,7 +103,7 @@ describe('urgd-pulse-extractText', () => {
       expect(putCall.input.Body).toBe('# Extracted PDF Content\n\nSome text here.')
       expect(putCall.input.ContentType).toBe('text/markdown')
 
-      // Should set documentStatus to "ready" with templateGreeting
+      // Should set documentStatus to "ready"
       const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
       const updateCall = dynamoCalls.find(c => c.constructor.name === 'UpdateItemCommand')
       expect(updateCall).toBeDefined()
@@ -111,7 +111,6 @@ describe('urgd-pulse-extractText', () => {
       expect(updateCall.input.ExpressionAttributeValues[':extractedKey'].S).toBe(
         'pulse/tenant-abc/items/item-xyz/extracted.md'
       )
-      expect(updateCall.input.ExpressionAttributeValues[':templateGreeting'].S).toContain('Test Document')
     })
   })
 
@@ -137,12 +136,11 @@ describe('urgd-pulse-extractText', () => {
       expect(putCall.input.Key).toBe('pulse/tenant-abc/items/item-xyz/extracted.md')
       expect(putCall.input.Body).toBe('Extracted DOCX text content.')
 
-      // Should set documentStatus to "ready" with templateGreeting
+      // Should set documentStatus to "ready"
       const dynamoCalls = dynamoSendSpy.mock.calls.map(c => c[0])
       const updateCall = dynamoCalls.find(c => c.constructor.name === 'UpdateItemCommand')
       expect(updateCall).toBeDefined()
       expect(updateCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
-      expect(updateCall.input.ExpressionAttributeValues[':templateGreeting'].S).toContain('Test Document')
     })
   })
 

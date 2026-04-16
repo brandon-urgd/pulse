@@ -1,5 +1,6 @@
 // Unit tests for urgd-pulse-chat — Session Fast Start features
 // Requirements: 2.2, 3.1–3.3, 6.1–6.6
+// Updated: Phased Cache Priming — turns 1-2 are text-only, document injection at turn 3+
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
@@ -123,7 +124,7 @@ function makeS3Bytes(content) {
 
 // ── Tests ──
 
-describe('urgd-pulse-chat — Session Fast Start', () => {
+describe('urgd-pulse-chat — Session Fast Start (Phased Cache Priming)', () => {
   beforeEach(() => {
     sendSpy.mockReset()
     s3SendSpy.mockReset()
@@ -134,32 +135,35 @@ describe('urgd-pulse-chat — Session Fast Start', () => {
     lambdaSendSpy.mockResolvedValue({})
   })
 
-  describe('page image attachment on first turn', () => {
-    it('attaches page images when pageCount > 0 on first turn', async () => {
+  describe('turn 1 (text-only phase) — no page images or document attached', () => {
+    it('does not attach page images on turn 1 (__session_start__)', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession() })                    // GetItem session
-        .mockResolvedValueOnce({ Items: [] })                              // Query transcripts (empty = first turn)
+        .mockResolvedValueOnce({ Items: [] })                              // Query transcripts (empty = turn 1)
         .mockResolvedValueOnce(makeItemRecord({ pageCount: { N: '2' } })) // GetItem item with pageCount
+        .mockResolvedValueOnce({})                                         // UpdateItem streamingLock
         .mockResolvedValueOnce({})                                         // TransactWriteItems
         .mockResolvedValueOnce({})                                         // UpdateItem session
 
-      // S3: extracted.md, document.pdf, page-001.png, page-002.png
+      // S3: only extracted.md is loaded (no document.pdf or page images on turn 1)
       s3SendSpy
         .mockResolvedValueOnce(makeS3Bytes('# Extracted text'))   // extracted.md
-        .mockResolvedValueOnce(makeS3Bytes('fake-pdf-bytes'))     // document.pdf
-        .mockResolvedValueOnce(makeS3Bytes('page-1-bytes'))       // page-001.png
-        .mockResolvedValueOnce(makeS3Bytes('page-2-bytes'))       // page-002.png
+        .mockRejectedValue(new Error('NoSuchKey'))                // any other S3 calls fail
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Welcome!'))
 
       const res = await handler(makeEvent())
       expect(res.statusCode).toBe(200)
 
-      // Bedrock was called with image blocks
+      // Bedrock was called without image blocks (text-only phase)
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
       const userContent = bedrockCall.input.messages[0].content
       const imageBlocks = userContent.filter(b => b.image)
-      expect(imageBlocks).toHaveLength(2)
+      expect(imageBlocks).toHaveLength(0)
+
+      // No document block either
+      const docBlocks = userContent.filter(b => b.document)
+      expect(docBlocks).toHaveLength(0)
     })
 
     it('does not attach page images when pageCount is absent', async () => {
@@ -169,10 +173,11 @@ describe('urgd-pulse-chat — Session Fast Start', () => {
         .mockResolvedValueOnce(makeItemRecord())  // no pageCount
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
 
       s3SendSpy
         .mockResolvedValueOnce(makeS3Bytes('# Extracted text'))
-        .mockResolvedValueOnce(makeS3Bytes('fake-pdf-bytes'))
+        .mockRejectedValue(new Error('NoSuchKey'))
 
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Welcome!'))
 
@@ -184,26 +189,31 @@ describe('urgd-pulse-chat — Session Fast Start', () => {
       const imageBlocks = userContent.filter(b => b.image)
       expect(imageBlocks).toHaveLength(0)
     })
+  })
 
-    it('does not attach page images on subsequent turns', async () => {
+  describe('turn 2 (text-only phase) — no page images or document attached', () => {
+    it('does not attach page images on turn 2 (1 prior user message)', async () => {
       sendSpy
         .mockResolvedValueOnce({ Item: makeSession({ status: { S: 'in_progress' } }) })
-        .mockResolvedValueOnce({ Items: [                                  // Query transcripts (has history)
-          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000001' }, role: { S: 'reviewer' }, content: { S: 'Hello' } },
-          { sessionId: { S: 'session-1' }, messageId: { S: '01HTEST000000000000000002' }, role: { S: 'agent' }, content: { S: 'Hi there' } },
+        .mockResolvedValueOnce({ Items: [
+          // 1 prior user message = turn 2
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-1' }, role: { S: 'reviewer' }, content: { S: '[__session_start__]' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-2' }, role: { S: 'agent' }, content: { S: 'Welcome!' } },
         ] })
         .mockResolvedValueOnce(makeItemRecord({ pageCount: { N: '2' } }))
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
 
-      s3SendSpy.mockRejectedValue(new Error('NoSuchKey'))
+      s3SendSpy
+        .mockResolvedValueOnce(makeS3Bytes('# Extracted text'))
+        .mockRejectedValue(new Error('NoSuchKey'))
+
       bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Response'))
 
-      const res = await handler(makeEvent({ message: 'Follow up question' }))
+      const res = await handler(makeEvent({ message: 'My first real message' }))
       expect(res.statusCode).toBe(200)
 
-      // No page image S3 reads should have been attempted for pages
-      // (s3 calls are only for extracted.md/document.md which fail)
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
       const allContent = bedrockCall.input.messages.flatMap(m =>
         Array.isArray(m.content) ? m.content : [m.content]
@@ -211,35 +221,78 @@ describe('urgd-pulse-chat — Session Fast Start', () => {
       const imageBlocks = allContent.filter(b => b?.image)
       expect(imageBlocks).toHaveLength(0)
     })
+  })
 
-    it('skips individual page S3 failure and continues', async () => {
+  describe('turn 3+ (document injection phase) — page images attached', () => {
+    it('attaches page images on turn 3 (2 prior user messages)', async () => {
       sendSpy
-        .mockResolvedValueOnce({ Item: makeSession() })
-        .mockResolvedValueOnce({ Items: [] })
-        .mockResolvedValueOnce(makeItemRecord({ pageCount: { N: '3' } }))
+        .mockResolvedValueOnce({ Item: makeSession({ status: { S: 'in_progress' } }) })
+        .mockResolvedValueOnce({ Items: [
+          // 2 prior user messages = turn 3
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-1' }, role: { S: 'reviewer' }, content: { S: '[__session_start__]' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-2' }, role: { S: 'agent' }, content: { S: 'Welcome!' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-3' }, role: { S: 'reviewer' }, content: { S: 'First message' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-4' }, role: { S: 'agent' }, content: { S: 'Response' } },
+        ] })
+        .mockResolvedValueOnce(makeItemRecord({ pageCount: { N: '2' } }))
+        .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
 
       s3SendSpy
         .mockResolvedValueOnce(makeS3Bytes('# Extracted text'))   // extracted.md
         .mockResolvedValueOnce(makeS3Bytes('fake-pdf-bytes'))     // document.pdf
-        .mockResolvedValueOnce(makeS3Bytes('page-1-bytes'))       // page-001.png OK
-        .mockResolvedValueOnce(null)                               // page-002.png returns null (getS3Bytes returns null on error)
-        .mockResolvedValueOnce(makeS3Bytes('page-3-bytes'))       // page-003.png OK
+        .mockResolvedValueOnce(makeS3Bytes('page-1-bytes'))       // page-001.png
+        .mockResolvedValueOnce(makeS3Bytes('page-2-bytes'))       // page-002.png
 
-      bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Welcome!'))
+      bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Full doc response'))
 
-      const res = await handler(makeEvent())
+      const res = await handler(makeEvent({ message: 'Second message' }))
       expect(res.statusCode).toBe(200)
 
-      // Should have 2 image blocks (page 2 was null, skipped)
       const bedrockCall = bedrockSendSpy.mock.calls[0][0]
-      const userContent = bedrockCall.input.messages[0].content
-      const imageBlocks = userContent.filter(b => b.image)
+      const firstUserContent = bedrockCall.input.messages[0].content
+      const imageBlocks = firstUserContent.filter(b => b.image)
       expect(imageBlocks).toHaveLength(2)
+
+      // Document block should also be present
+      const docBlocks = firstUserContent.filter(b => b.document)
+      expect(docBlocks).toHaveLength(1)
+    })
+
+    it('does not attach page images on turns after injection (turn 4+)', async () => {
+      sendSpy
+        .mockResolvedValueOnce({ Item: makeSession({ status: { S: 'in_progress' } }) })
+        .mockResolvedValueOnce({ Items: [
+          // 3 prior user messages = turn 4 (document already injected at turn 3)
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-1' }, role: { S: 'reviewer' }, content: { S: '[__session_start__]' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-2' }, role: { S: 'agent' }, content: { S: 'Welcome!' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-3' }, role: { S: 'reviewer' }, content: { S: 'First message' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-4' }, role: { S: 'agent' }, content: { S: 'Response' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-5' }, role: { S: 'reviewer' }, content: { S: 'Second message' } },
+          { sessionId: { S: 'session-1' }, messageId: { S: 'msg-6' }, role: { S: 'agent' }, content: { S: 'Full doc response' } },
+        ] })
+        .mockResolvedValueOnce(makeItemRecord({ pageCount: { N: '2' } }))
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+
+      s3SendSpy.mockRejectedValue(new Error('NoSuchKey'))
+      bedrockSendSpy.mockResolvedValueOnce(makeBedrockResponse('Follow-up response'))
+
+      const res = await handler(makeEvent({ message: 'Third message' }))
+      expect(res.statusCode).toBe(200)
+
+      const bedrockCall = bedrockSendSpy.mock.calls[0][0]
+      const allContent = bedrockCall.input.messages.flatMap(m =>
+        Array.isArray(m.content) ? m.content : [m.content]
+      )
+      const imageBlocks = allContent.filter(b => b?.image)
+      expect(imageBlocks).toHaveLength(0)
     })
   })
 
-  // NOTE: __init_pregenerated__ path was removed in the two-phase-session-start spec.
-  // The replacement __template_init__ handler is tested in tests/unit/chat-templateInit.test.mjs.
+  // NOTE: __template_init__ handler was removed in the phased-cache-priming spec.
+  // Priming is now handled by entry point Lambdas (validateSession, createSelfSession, previewSession).
+  // Tests for entry point priming are in tests/unit/entrypoint-priming.test.mjs.
 })

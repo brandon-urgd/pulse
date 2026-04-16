@@ -5,6 +5,7 @@ vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
 vi.stubEnv('QUARANTINE_BUCKET_NAME', 'urgd-shield-quarantine-dev-123456789')
 vi.stubEnv('DATA_BUCKET_NAME', 'urgd-pulse-data-dev')
 vi.stubEnv('EXTRACT_TEXT_FUNCTION_NAME', 'urgd-pulse-extractText-dev')
+vi.stubEnv('ANALYZE_DOCUMENT_FUNCTION_ARN', 'arn:aws:lambda:us-west-2:123456789012:function:urgd-pulse-analyzeDocument-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
@@ -27,7 +28,9 @@ vi.mock('@aws-sdk/client-s3', () => {
   class CopyObjectCommand { constructor(input) { this.input = input } }
   class DeleteObjectCommand { constructor(input) { this.input = input } }
   class GetObjectTaggingCommand { constructor(input) { this.input = input } }
-  return { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand }
+  class GetObjectCommand { constructor(input) { this.input = input } }
+  class PutObjectCommand { constructor(input) { this.input = input } }
+  return { S3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectTaggingCommand, GetObjectCommand, PutObjectCommand }
 })
 
 vi.mock('@aws-sdk/client-lambda', () => {
@@ -83,6 +86,16 @@ describe('urgd-pulse-shieldCallback', () => {
         objectKey,
       })
 
+      // After the default mockScanResult sets up GetObjectTaggingCommand (call 0),
+      // the handler does: CopyObject, DeleteObject, GetObject (read text), PutObject (write extracted.md)
+      // We need to mock GetObject to return text content
+      s3SendSpy.mockResolvedValueOnce({}) // CopyObject
+      s3SendSpy.mockResolvedValueOnce({}) // DeleteObject
+      s3SendSpy.mockResolvedValueOnce({   // GetObject (read text file)
+        Body: (async function* () { yield Buffer.from('Hello world test content') })(),
+      })
+      s3SendSpy.mockResolvedValueOnce({}) // PutObject (write extracted.md)
+
       await handler(event)
 
       // Should copy from quarantine to data bucket
@@ -102,8 +115,11 @@ describe('urgd-pulse-shieldCallback', () => {
       const dynamoCall = dynamoSendSpy.mock.calls[0][0]
       expect(dynamoCall.input.ExpressionAttributeValues[':status'].S).toBe('ready')
 
-      // Should NOT invoke extractText
-      expect(lambdaSendSpy).not.toHaveBeenCalled()
+      // Should invoke analyzeDocument async for text files
+      expect(lambdaSendSpy).toHaveBeenCalledOnce()
+      const lambdaCall = lambdaSendSpy.mock.calls[0][0]
+      expect(lambdaCall.input.FunctionName).toBe('arn:aws:lambda:us-west-2:123456789012:function:urgd-pulse-analyzeDocument-dev')
+      expect(lambdaCall.input.InvocationType).toBe('Event')
     })
   })
 

@@ -168,7 +168,12 @@ describe('Property 5: Partial page image resilience', () => {
 
           dynamoSpy
             .mockResolvedValueOnce({ Item: makeSessionItem() })       // GetItem session
-            .mockResolvedValueOnce({ Items: [] })                      // Query transcript (first turn)
+            .mockResolvedValueOnce({ Items: [                          // Query transcript (turn 3 — 2 prior user messages)
+              { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-1' }, role: { S: 'reviewer' }, content: { S: '[__session_start__]' }, timestamp: { S: new Date().toISOString() } },
+              { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-2' }, role: { S: 'agent' }, content: { S: 'Welcome!' }, timestamp: { S: new Date().toISOString() } },
+              { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-3' }, role: { S: 'reviewer' }, content: { S: 'Hello' }, timestamp: { S: new Date().toISOString() } },
+              { sessionId: { S: 'session-xyz' }, messageId: { S: 'msg-4' }, role: { S: 'agent' }, content: { S: 'Hi there!' }, timestamp: { S: new Date().toISOString() } },
+            ] })
             .mockResolvedValueOnce({ Item: makeItemRecord({ pageCount: { N: String(pageCount) } }) }) // GetItem item
             .mockResolvedValueOnce({})  // streamingLock
             .mockResolvedValueOnce({})  // TransactWrite
@@ -194,7 +199,7 @@ describe('Property 5: Partial page image resilience', () => {
 
           bedrockSpy.mockResolvedValueOnce(makeConverseResponse('Welcome!'))
 
-          const event = makeChatEvent('session-xyz', 'tenant-abc', '__session_start__')
+          const event = makeChatEvent('session-xyz', 'tenant-abc', 'Tell me more about the document')
 
           // Must not throw
           const result = await chatHandler(event)

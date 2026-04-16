@@ -17,7 +17,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class GetItemCommand { constructor(input) { this.input = input } }
   class PutItemCommand { constructor(input) { this.input = input } }
   class QueryCommand { constructor(input) { this.input = input } }
-  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand }
+  class UpdateItemCommand { constructor(input) { this.input = input } }
+  return { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-s3', () => {
@@ -27,6 +28,22 @@ vi.mock('@aws-sdk/client-s3', () => {
   class PutObjectCommand { constructor(input) { this.input = input } }
   return { S3Client, PutObjectCommand }
 })
+
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send() { return Promise.resolve({}) } }
+  class InvokeCommand { constructor(input) { this.input = input } }
+  return { LambdaClient, InvokeCommand }
+})
+
+vi.mock('@aws-sdk/client-scheduler', () => {
+  class SchedulerClient { send() { return Promise.resolve({}) } }
+  class CreateScheduleCommand { constructor(input) { this.input = input } }
+  return { SchedulerClient, CreateScheduleCommand }
+})
+
+vi.mock('./shared/counters.mjs', () => ({
+  checkAndIncrement: vi.fn(() => Promise.resolve({ allowed: true, newCount: 1 })),
+}))
 
 const { handler } = await import('./index.mjs')
 
@@ -147,9 +164,16 @@ describe('urgd-pulse-createItem', () => {
 
   describe('maxActiveItems limit returns 403', () => {
     it('returns 403 when free tenant is at limit (1 item)', async () => {
-      sendSpy
-        .mockResolvedValueOnce({ Item: FREE_TENANT })
-        .mockResolvedValueOnce({ Count: 1, Items: [] })
+      sendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'GetItemCommand') {
+          const key = cmd.input?.Key?.tenantId?.S
+          if (key === 'SYSTEM') return Promise.resolve({ Item: { tenantId: { S: 'SYSTEM' }, serviceFlags: { M: {} } } })
+          return Promise.resolve({ Item: FREE_TENANT })
+        }
+        if (name === 'QueryCommand') return Promise.resolve({ Count: 1, Items: [] })
+        return Promise.resolve({})
+      })
 
       const res = await handler(makeEvent('tenant-free', {
         itemName: 'My Item',
@@ -162,9 +186,16 @@ describe('urgd-pulse-createItem', () => {
     })
 
     it('returns 403 when paid tenant is at limit (25 items)', async () => {
-      sendSpy
-        .mockResolvedValueOnce({ Item: PAID_TENANT })
-        .mockResolvedValueOnce({ Count: 25, Items: [] })
+      sendSpy.mockImplementation((cmd) => {
+        const name = cmd?.constructor?.name
+        if (name === 'GetItemCommand') {
+          const key = cmd.input?.Key?.tenantId?.S
+          if (key === 'SYSTEM') return Promise.resolve({ Item: { tenantId: { S: 'SYSTEM' }, serviceFlags: { M: {} } } })
+          return Promise.resolve({ Item: PAID_TENANT })
+        }
+        if (name === 'QueryCommand') return Promise.resolve({ Count: 25, Items: [] })
+        return Promise.resolve({})
+      })
 
       const res = await handler(makeEvent('tenant-paid', {
         itemName: 'My Item',

@@ -8,6 +8,7 @@ import * as fc from 'fast-check'
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
 vi.stubEnv('TRANSCRIPTS_TABLE', 'urgd-pulse-transcripts-dev')
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
+vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 
@@ -19,6 +20,16 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class QueryCommand { constructor(input) { this.input = input } }
   return { DynamoDBClient, GetItemCommand, QueryCommand }
 })
+
+vi.mock('@aws-sdk/client-s3', () => {
+  class S3Client { send() { return Promise.resolve({}) } }
+  class GetObjectCommand { constructor(input) { this.input = input } }
+  return { S3Client, GetObjectCommand }
+})
+
+vi.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: vi.fn(() => Promise.resolve('https://signed-url.example.com/doc')),
+}))
 
 const { handler } = await import('./index.mjs')
 

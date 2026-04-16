@@ -36,12 +36,10 @@ function makePulseCheckWithThemes(themeIds) {
     Item: {
       tenantId: { S: 'tenant-1' },
       itemId: { S: 'item-1' },
-      themes: {
+      proposedRevisions: {
         L: themeIds.map(id => ({
           M: {
-            themeId: { S: id },
-            label: { S: `Theme ${id}` },
-            reviewerSignals: { L: [] },
+            revisionId: { S: id },
           },
         })),
       },
@@ -87,7 +85,8 @@ describe('Property 23: Decisions Persistence Property', () => {
           sendSpy.mockReset()
           sendSpy
             .mockResolvedValueOnce(makePulseCheckWithThemes(themeIds)) // GetItem
-            .mockResolvedValueOnce({}) // UpdateItem
+            .mockResolvedValueOnce({}) // UpdateItem (ensure map)
+            .mockResolvedValueOnce({}) // UpdateItem (write decisions)
 
           const result = await handler(makeEvent(tenantId, itemId, decisions))
           expect(result.statusCode).toBe(200)
@@ -119,17 +118,20 @@ describe('Property 23: Decisions Persistence Property', () => {
           sendSpy.mockReset()
           sendSpy
             .mockResolvedValueOnce(makePulseCheckWithThemes(allThemeIds)) // GetItem
-            .mockResolvedValueOnce({}) // UpdateItem
+            .mockResolvedValueOnce({}) // UpdateItem (ensure map)
+            .mockResolvedValueOnce({}) // UpdateItem (write decisions)
 
           const result = await handler(makeEvent(tenantId, itemId, decisions))
           expect(result.statusCode).toBe(200)
 
-          // Verify UpdateItem was called
-          const updateCall = sendSpy.mock.calls.find(c => c[0]?.constructor?.name === 'UpdateItemCommand')
-          expect(updateCall).toBeDefined()
+          // Verify UpdateItem was called — the second UpdateItem is the nested write
+          const updateCalls = sendSpy.mock.calls.filter(c => c[0]?.constructor?.name === 'UpdateItemCommand')
+          // updateCalls[0] = ensure map, updateCalls[1] = write decisions
+          expect(updateCalls.length).toBeGreaterThanOrEqual(2)
+          const writeCall = updateCalls[1]
 
-          const updateExpr = updateCall[0].input.UpdateExpression
-          const exprNames = updateCall[0].input.ExpressionAttributeNames
+          const updateExpr = writeCall[0].input.UpdateExpression
+          const exprNames = writeCall[0].input.ExpressionAttributeNames
 
           // Submitted themeIds should appear in expression names
           for (const themeId of submittedThemeIds) {

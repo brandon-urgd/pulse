@@ -669,20 +669,8 @@ export const labels = {
     settingsHeading: 'Data Retention',
   },
 
-  // About Pulse
+  // About Pulse — content moved to @pulse/shared (ABOUT_CONTENT)
   about: {
     button: 'About Pulse',
-    version: 'Version {version}',
-    descriptionP1: 'Pulse is a feedback tool. You upload your work, invite people to review it, and Pulse guides each conversation so you get structured, thoughtful feedback \u2014 not just \u201clooks good.\u201d',
-    descriptionP2: 'When your reviewers are done, Pulse consolidates everything into a single view called a Pulse Check. It shows you what landed, where things struggled, and what to do next \u2014 so you can make decisions, not just collect opinions.',
-    attribution: 'Quietly Powerful, by',
-    attributionStudio: 'ur/gd Studios',
-    attributionLocation: 'Seattle, WA',
-    attributionUrl: 'https://urgdstudios.com',
-    privacyLink: 'Privacy Policy',
-    privacyUrl: 'https://urgdstudios.com/privacy',
-    termsLink: 'Terms of Use',
-    termsUrl: 'https://urgdstudios.com/terms',
-    closeButton: 'Close',
   },
 } as const;

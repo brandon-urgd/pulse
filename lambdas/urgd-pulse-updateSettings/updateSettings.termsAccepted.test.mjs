@@ -3,11 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── DynamoDB mock ──────────────────────────────────────────────────────────
 const mockSend = vi.fn()
-vi.mock('@aws-sdk/client-dynamodb', () => ({
-  DynamoDBClient: vi.fn(() => ({ send: mockSend })),
-  UpdateItemCommand: vi.fn(input => ({ _input: input })),
-  GetItemCommand: vi.fn(input => ({ _input: input })),
-  QueryCommand: vi.fn(input => ({ _input: input })),
+vi.mock('@aws-sdk/client-dynamodb', () => {
+  class DynamoDBClient { send(cmd) { return mockSend(cmd) } }
+  class UpdateItemCommand { constructor(input) { this._input = input } }
+  class GetItemCommand { constructor(input) { this._input = input } }
+  class QueryCommand { constructor(input) { this._input = input } }
+  class BatchGetItemCommand { constructor(input) { this._input = input } }
+  return { DynamoDBClient, UpdateItemCommand, GetItemCommand, QueryCommand, BatchGetItemCommand }
+})
+
+// Mock features module used by getSettings handler
+vi.mock('./shared/features.mjs', () => ({
+  resolveAllFeatures: vi.fn(() => ({})),
 }))
 
 // ── Env setup ──────────────────────────────────────────────────────────────
@@ -93,19 +100,25 @@ describe('updateSettings — termsAcceptedVersion + termsAcceptedAt', () => {
 // ── getSettings — termsAcceptedVersion field ───────────────────────────────
 describe('getSettings — termsAcceptedVersion in response', () => {
   it('returns termsAcceptedVersion when set on tenant record', async () => {
-    mockSend
-      .mockResolvedValueOnce({
-        Item: {
-          tenantId: { S: 'tenant-abc' },
-          displayName: { S: 'Alice' },
-          email: { S: 'alice@example.com' },
-          tier: { S: 'free' },
-          onboardingComplete: { BOOL: true },
-          termsAcceptedVersion: { S: '2026-03-16' },
-        },
-      })
-      .mockResolvedValueOnce({ Count: 0 })
-      .mockResolvedValueOnce({ Count: 0 })
+    mockSend.mockImplementation((cmd) => {
+      const name = cmd?.constructor?.name
+      if (name === 'BatchGetItemCommand') {
+        return Promise.resolve({
+          Responses: {
+            'test-tenants': [{
+              tenantId: { S: 'tenant-abc' },
+              displayName: { S: 'Alice' },
+              email: { S: 'alice@example.com' },
+              tier: { S: 'free' },
+              onboardingComplete: { BOOL: true },
+              termsAcceptedVersion: { S: '2026-03-16' },
+            }],
+          },
+        })
+      }
+      if (name === 'QueryCommand') return Promise.resolve({ Count: 0 })
+      return Promise.resolve({})
+    })
 
     const { handler } = await import(
       '../urgd-pulse-getSettings/index.mjs'
@@ -119,17 +132,23 @@ describe('getSettings — termsAcceptedVersion in response', () => {
   })
 
   it('returns termsAcceptedVersion as null when not set on tenant record', async () => {
-    mockSend
-      .mockResolvedValueOnce({
-        Item: {
-          tenantId: { S: 'tenant-abc' },
-          email: { S: 'alice@example.com' },
-          tier: { S: 'free' },
-          onboardingComplete: { BOOL: false },
-        },
-      })
-      .mockResolvedValueOnce({ Count: 0 })
-      .mockResolvedValueOnce({ Count: 0 })
+    mockSend.mockImplementation((cmd) => {
+      const name = cmd?.constructor?.name
+      if (name === 'BatchGetItemCommand') {
+        return Promise.resolve({
+          Responses: {
+            'test-tenants': [{
+              tenantId: { S: 'tenant-abc' },
+              email: { S: 'alice@example.com' },
+              tier: { S: 'free' },
+              onboardingComplete: { BOOL: false },
+            }],
+          },
+        })
+      }
+      if (name === 'QueryCommand') return Promise.resolve({ Count: 0 })
+      return Promise.resolve({})
+    })
 
     const { handler } = await import(
       '../urgd-pulse-getSettings/index.mjs'

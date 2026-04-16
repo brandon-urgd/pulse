@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import { labels } from '../config/labels-registry';
-import { APP_VERSION } from '../config/version';
+import { APP_VERSION, ABOUT_CONTENT } from '@pulse/shared';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import styles from './AboutModal.module.css';
 
@@ -11,7 +10,7 @@ interface AboutModalProps {
 
 /**
  * About Pulse modal — displays version, description, attribution, and legal links.
- * Requirements: 9.2, 9.3, 9.4, 9.6, 9.7
+ * Requirements: 9.2, 9.3, 9.4, 9.6, 9.7, 15.1, 15.2
  */
 export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
   const focusTrapRef = useFocusTrap(isOpen);
@@ -27,8 +26,6 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 
   if (!isOpen) return null;
 
-  const a = labels.about;
-
   return (
     <div
       className={styles.overlay}
@@ -39,39 +36,39 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
       ref={focusTrapRef}
     >
       <div className={styles.card}>
-        <p className={styles.wordmark} id="about-modal-title">pulse</p>
-        <p className={styles.version}>{a.version.replace('{version}', APP_VERSION)}</p>
-        <p className={styles.description}>{a.descriptionP1}</p>
-        <p className={styles.description}>{a.descriptionP2}</p>
+        <p className={styles.wordmark} id="about-modal-title">{ABOUT_CONTENT.wordmark}</p>
+        <p className={styles.version}>Version {APP_VERSION}</p>
+        <p className={styles.description}>{ABOUT_CONTENT.descriptionP1}</p>
+        <p className={styles.description}>{ABOUT_CONTENT.descriptionP2}</p>
         <p className={styles.attribution}>
-          {a.attribution}{' '}
+          {ABOUT_CONTENT.attribution}{' '}
           <a
-            href={a.attributionUrl}
+            href={ABOUT_CONTENT.attributionUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={styles.attributionLink}
           >
-            {a.attributionStudio}
+            {ABOUT_CONTENT.attributionStudio}
           </a>
-          {' | '}{a.attributionLocation}
+          {' | '}{ABOUT_CONTENT.attributionLocation}
         </p>
         <div className={styles.legalLinks}>
           <a
-            href={a.privacyUrl}
+            href={ABOUT_CONTENT.privacyUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={styles.legalLink}
           >
-            {a.privacyLink}
+            {ABOUT_CONTENT.privacyLabel}
           </a>
           <span className={styles.legalSeparator} aria-hidden="true">·</span>
           <a
-            href={a.termsUrl}
+            href={ABOUT_CONTENT.termsUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={styles.legalLink}
           >
-            {a.termsLink}
+            {ABOUT_CONTENT.termsLabel}
           </a>
         </div>
         <button
@@ -79,7 +76,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
           className={styles.closeButton}
           onClick={onClose}
         >
-          {a.closeButton}
+          Close
         </button>
       </div>
     </div>

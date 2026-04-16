@@ -38,12 +38,14 @@ export const handler = async (event) => {
   do {
     const scanResult = await dynamo.send(new ScanCommand({
       TableName: process.env.SESSIONS_TABLE,
-      FilterExpression: 'attribute_exists(expiresAt) AND expiresAt < :now AND #status <> :completed AND #status <> :expired',
+      FilterExpression: 'attribute_exists(expiresAt) AND expiresAt < :now AND #status <> :completed AND #status <> :expired AND #status <> :cancelled AND #status <> :discarded',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':now': { S: now },
         ':completed': { S: 'completed' },
         ':expired': { S: 'expired' },
+        ':cancelled': { S: 'cancelled' },
+        ':discarded': { S: 'discarded' },
       },
       ...(lastEvaluatedKey ? { ExclusiveStartKey: lastEvaluatedKey } : {}),
     }))
@@ -107,13 +109,15 @@ export const handler = async (event) => {
             tenantId: { S: tenantId },
             sessionId: { S: sessionId },
           },
-          // Conditional expression: only update if status is still not "completed"
-          ConditionExpression: '#status <> :completed',
+          // Conditional expression: only update if status is not a terminal state
+          ConditionExpression: '#status <> :completed AND #status <> :cancelled AND #status <> :discarded',
           UpdateExpression: 'SET #status = :expired, expiredAt = :now',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: {
             ':expired': { S: 'expired' },
             ':completed': { S: 'completed' },
+            ':cancelled': { S: 'cancelled' },
+            ':discarded': { S: 'discarded' },
             ':now': { S: now },
           },
         }))

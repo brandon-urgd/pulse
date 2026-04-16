@@ -117,6 +117,10 @@ describe('Property 3: Worker completion transitions revision to complete with st
           // S3 PutObject for revision
           s3SendSpy.mockResolvedValueOnce({})
 
+          // DynamoDB: GetItem item record (for documentKey/pageCount)
+          dynamoSendSpy.mockResolvedValueOnce({
+            Item: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          })
           // DynamoDB: pulse check
           dynamoSendSpy.mockResolvedValueOnce(makePulseCheck(tenantId, itemId))
           // DynamoDB: UpdateItem revision → complete

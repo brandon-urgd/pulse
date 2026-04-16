@@ -1,5 +1,6 @@
-// Unit tests for CreateItem Lambda — template greeting storage
-// Validates: Requirements 3.1, 3.2
+// Unit tests for CreateItem Lambda — templateGreeting removal
+// Validates: Requirement 13.2 (Phased Cache Priming — template greeting infrastructure removal)
+// Updated: templateGreeting is no longer written by the CreateItem Lambda.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
@@ -47,8 +48,6 @@ vi.mock('../../lambdas/shared/scheduleClose.mjs', () => ({
 vi.mock('../../lambdas/shared/counters.mjs', () => ({
   checkAndIncrement: vi.fn().mockResolvedValue({ allowed: true, newCount: 1 }),
 }))
-
-import { GREETING_TEMPLATES } from '../../lambdas/shared/greetingTemplates.mjs'
 
 const { handler } = await import('../../lambdas/urgd-pulse-createItem/index.mjs')
 
@@ -101,7 +100,7 @@ function findPutCall() {
     .find(c => c.constructor.name === 'PutItemCommand')
 }
 
-describe('CreateItem Lambda — template greeting storage', () => {
+describe('CreateItem Lambda — templateGreeting no longer written (R13.2)', () => {
   beforeEach(() => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
@@ -110,8 +109,8 @@ describe('CreateItem Lambda — template greeting storage', () => {
     lambdaSendSpy.mockResolvedValue({})
   })
 
-  describe('markdown/text items get templateGreeting in PutItem call (R3.1, R3.2)', () => {
-    it('stores templateGreeting when content is provided (documentStatus=ready)', async () => {
+  describe('markdown/text items do not get templateGreeting in PutItem call', () => {
+    it('does not store templateGreeting even when content is provided (documentStatus=ready)', async () => {
       setupDynamoMocks()
 
       const result = await handler(makeEvent({
@@ -128,40 +127,15 @@ describe('CreateItem Lambda — template greeting storage', () => {
       const putCall = findPutCall()
       expect(putCall).toBeDefined()
 
-      // templateGreeting should be present
-      expect(putCall.input.Item.templateGreeting).toBeDefined()
-      expect(putCall.input.Item.templateGreeting.S).toContain('My Markdown Doc')
+      // templateGreeting should NOT be present
+      expect(putCall.input.Item.templateGreeting).toBeUndefined()
 
-      // Should use the document template
-      const expectedGreeting = GREETING_TEMPLATES.document.replace('{itemName}', 'My Markdown Doc')
-      expect(putCall.input.Item.templateGreeting.S).toBe(expectedGreeting)
-
-      // documentStatus should be ready
+      // documentStatus should still be ready
       expect(putCall.input.Item.documentStatus.S).toBe('ready')
-    })
-
-    it('uses trimmed itemName in the greeting', async () => {
-      setupDynamoMocks()
-
-      const result = await handler(makeEvent({
-        body: {
-          itemName: '  Spaced Name  ',
-          description: 'A text-based review item.',
-          closeDate: futureDate,
-          content: 'Some content here.',
-        },
-      }))
-
-      expect(result.statusCode).toBe(201)
-
-      const putCall = findPutCall()
-      const greeting = putCall.input.Item.templateGreeting.S
-      expect(greeting).toContain('Spaced Name')
-      expect(greeting).not.toContain('  Spaced Name  ')
     })
   })
 
-  describe('items without documentStatus=ready do not get templateGreeting (R3.1)', () => {
+  describe('items without content still do not get templateGreeting', () => {
     it('does not store templateGreeting when no content is provided', async () => {
       setupDynamoMocks()
 
@@ -170,7 +144,6 @@ describe('CreateItem Lambda — template greeting storage', () => {
           itemName: 'Upload-Only Item',
           description: 'Will upload a PDF later.',
           closeDate: futureDate,
-          // no content field — documentStatus will be null
         },
       }))
 
@@ -181,9 +154,6 @@ describe('CreateItem Lambda — template greeting storage', () => {
 
       // templateGreeting should NOT be present
       expect(putCall.input.Item.templateGreeting).toBeUndefined()
-
-      // documentStatus should be NULL (not ready)
-      expect(putCall.input.Item.documentStatus.NULL).toBe(true)
     })
   })
 })

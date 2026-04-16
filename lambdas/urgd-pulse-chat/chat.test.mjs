@@ -186,6 +186,7 @@ describe('urgd-pulse-chat', () => {
         .mockResolvedValueOnce({ Item: makeSession({ status: { S: 'not_started' } }) })
         .mockResolvedValueOnce({ Items: [] })             // Query transcripts (empty — first message)
         .mockResolvedValueOnce(makeItemRecord())          // GetItem item
+        .mockResolvedValueOnce({})                        // streamingLock UpdateItem
         .mockResolvedValueOnce({})                        // TransactWriteItems
         .mockResolvedValueOnce({})                        // UpdateItem session
 
@@ -194,8 +195,8 @@ describe('urgd-pulse-chat', () => {
       const res = await handler(makeEvent({ message: '__session_start__' }))
       expect(res.statusCode).toBe(200)
 
-      // GetItem session(0), Query(1), GetItem item(2), TransactWriteItems(3), UpdateItem(4) = 5 calls
-      expect(sendSpy).toHaveBeenCalledTimes(5)
+      // GetItem session(0), Query(1), GetItem item(2), streamingLock(3), TransactWriteItems(4), UpdateItem(5) = 6 calls
+      expect(sendSpy).toHaveBeenCalledTimes(6)
       // Reviewer message is in the TransactWriteItems call
       const { TransactWriteItemsCommand } = await import('@aws-sdk/client-dynamodb')
       const transactCall = sendSpy.mock.calls.find(([cmd]) => cmd instanceof TransactWriteItemsCommand)

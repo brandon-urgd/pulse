@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import ReportSheet from './ReportSheet'
-import { APP_VERSION } from '../config/version'
+import { APP_VERSION, ABOUT_CONTENT } from '@pulse/shared'
 
 interface Props {
   sessionId?: string
@@ -68,14 +68,14 @@ export default function SessionFooter({ sessionId, sessionToken }: Props) {
           About Pulse
         </button>
         <span>
-          Quietly Powerful, by{' '}
+          {ABOUT_CONTENT.attribution}{' '}
           <a
-            href="https://urgdstudios.com/"
+            href={ABOUT_CONTENT.attributionUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{ ...linkStyle, textDecoration: 'underline' }}
           >
-            ur/gd Studios
+            {ABOUT_CONTENT.attributionStudio}
           </a>
         </span>
       </footer>
@@ -194,46 +194,39 @@ function SessionAboutModal({ onClose }: { onClose: () => void }) {
       aria-labelledby="session-about-title"
     >
       <div style={aboutCardStyle}>
-        <p style={aboutWordmarkStyle} id="session-about-title">pulse</p>
+        <p style={aboutWordmarkStyle} id="session-about-title">{ABOUT_CONTENT.wordmark}</p>
         <p style={aboutVersionStyle}>Version {APP_VERSION}</p>
-        <p style={aboutDescStyle}>
-          Pulse is a feedback tool. You upload your work, invite people to review it, and Pulse
-          guides each conversation so you get structured, thoughtful feedback — not just "looks good."
-        </p>
-        <p style={aboutDescStyle}>
-          When your reviewers are done, Pulse consolidates everything into a single view called a
-          Pulse Check. It shows you what landed, where things struggled, and what to do next — so
-          you can make decisions, not just collect opinions.
-        </p>
+        <p style={aboutDescStyle}>{ABOUT_CONTENT.descriptionP1}</p>
+        <p style={aboutDescStyle}>{ABOUT_CONTENT.descriptionP2}</p>
         <p style={aboutAttrStyle}>
-          Quietly Powerful, by{' '}
+          {ABOUT_CONTENT.attribution}{' '}
           <a
-            href="https://urgdstudios.com"
+            href={ABOUT_CONTENT.attributionUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{ ...aboutLegalLinkStyle, textDecoration: 'underline' }}
           >
-            ur/gd Studios
+            {ABOUT_CONTENT.attributionStudio}
           </a>
-          {' | '}Seattle, WA
+          {' | '}{ABOUT_CONTENT.attributionLocation}
         </p>
         <div style={aboutLegalStyle}>
           <a
-            href="https://urgdstudios.com/privacy"
+            href={ABOUT_CONTENT.privacyUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={aboutLegalLinkStyle}
           >
-            Privacy Policy
+            {ABOUT_CONTENT.privacyLabel}
           </a>
           <span style={{ color: 'var(--color-text-muted, #6c757d)', fontSize: '0.75rem' }} aria-hidden="true">·</span>
           <a
-            href="https://urgdstudios.com/terms"
+            href={ABOUT_CONTENT.termsUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={aboutLegalLinkStyle}
           >
-            Terms of Use
+            {ABOUT_CONTENT.termsLabel}
           </a>
         </div>
         <button

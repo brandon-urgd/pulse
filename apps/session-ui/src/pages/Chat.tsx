@@ -4,7 +4,6 @@ import { useSession } from '../context/SessionContext'
 import {
   deleteSessionTranscript,
   getSessionState,
-  initTemplateGreeting,
   reportSessionCompletion,
   sendChatMessage,
   sendChatMessageStreaming,
@@ -352,18 +351,9 @@ export default function Chat() {
           setSessionStatus('not_started')
           setMessages(existingMessages)
 
-          if (state.templateGreeting && existingMessages.length === 0) {
-            // Two-Phase Session Start: display template greeting instantly
-            const greetingMsg: Message = { role: 'agent', content: state.templateGreeting }
-            setMessages([greetingMsg])
-            setSessionStatus('in_progress')
-            setIsThinking(false)
-            // Best-effort: write transcript entry + transition session to in_progress
-            initTemplateGreeting(sessionId, sessionToken!, state.templateGreeting).catch(() => {})
-          } else {
-            // Legacy fallback: no templateGreeting — send __session_start__ via streaming
-            await autoSend('__session_start__', existingMessages)
-          }
+          // Phased Cache Priming: send __session_start__ directly — the model generates
+          // its own greeting at turn 1 based on extracted text context.
+          await autoSend('__session_start__', existingMessages)
         } else if (state.status === 'in_progress') {
           setSessionStatus('in_progress')
           setMessages(existingMessages)

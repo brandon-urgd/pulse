@@ -54,19 +54,29 @@ export const handler = async (event) => {
     }
 
     // Soft-cancel: mark as "cancelled" so the pulse code returns a clear message if used
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.SESSIONS_TABLE,
-      Key: {
-        tenantId: { S: tenantId },
-        sessionId: { S: sessionId },
-      },
-      UpdateExpression: 'SET #status = :cancelled, cancelledAt = :now',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: {
-        ':cancelled': { S: 'cancelled' },
-        ':now': { S: new Date().toISOString() },
-      },
-    }))
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          sessionId: { S: sessionId },
+        },
+        UpdateExpression: 'SET #status = :cancelled, cancelledAt = :now',
+        ConditionExpression: '#status = :not_started',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':cancelled': { S: 'cancelled' },
+          ':not_started': { S: 'not_started' },
+          ':now': { S: new Date().toISOString() },
+        },
+      }))
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        log('warn', 'CancelSession: session status changed concurrently', { requestId, tenantId, sessionId })
+        return errorResponse(409, 'Session is already in progress and cannot be cancelled', {}, origin)
+      }
+      throw err
+    }
 
     log('info', 'CancelSession: session cancelled', { requestId, tenantId, itemId, sessionId })
 

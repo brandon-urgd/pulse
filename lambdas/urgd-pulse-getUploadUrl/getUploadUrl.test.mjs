@@ -86,7 +86,7 @@ describe('urgd-pulse-getUploadUrl', () => {
   })
 
   describe('disallowed file type returns 400', () => {
-    it.each(['.exe', '.js', '.zip', '.png', '.mp4', ''])('returns 400 for %s extension', async (ext) => {
+    it.each(['.exe', '.js', '.zip', '.mp4', ''])('returns 400 for %s extension', async (ext) => {
       const res = await handler(makeEvent({
         body: { fileName: `document${ext}`, fileSize: 1024 },
       }))
