@@ -48,12 +48,14 @@ export const handler = async (event) => {
       return createResponse(200, { message: 'Session already cancelled' }, {}, origin)
     }
 
-    if (status !== 'not_started' && status !== 'cancelled') {
-      log('warn', 'CancelSession: can only cancel not_started sessions', { requestId, tenantId, sessionId, status })
-      return errorResponse(409, 'Only pending sessions can be cancelled', {}, origin)
+    if (status !== 'not_started' && status !== 'in_progress' && status !== 'cancelled') {
+      log('warn', 'CancelSession: cannot cancel terminal session', { requestId, tenantId, sessionId, status })
+      return errorResponse(409, 'This session cannot be cancelled', {}, origin)
     }
 
     // Soft-cancel: mark as "cancelled" so the pulse code returns a clear message if used
+    // Allows cancelling not_started and in_progress sessions (self-review restart flow)
+    // but blocks terminal states (completed, expired) via ConditionExpression
     try {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.SESSIONS_TABLE,
@@ -62,18 +64,19 @@ export const handler = async (event) => {
           sessionId: { S: sessionId },
         },
         UpdateExpression: 'SET #status = :cancelled, cancelledAt = :now',
-        ConditionExpression: '#status = :not_started',
+        ConditionExpression: '#status IN (:not_started, :in_progress)',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':cancelled': { S: 'cancelled' },
           ':not_started': { S: 'not_started' },
+          ':in_progress': { S: 'in_progress' },
           ':now': { S: new Date().toISOString() },
         },
       }))
     } catch (err) {
       if (err.name === 'ConditionalCheckFailedException') {
-        log('warn', 'CancelSession: session status changed concurrently', { requestId, tenantId, sessionId })
-        return errorResponse(409, 'Session is already in progress and cannot be cancelled', {}, origin)
+        log('warn', 'CancelSession: session in terminal state, cannot cancel', { requestId, tenantId, sessionId })
+        return errorResponse(409, 'This session cannot be cancelled', {}, origin)
       }
       throw err
     }
