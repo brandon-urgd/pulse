@@ -255,34 +255,36 @@ describe('Turn number computation', () => {
 
     expect(result.statusCode).toBe(200)
 
-    // Turn 4: isDocumentInjectionTurn is true (turnNumber >= 3), but nativeDocBytes
-    // are only loaded and attached to the FIRST user message (send-once pattern).
-    // On turn 4, the document was already injected at turn 3 and is in the history.
-    // The Chat Lambda loads nativeDocBytes on turn 4 (turnNumber >= 3) and attaches
-    // them to the first user message in the coalesced messages array.
-    // This is correct — the send-once pattern puts the doc on the first user message.
+    // Turn 4: isDocumentAttachmentTurn is false (turnNumber !== 3), so no document
+    // bytes are loaded or attached. The document was already injected at turn 3
+    // and is in the conversation history — send-once pattern.
     const bedrockCall = bedrockSpy.mock.calls[0][0]
     const messages = bedrockCall.input.messages
     const firstUserMsg = messages.find(m => m.role === 'user')
     expect(firstUserMsg).toBeDefined()
-    // On turn 4+, the first user message gets the document blocks (send-once pattern)
-    expect(Array.isArray(firstUserMsg.content)).toBe(true)
-    expect(firstUserMsg.content.some(b => b.document)).toBe(true)
+    // On turn 4+, NO document or image blocks should be present (send-once)
+    if (Array.isArray(firstUserMsg.content)) {
+      expect(firstUserMsg.content.find(b => b.document)).toBeUndefined()
+      expect(firstUserMsg.content.find(b => b.image)).toBeUndefined()
+    }
   })
 
-  it('5 prior user messages → turn 6 (document on first user message)', async () => {
+  it('5 prior user messages → turn 6 (no document re-injection)', async () => {
     setupMocks(5)
     const event = makeChatEvent('Final thoughts?')
     const result = await chatHandler(event)
 
     expect(result.statusCode).toBe(200)
 
-    // Turn 6: same as turn 4+ — document attached to first user message
+    // Turn 6: same as turn 4+ — no document blocks (send-once pattern)
     const bedrockCall = bedrockSpy.mock.calls[0][0]
     const messages = bedrockCall.input.messages
     const firstUserMsg = messages.find(m => m.role === 'user')
     expect(firstUserMsg).toBeDefined()
-    expect(Array.isArray(firstUserMsg.content)).toBe(true)
-    expect(firstUserMsg.content.some(b => b.document)).toBe(true)
+    // On turn 6, NO document or image blocks should be present (send-once)
+    if (Array.isArray(firstUserMsg.content)) {
+      expect(firstUserMsg.content.find(b => b.document)).toBeUndefined()
+      expect(firstUserMsg.content.find(b => b.image)).toBeUndefined()
+    }
   })
 })

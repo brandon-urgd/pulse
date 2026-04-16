@@ -194,6 +194,7 @@ if [ -n "$ENVIRONMENT" ]; then
     "urgd-pulse-shieldCallback-${ENVIRONMENT}"
     "urgd-pulse-usageReport-${ENVIRONMENT}"
     "urgd-pulse-renderPages-${ENVIRONMENT}"
+    "urgd-pulse-primeCacheWorker-${ENVIRONMENT}"
   )
   for fn in "${LAMBDA_FUNCTIONS[@]}"; do
     echo "Testing Lambda $fn..."

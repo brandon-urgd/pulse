@@ -6,15 +6,16 @@
 // Generates a session token directly and returns { sessionId, sessionUrl }.
 
 import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
 import { checkAndIncrement } from './shared/counters.mjs'
-import { primeCacheAsync } from './shared/primeCacheAsync.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS', 'APP_URL'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 /**
  * Build initial sectionCoverage map from item's feedbackSections (5.5).
@@ -288,27 +289,31 @@ export const handler = async (event) => {
       },
     }, {}, origin)
 
-    // Fire-and-forget priming (async, after response)
-    if (itemResult.Item) {
+    // Async Lambda invocation — guaranteed to complete (own execution lifecycle)
+    if (itemResult.Item && process.env.PRIME_CACHE_FUNCTION_NAME) {
       const item = itemResult.Item
-      primeCacheAsync({
-        itemName: item.itemName?.S || '',
-        itemDescription: item.description?.S || '',
-        itemType: item.itemType?.S || '',
-        documentKey: item.documentKey?.S || '',
-        pageCount: parseInt(item.pageCount?.N || '0', 10),
-        tenantId,
-        itemId,
-        sessionId,
-        requestId,
-        frozenSnapshot: item.sectionMap?.M ? {
-          feedbackSections: (item.feedbackSections?.L || []).map(s => s.S || s),
-        } : null,
-        timeLimitMinutes: cappedTimeLimitMinutes,
-        isSelfReview: true,
-        coverageMap: null,
-        dataBucket: process.env.DATA_BUCKET,
-        bedrockModelId: process.env.BEDROCK_MODEL_ID,
+      lambda.send(new InvokeCommand({
+        FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
+        InvocationType: 'Event',
+        Payload: JSON.stringify({
+          itemName: item.itemName?.S || '',
+          itemDescription: item.description?.S || '',
+          itemType: item.itemType?.S || '',
+          documentKey: item.documentKey?.S || '',
+          pageCount: parseInt(item.pageCount?.N || '0', 10),
+          tenantId,
+          itemId,
+          sessionId,
+          requestId,
+          frozenSnapshot: item.sectionMap?.M ? {
+            feedbackSections: (item.feedbackSections?.L || []).map(s => s.S || s),
+          } : null,
+          timeLimitMinutes: cappedTimeLimitMinutes,
+          isSelfReview: true,
+          coverageMap: null,
+        }),
+      })).catch(err => {
+        log('warn', 'Failed to invoke prime cache worker', { requestId, errorName: err.name })
       })
     }
 

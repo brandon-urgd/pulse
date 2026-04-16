@@ -3,14 +3,15 @@
 // Validates a reviewer's session via pulseCode or sessionId + email match
 
 import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
-import { primeCacheAsync } from './shared/primeCacheAsync.mjs'
 import { randomUUID } from 'crypto'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
 export const handler = async (event) => {
   const origin = event?.headers?.origin ?? event?.headers?.Origin
@@ -201,24 +202,28 @@ export const handler = async (event) => {
       ...(isPublic && name ? { reviewerName: name.trim() } : {}),
     }, {}, origin)
 
-    // Fire-and-forget priming (async, after response)
-    if (itemRecord && activeSessionId) {
-      primeCacheAsync({
-        itemName: itemRecord.itemName?.S || '',
-        itemDescription: itemRecord.description?.S || '',
-        itemType: itemRecord.itemType?.S || '',
-        documentKey: itemRecord.documentKey?.S || '',
-        pageCount: parseInt(itemRecord.pageCount?.N || '0', 10),
-        tenantId,
-        itemId: itemRecord.itemId?.S || itemId,
-        sessionId: activeSessionId,
-        requestId,
-        frozenSnapshot: null,
-        timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
-        isSelfReview: isSelfReview || false,
-        coverageMap: null,
-        dataBucket: process.env.DATA_BUCKET,
-        bedrockModelId: process.env.BEDROCK_MODEL_ID,
+    // Async Lambda invocation — guaranteed to complete (own execution lifecycle)
+    if (itemRecord && activeSessionId && process.env.PRIME_CACHE_FUNCTION_NAME) {
+      lambda.send(new InvokeCommand({
+        FunctionName: process.env.PRIME_CACHE_FUNCTION_NAME,
+        InvocationType: 'Event',
+        Payload: JSON.stringify({
+          itemName: itemRecord.itemName?.S || '',
+          itemDescription: itemRecord.description?.S || '',
+          itemType: itemRecord.itemType?.S || '',
+          documentKey: itemRecord.documentKey?.S || '',
+          pageCount: parseInt(itemRecord.pageCount?.N || '0', 10),
+          tenantId,
+          itemId: itemRecord.itemId?.S || itemId,
+          sessionId: activeSessionId,
+          requestId,
+          frozenSnapshot: null,
+          timeLimitMinutes: parseInt(sessionRecord.timeLimitMinutes?.N || '30', 10),
+          isSelfReview: isSelfReview || false,
+          coverageMap: null,
+        }),
+      })).catch(err => {
+        log('warn', 'Failed to invoke prime cache worker', { requestId, errorName: err.name })
       })
     }
 

@@ -193,7 +193,7 @@ describe('Feature: phased-cache-priming, Property 3: turn-aware document injecti
     lambdaSpy.mockResolvedValue({})
   })
 
-  it('document sessions: turns 1-2 have no document/image blocks, turn 3+ has them', async () => {
+  it('document sessions: turns 1-2 have no document/image blocks, turn 3 has them, turns 4+ do not (send-once)', async () => {
     // **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5**
     await fc.assert(
       fc.asyncProperty(
@@ -209,7 +209,7 @@ describe('Feature: phased-cache-priming, Property 3: turn-aware document injecti
           lambdaSpy.mockResolvedValue({})
 
           const turnNumber = priorUserMsgs + 1
-          const isDocInjectionTurn = turnNumber >= 3
+          const isDocAttachmentTurn = turnNumber === 3
           const transcriptItems = buildTranscriptItems(priorUserMsgs)
 
           dynamoSpy
@@ -241,8 +241,8 @@ describe('Feature: phased-cache-priming, Property 3: turn-aware document injecti
           const bedrockCall = bedrockSpy.mock.calls[0][0]
           const messages = bedrockCall.input.messages
 
-          if (isDocInjectionTurn) {
-            // Turn 3+: first user message should have document and/or image content blocks
+          if (isDocAttachmentTurn) {
+            // Turn 3 ONLY: first user message should have document and/or image content blocks
             const firstUserMsg = messages.find(m => m.role === 'user')
             expect(firstUserMsg).toBeDefined()
             expect(Array.isArray(firstUserMsg.content)).toBe(true)
@@ -251,7 +251,7 @@ describe('Feature: phased-cache-priming, Property 3: turn-aware document injecti
             expect(hasDocBlock).toBe(true)
             expect(hasImageBlock).toBe(true)
           } else {
-            // Turns 1-2: NO document or image blocks in any message
+            // Turns 1-2 AND turns 4+: NO document or image blocks in any message (send-once)
             for (const msg of messages) {
               if (Array.isArray(msg.content)) {
                 const docBlock = msg.content.find(b => b.document)

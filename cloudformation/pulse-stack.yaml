@@ -296,6 +296,11 @@ Parameters:
     Default: pulse/lambda-packages/urgd-pulse-createSelfSession/latest.zip
     Description: S3 key for urgd-pulse-createSelfSession Lambda ZIP
 
+  PrimeCacheWorkerCodeKey:
+    Type: String
+    Default: pulse/lambda-packages/urgd-pulse-primeCacheWorker/latest.zip
+    Description: S3 key for urgd-pulse-primeCacheWorker Lambda ZIP
+
   SubmitReportCodeKey:
     Type: String
     Default: pulse/lambda-packages/urgd-pulse-submitReport/latest.zip
@@ -505,6 +510,8 @@ Mappings:
       EmailSessionSummary: 3
       # Session Fast Start
       RenderPages: 3
+      # Phased Cache Priming
+      PrimeCacheWorker: 3
     staging:
       Health: 5
       BedrockHealth: 5
@@ -578,6 +585,8 @@ Mappings:
       EmailSessionSummary: 5
       # Session Fast Start
       RenderPages: 5
+      # Phased Cache Priming
+      PrimeCacheWorker: 3
     prod:
       Health: 5
       BedrockHealth: 5
@@ -651,6 +660,8 @@ Mappings:
       EmailSessionSummary: 5
       # Session Fast Start
       RenderPages: 5
+      # Phased Cache Priming
+      PrimeCacheWorker: 5
 Resources:
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -4208,6 +4219,11 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              # Phased cache priming — invoke worker Lambda asynchronously
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulsePrimeCacheWorkerFunction.Arn
 
   PulseAcceptConfidentialityFunctionRole:
     Type: AWS::IAM::Role
@@ -4654,6 +4670,7 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           DATA_BUCKET: !Ref PulseDataBucket
+          PRIME_CACHE_FUNCTION_NAME: !Ref PulsePrimeCacheWorkerFunction
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           ENVIRONMENT: !Ref Environment
           VERSION: !Ref DeploymentVersion
@@ -8130,6 +8147,11 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              # Phased cache priming — invoke worker Lambda asynchronously
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulsePrimeCacheWorkerFunction.Arn
 
   PulsePreviewSessionFunction:
     Type: AWS::Lambda::Function
@@ -8154,6 +8176,7 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           DATA_BUCKET: !Ref PulseDataBucket
+          PRIME_CACHE_FUNCTION_NAME: !Ref PulsePrimeCacheWorkerFunction
           APP_URL: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
@@ -8287,6 +8310,11 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+              # Phased cache priming — invoke worker Lambda asynchronously
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulsePrimeCacheWorkerFunction.Arn
 
   PulseCreateSelfSessionFunction:
     Type: AWS::Lambda::Function
@@ -8311,6 +8339,7 @@ Resources:
           TENANTS_TABLE: !Ref PulseTenantsTable
           BEDROCK_MODEL_ID: !Ref BedrockModelId
           DATA_BUCKET: !Ref PulseDataBucket
+          PRIME_CACHE_FUNCTION_NAME: !Ref PulsePrimeCacheWorkerFunction
           APP_URL: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
@@ -10121,6 +10150,106 @@ Resources:
           ITEMS_TABLE: !Ref PulseItemsTable
           DATA_BUCKET: !Ref PulseDataBucket
           HOME: '/tmp'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: orbit
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Phased Cache Priming — Worker Lambda
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  PulsePrimeCacheWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-primeCacheWorker-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
+  PulsePrimeCacheWorkerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-primeCacheWorker-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PrimeCacheWorkerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              # Bedrock InvokeModel for cache priming call
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6'
+                  - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6'
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}'
+              # S3 read for native document bytes and page images
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${PulseDataBucket.Arn}/pulse/*'
+
+  PulsePrimeCacheWorkerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulsePrimeCacheWorkerLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-primeCacheWorker-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulsePrimeCacheWorkerFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref PrimeCacheWorkerCodeKey
+      Timeout: 120
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, PrimeCacheWorker]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          DATA_BUCKET: !Ref PulseDataBucket
+          ENVIRONMENT: !Ref Environment
+          VERSION: !Ref DeploymentVersion
       Tags:
         - Key: project
           Value: pulse

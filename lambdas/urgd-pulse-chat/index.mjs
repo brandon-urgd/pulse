@@ -380,9 +380,12 @@ async function handleChat(event, responseStream) {
     // Document injection only applies to document sessions with a native document (PDF/DOCX).
     // Image sessions and text-only sessions are unaffected by turn-awareness.
     const isDocumentInjectionTurn = turnNumber >= 3
+    // Send-once: load and attach document bytes ONLY on turn 3 (the injection turn).
+    // On turns 4+, the document is already in conversation history — no need to re-attach.
+    const isDocumentAttachmentTurn = turnNumber === 3
 
     let nativeDocBytes = null
-    if (isDocumentInjectionTurn && itemType === 'document' && documentKey) {
+    if (isDocumentAttachmentTurn && itemType === 'document' && documentKey) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
       const docMediaTypes = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
       if (docMediaTypes[ext]) {
@@ -401,7 +404,9 @@ async function handleChat(event, responseStream) {
     // - false for turns 1-2 of document sessions (text-only phase)
     // - true for turn 3+ of document sessions (full document phase)
     // - For non-document sessions, this follows existing behavior (based on whether doc bytes loaded)
-    const nativeDocumentAvailable = !!nativeDocBytes
+    // For document sessions: true on turn 3+ (model has seen the doc)
+    // For non-document sessions: based on whether doc bytes loaded (existing behavior)
+    const nativeDocumentAvailable = (itemType === 'document' && documentKey && turnNumber >= 3) || !!nativeDocBytes
 
     // Phased Cache Priming: System prompt no longer uses templateGreeting — the model
     // generates its own greeting at turn 1 via __session_start__.
@@ -485,11 +490,11 @@ async function handleChat(event, responseStream) {
     }
 
     // Phased Cache Priming: Native document attachment — send-once pattern for PDF/DOCX items.
-    // On document injection turn (turn 3+), attach original file as document content block.
+    // On document attachment turn (turn 3 only), attach original file as document content block.
     // On turns 1-2, the document is not attached — text-only phase for fast responses.
-    // On subsequent turns after injection, the document is already in conversation history.
+    // On turns 4+, the document is already in conversation history — no re-attachment needed.
     // nativeDocBytes was pre-loaded above (before system prompt building).
-    if (isDocumentInjectionTurn && itemType === 'document' && documentKey && nativeDocBytes) {
+    if (isDocumentAttachmentTurn && itemType === 'document' && documentKey && nativeDocBytes) {
       const ext = documentKey.split('.').pop()?.toLowerCase()
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
@@ -507,8 +512,8 @@ async function handleChat(event, responseStream) {
       }
     }
 
-    // Phased Cache Priming: Attach page images on document injection turn (send-once pattern)
-    if (isDocumentInjectionTurn && itemType === 'document' && pageCount > 0) {
+    // Phased Cache Priming: Attach page images on document attachment turn (send-once pattern)
+    if (isDocumentAttachmentTurn && itemType === 'document' && pageCount > 0) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
@@ -548,7 +553,7 @@ async function handleChat(event, responseStream) {
     // Prompt Cache Priming: Insert document-level cache point when native doc is present
     // but there are no page images (pageCount === 0). The page images block above handles
     // the case when pageCount > 0.
-    if (isDocumentInjectionTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
+    if (isDocumentAttachmentTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
