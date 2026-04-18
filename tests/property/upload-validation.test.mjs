@@ -30,6 +30,11 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: (...args) => getSignedUrlSpy(...args),
 }))
 
+// Also mock the Lambda's own node_modules copy (different resolution path)
+vi.mock('../../lambdas/urgd-pulse-getUploadUrl/node_modules/@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: (...args) => getSignedUrlSpy(...args),
+}))
+
 const { handler } = await import('../../lambdas/urgd-pulse-getUploadUrl/index.mjs')
 
 const ALLOWED_EXTENSIONS = ['.md', '.txt', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif']

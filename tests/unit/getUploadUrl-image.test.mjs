@@ -31,6 +31,11 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: (...args) => getSignedUrlMock(...args),
 }))
 
+// Also mock the Lambda's own node_modules copy (different resolution path)
+vi.mock('../../lambdas/urgd-pulse-getUploadUrl/node_modules/@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: (...args) => getSignedUrlMock(...args),
+}))
+
 function makeEvent({ tenantId, itemId, fileName, fileSize } = {}) {
   return {
     headers: { origin: 'https://pulse.urgdstudios.com' },
@@ -61,7 +66,9 @@ describe('urgd-pulse-getUploadUrl — image branch', () => {
     dynamoSendSpy.mockReset()
     s3SendSpy.mockReset()
     getSignedUrlMock.mockReset()
-    dynamoSendSpy.mockResolvedValue(makeItemRecord())
+    // GetItemCommand returns a valid item, UpdateItemCommand returns {}
+    dynamoSendSpy.mockResolvedValueOnce(makeItemRecord())
+    dynamoSendSpy.mockResolvedValue({})
     getSignedUrlMock.mockResolvedValue('https://presigned-upload-url.example.com')
   })
 

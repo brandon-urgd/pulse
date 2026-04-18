@@ -410,7 +410,9 @@ describe('urgd-pulse-chat', () => {
 
     it('closing phase prompt contains the closing question instruction', () => {
       const prompt = buildSystemPrompt(basePromptArgs)
-      expect(prompt).toContain('ask ONE open-ended closing question')
+      expect(prompt).toContain('STEP 1 — Open-ended closing question:')
+      expect(prompt).toContain('One last thing —')
+      expect(prompt).toContain('ask ONE open-ended question')
     })
 
     it('closing phase prompt contains the banned phrase list', () => {
