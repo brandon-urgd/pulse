@@ -377,13 +377,6 @@
   50% { box-shadow: 0 0 0 4px var(--color-interactive-subtle), 0 0 8px var(--color-interactive-subtle); }
 }
 
-/* Glow on Pulse Check button when pulse check is ready to review */
-.actionPulseCheckGlow {
-  border-color: var(--color-interactive);
-  color: var(--color-interactive);
-  animation: pulseGlow 2s ease-in-out infinite;
-}
-
 .actionDelete {
   color: var(--color-error);
   border-color: transparent;

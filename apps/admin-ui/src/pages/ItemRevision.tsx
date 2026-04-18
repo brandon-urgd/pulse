@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import ReactMarkdown from 'react-markdown';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import { downloadRevisionPdf } from '../utils/downloadPdf';
 import PulseCheckOverlay from '../components/PulseCheckOverlay';
-import AnnotatedChangeList, { isAnnotatedChangeList } from '../components/AnnotatedChangeList';
+import AnnotatedChangeList from '../components/AnnotatedChangeList';
 import styles from './ItemRevision.module.css';
 
 // ─── Revision overlay phases ──────────────────────────────────────────────────
@@ -41,54 +40,6 @@ interface ItemResponse {
   data: { itemId: string; itemName: string; status: string; itemType?: 'document' | 'image' };
 }
 
-// ─── Revision pane content ────────────────────────────────────────────────────
-
-function RevisionPane({ label, content, accentBorder }: { label: string; content: string; accentBorder?: boolean }) {
-  return (
-    <div className={styles.pane}>
-      <p className={styles.paneLabel}>{label}</p>
-      <div className={`${styles.paneContent} ${accentBorder ? styles.paneContentAccent : ''}`}>
-        <div className={styles.paneMarkdown}>
-          <ReactMarkdown
-            components={{
-              img: ({ alt }) => <span>{alt}</span>,
-            }}
-          >
-            {content || ''}
-          </ReactMarkdown>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Mobile tabs ──────────────────────────────────────────────────────────────
-
-function MobileTabs({ activeTab, onSelect, revisionNumber }: { activeTab: 'original' | 'revision'; onSelect: (t: 'original' | 'revision') => void; revisionNumber: number }) {
-  return (
-    <div className={styles.mobileTabs} role="tablist">
-      <button
-        role="tab"
-        aria-selected={activeTab === 'original'}
-        aria-controls="pane-original"
-        className={`${styles.mobileTab} ${activeTab === 'original' ? styles.mobileTabActive : ''}`}
-        onClick={() => onSelect('original')}
-      >
-        {labels.revision.originalPaneLabel}
-      </button>
-      <button
-        role="tab"
-        aria-selected={activeTab === 'revision'}
-        aria-controls="pane-revision"
-        className={`${styles.mobileTab} ${activeTab === 'revision' ? styles.mobileTabActive : ''}`}
-        onClick={() => onSelect('revision')}
-      >
-        {labels.revision.revisionPaneLabel.replace('{number}', String(revisionNumber))}
-      </button>
-    </div>
-  );
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ItemRevision() {
@@ -105,7 +56,6 @@ export default function ItemRevision() {
   const [originalContent, setOriginalContent] = useState<string | null>(null);
   const [revisionContent, setRevisionContent] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'original' | 'revision'>('revision');
   const [showHistory, setShowHistory] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -423,51 +373,10 @@ export default function ItemRevision() {
       {/* Side-by-side revision view */}
       {!generating && selectedRevision?.status === 'complete' && (
         <>
-          {/* Mobile tabs */}
-          <div className={styles.mobileOnly}>
-            <MobileTabs
-              activeTab={mobileTab}
-              onSelect={setMobileTab}
-              revisionNumber={selectedRevision.revisionNumber}
-            />
-          </div>
-
           {contentLoading ? (
             <p className={styles.loadingText}>{labels.revision.loading}</p>
-          ) : isAnnotatedChangeList(revisionContent ?? '') ? (
-            <AnnotatedChangeList content={revisionContent ?? ''} />
           ) : (
-            <>
-              {/* Desktop: side-by-side */}
-              <div className={`${styles.panesContainer} ${styles.desktopOnly}`}>
-                <RevisionPane
-                  label={labels.revision.originalPaneLabel}
-                  content={originalContent ?? ''}
-                />
-                <RevisionPane
-                  label={labels.revision.revisionPaneLabel.replace('{number}', String(selectedRevision.revisionNumber))}
-                  content={revisionContent ?? ''}
-                  accentBorder
-                />
-              </div>
-
-              {/* Mobile: single pane */}
-              <div className={styles.mobileOnly}>
-                {mobileTab === 'original' ? (
-                  <div id="pane-original" role="tabpanel">
-                    <RevisionPane label={labels.revision.originalPaneLabel} content={originalContent ?? ''} />
-                  </div>
-                ) : (
-                  <div id="pane-revision" role="tabpanel">
-                    <RevisionPane
-                      label={labels.revision.revisionPaneLabel.replace('{number}', String(selectedRevision.revisionNumber))}
-                      content={revisionContent ?? ''}
-                      accentBorder
-                    />
-                  </div>
-                )}
-              </div>
-            </>
+            <AnnotatedChangeList content={revisionContent ?? ''} />
           )}
 
           {/* Action row */}

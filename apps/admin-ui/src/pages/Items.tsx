@@ -170,7 +170,7 @@ function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardCon
         {actions.includes('pulseCheck') && (
           <Link
             to={`/admin/pulse-check/${item.itemId}`}
-            className={`${styles.actionPulseCheck} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''} ${item.hasPulseCheck ? styles.actionPulseCheckGlow : ''}`}
+            className={`${styles.actionPulseCheck} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''}`}
             aria-label={`${labels.itemCard.pulseCheck} — ${item.itemName}`}
           >
             {shouldShowRerunDot(item) && <span className={styles.rerunDot} aria-hidden="true" />}
@@ -189,7 +189,7 @@ function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardCon
         {actions.includes('revisions') && (
           <Link
             to={`/admin/items/${item.itemId}/revisions`}
-            className={`${styles.actionPulseCheck} ${item.hasCompletedRevision ? styles.actionPulseCheckGlow : ''}`}
+            className={styles.actionPulseCheck}
             aria-label={`${labels.itemCard.revisions} — ${item.itemName}`}
           >
             {labels.itemCard.revisions}

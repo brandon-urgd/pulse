@@ -25,25 +25,14 @@ const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
-// --- Prompt selection based on document type ---
+// --- Revision prompt ---
 
-const FULL_REWRITE_PROMPT = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
-
-CRITICAL RULES:
-- Only incorporate the ACCEPTED and REVISED feedback points listed below
-- For ACCEPT decisions: incorporate the feedback as-is into the document
-- For REVISE decisions: incorporate the feedback with any tenant notes as guidance
-- Preserve the document's original structure, voice, and formatting
-- Do not add new sections or content not implied by the feedback
-- Do not remove sections unless explicitly indicated by the feedback
-- Return ONLY the revised document text — no preamble, no explanation, no metadata`
-
-const ANNOTATED_CHANGE_LIST_PROMPT = `You are a professional document editor. The user has a PDF/DOCX document they cannot directly edit from your output. Instead of rewriting the full document, produce a structured change list that the user can apply in their original design tool.
+const ANNOTATED_CHANGE_LIST_PROMPT = `You are a professional document editor. Produce a structured change list based on the feedback decisions provided.
 
 For each change, output a Markdown section in this exact format:
 
 ### Change N
-- **Location:** Page X, paragraph/section Y
+- **Location:** Page X, paragraph/section Y (or section heading for text documents)
 - **Original:** "exact original text"
 - **Replacement:** "proposed replacement text"
 - **Rationale:** Brief explanation
@@ -56,21 +45,14 @@ RULES:
 - For REVISE decisions, incorporate tenant notes as guidance`
 
 /**
- * Returns the appropriate system prompt based on the document's file extension.
- * PDF/DOCX items get the annotated change list prompt; all others (md, txt, null/undefined)
- * get the full-document rewrite prompt.
+ * Returns the system prompt for revision generation.
+ * All document types now use the annotated change list format.
  *
- * @param {string|null|undefined} documentKey - S3 key of the original document
+ * @param {string|null|undefined} _documentKey - Unused (kept for API compatibility)
  * @returns {string} The system prompt to use for Bedrock
  */
-export function selectPrompt(documentKey) {
-  if (documentKey) {
-    const ext = documentKey.split('.').pop()?.toLowerCase()
-    if (ext === 'pdf' || ext === 'docx') {
-      return ANNOTATED_CHANGE_LIST_PROMPT
-    }
-  }
-  return FULL_REWRITE_PROMPT
+export function selectPrompt(_documentKey) {
+  return ANNOTATED_CHANGE_LIST_PROMPT
 }
 
 async function putMetrics(metrics) {
