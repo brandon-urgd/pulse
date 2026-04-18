@@ -197,9 +197,10 @@ describe('Feature: phased-cache-priming, Property 4: system prompt phase-awarene
             timeLimitMinutes,
             message,
             nativeDocumentAvailable: true,
+            includePageImages: true,
           }))
 
-          // Should contain full-document instructions
+          // Should contain full-document instructions (with page images enabled)
           expect(prompt).toContain('native file attachment and page images')
           expect(prompt).toContain('full access to its content, layout, and visual elements')
         },

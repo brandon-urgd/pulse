@@ -46,7 +46,7 @@ function computeTimeAllocations(sections, depthPrefs, timeLimitMinutes) {
  * Build the system prompt (4.5: overhauled).
  * Behavioral guardrails at top, then conversational instructions.
  */
-function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable }) {
+function buildSystemPrompt({ itemName, itemDescription, itemContent, itemType, totalSections, currentSection, closingState, windingDown, message, isSpecial, frozenSnapshot, coverageMap, imageBase64, isSelfReview, timeLimitMinutes, nativeDocumentAvailable, includePageImages }) {
   // ── Behavioral guardrails (placed at top per 4.5/8.8) ──
   let prompt = `BEHAVIORAL GUARDRAILS — follow these rules at all times:
 - Never guess or assume the reviewer's intent. If something is unclear, ask for clarification. Say "Could you tell me more about what you mean?" rather than interpreting on your own.
@@ -135,10 +135,17 @@ This is your primary steering signal. Shape your questions around it. Periodical
 When describing the image, use everyday language. Say "the patterned wood floor" not "herringbone parquet." Say "the small bathroom" not "the powder room." Say "the dark tile" not "zellige tile." If the reviewer uses a specific term, you can mirror it — but don't assume vocabulary. The reviewer is a regular person giving their honest reaction.
 
 `
-  } else if (nativeDocumentAvailable) {
+  } else if (nativeDocumentAvailable && includePageImages === true) {
     // Native PDF/DOCX document block + page images are sent as content blocks on the first user message.
     // The model has full access to the document via those blocks — no need to duplicate the extracted text here.
     prompt += `The document has been provided as a native file attachment and page images. You have full access to its content, layout, and visual elements. Reference it directly — do not ask the reviewer to describe what's in the document.
+
+`
+  } else if (nativeDocumentAvailable) {
+    // Native PDF/DOCX document block without page images — model has structural access but no visual content of embedded photos/graphics.
+    prompt += `The document has been provided as a native file attachment. You have access to its full text content, document structure, page boundaries, layout coordinates, font sizing, column structure, and image placement positions. Use the PDF block's underlying structure and spatial coordinates to make confident observations about layout, hierarchy, visual weight, and how the document is organized on the page. Reference the document directly — do not ask the reviewer to describe what is in the document.
+
+If the reviewer asks about a specific photo or graphic embedded in the document, be straightforward: you can see where the image is placed, its size, any caption or alt text, and the surrounding context — but you cannot see the visual content of the image itself. Redirect to what you can observe: the image's position, its relationship to surrounding text, and any descriptive text associated with it. Do not explain why in technical terms.
 
 `
   } else if (itemType === 'document' && itemContent) {

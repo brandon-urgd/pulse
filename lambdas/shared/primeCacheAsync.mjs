@@ -84,6 +84,9 @@ export async function primeCacheAsync({
 }) {
   const primingStart = Date.now()
 
+  // Read feature flag — must match Chat Lambda behavior for cache prefix alignment
+  const includePageImages = process.env.INCLUDE_PAGE_IMAGES_ON_INJECTION === 'true'
+
   try {
     // Eligibility check
     if (!isPrimingEligible({ itemType, documentKey, bedrockModelId, dataBucket })) {
@@ -126,6 +129,7 @@ export async function primeCacheAsync({
       isSelfReview: isSelfReview || false,
       timeLimitMinutes: timeLimitMinutes || 30,
       nativeDocumentAvailable: true,
+      includePageImages,
     })
 
     // Build user content blocks — same structure as Chat Lambda turn 3
@@ -135,16 +139,18 @@ export async function primeCacheAsync({
     const ext = documentKey.split('.').pop()?.toLowerCase()
     userContent.push({ document: { format: ext, name: 'document', source: { bytes: nativeDocBytes } } })
 
-    // Page images (same order as Chat Lambda)
-    for (let p = 1; p <= (pageCount || 0); p++) {
-      const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
-      try {
-        const pageBytes = await getS3Bytes(dataBucket, pageKey)
-        if (pageBytes) {
-          userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+    // Page images (same order as Chat Lambda) — only when feature flag is enabled
+    if (includePageImages) {
+      for (let p = 1; p <= (pageCount || 0); p++) {
+        const pageKey = `pulse/${tenantId}/items/${itemId}/pages/page-${String(p).padStart(3, '0')}.png`
+        try {
+          const pageBytes = await getS3Bytes(dataBucket, pageKey)
+          if (pageBytes) {
+            userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+          }
+        } catch {
+          log('warn', 'Priming: failed to read page image, skipping', { requestId, sessionId, page: p })
         }
-      } catch {
-        log('warn', 'Priming: failed to read page image, skipping', { requestId, sessionId, page: p })
       }
     }
 

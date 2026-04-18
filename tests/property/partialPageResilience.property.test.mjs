@@ -14,6 +14,7 @@ vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
+vi.stubEnv('INCLUDE_PAGE_IMAGES_ON_INJECTION', 'true')
 
 // ── Spies ──
 

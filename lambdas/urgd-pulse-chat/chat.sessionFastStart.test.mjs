@@ -10,6 +10,7 @@ vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
+vi.stubEnv('INCLUDE_PAGE_IMAGES_ON_INJECTION', 'true')
 
 const sendSpy = vi.fn()
 const s3SendSpy = vi.fn()

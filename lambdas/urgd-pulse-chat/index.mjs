@@ -446,6 +446,9 @@ async function handleChat(event, responseStream) {
       }
     }
 
+    // Read feature flag at request time (not module level — allows env var changes without redeploy)
+    const includePageImages = process.env.INCLUDE_PAGE_IMAGES_ON_INJECTION === 'true'
+
     // Phased Cache Priming: System prompt no longer uses templateGreeting — the model
     // generates its own greeting at turn 1 via __session_start__.
     const systemPrompt = buildSystemPrompt({
@@ -455,6 +458,7 @@ async function handleChat(event, responseStream) {
       frozenSnapshot, coverageMap, imageBase64, isSelfReview,
       timeLimitMinutes,
       nativeDocumentAvailable,
+      includePageImages,
     })
 
     // Build messages for Bedrock
@@ -551,7 +555,8 @@ async function handleChat(event, responseStream) {
     }
 
     // Phased Cache Priming: Attach page images on document attachment turn (send-once pattern)
-    if (isDocumentAttachmentTurn && itemType === 'document' && pageCount > 0) {
+    // Only when feature flag is enabled — page images are excluded by default to reduce TTFT.
+    if (isDocumentAttachmentTurn && itemType === 'document' && pageCount > 0 && includePageImages) {
       const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (firstUserIdx !== -1) {
         const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
@@ -588,20 +593,23 @@ async function handleChat(event, responseStream) {
       }
     }
 
-    // Prompt Cache Priming: Insert document-level cache point when native doc is present
-    // but there are no page images (pageCount === 0). The page images block above handles
-    // the case when pageCount > 0.
-    if (isDocumentAttachmentTurn && itemType === 'document' && nativeDocBytes && pageCount === 0) {
-      const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
-      if (firstUserIdx !== -1) {
-        const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
-          ? [...coalescedMessages[firstUserIdx].content]
-          : [{ text: coalescedMessages[firstUserIdx].content }]
-        const cacheTextIdx = existingContent.findIndex(b => b.text)
-        if (cacheTextIdx > 0) {
-          existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
+    // Document-level cache point — always inserted after document block (and page images if present).
+    // If page images were NOT attached (either pageCount === 0 or flag is false),
+    // insert cache point after the document block and before the text block.
+    // If page images WERE attached, the cache point was already inserted in the page image block above.
+    if (isDocumentAttachmentTurn && itemType === 'document' && nativeDocBytes) {
+      if (!(pageCount > 0 && includePageImages)) {
+        const firstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
+        if (firstUserIdx !== -1) {
+          const existingContent = Array.isArray(coalescedMessages[firstUserIdx].content)
+            ? [...coalescedMessages[firstUserIdx].content]
+            : [{ text: coalescedMessages[firstUserIdx].content }]
+          const cacheTextIdx = existingContent.findIndex(b => b.text)
+          if (cacheTextIdx > 0) {
+            existingContent.splice(cacheTextIdx, 0, { cachePoint: { type: 'default' } })
+          }
+          coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
         }
-        coalescedMessages[firstUserIdx] = { role: 'user', content: existingContent }
       }
     }
 
@@ -647,6 +655,7 @@ async function handleChat(event, responseStream) {
     let tokensOut = 0
     let cacheReadInputTokens = 0
     let cacheWriteInputTokens = 0
+    let ttftMs = null
 
     if (isStreaming) {
       // 4.1: Streaming path — ConverseStream
@@ -661,6 +670,9 @@ async function handleChat(event, responseStream) {
         for await (const event of streamResponse.stream) {
           if (event.contentBlockDelta?.delta?.text) {
             const text = event.contentBlockDelta.delta.text
+            if (ttftMs === null) {
+              ttftMs = Date.now() - bedrockStart
+            }
             agentText += text
             responseStream.write(text)
           }
@@ -670,6 +682,16 @@ async function handleChat(event, responseStream) {
             cacheReadInputTokens = event.metadata.usage.cacheReadInputTokens || 0
             cacheWriteInputTokens = event.metadata.usage.cacheWriteInputTokens || 0
           }
+        }
+
+        // Log TTFT after stream completes
+        if (ttftMs !== null) {
+          log('info', 'Chat: TTFT measured', {
+            requestId, sessionId, tenantId,
+            ttftMs,
+            inputTokens: tokensIn,
+            turnNumber,
+          })
         }
 
         responseStream.end()
@@ -962,6 +984,10 @@ async function handleChat(event, responseStream) {
     }
     if (cacheWriteInputTokens > 0) {
       metrics.push({ MetricName: 'CacheWriteInputTokens', Value: cacheWriteInputTokens, Unit: 'Count' })
+    }
+
+    if (ttftMs !== null) {
+      metrics.push({ MetricName: 'TimeToFirstToken', Value: ttftMs, Unit: 'Milliseconds' })
     }
 
     await putMetrics(metrics)

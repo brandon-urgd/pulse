@@ -6006,6 +6006,7 @@ Resources:
           GENERATE_SESSION_SUMMARY_FUNCTION_NAME: !Ref PulseGenerateSessionSummaryFunction
           GENERATE_REPORT_FUNCTION_NAME: !Ref PulseGenerateReportFunction
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
+          INCLUDE_PAGE_IMAGES_ON_INJECTION: 'false'
       Tags:
         - Key: project
           Value: pulse
@@ -10250,6 +10251,7 @@ Resources:
           DATA_BUCKET: !Ref PulseDataBucket
           ENVIRONMENT: !Ref Environment
           VERSION: !Ref DeploymentVersion
+          INCLUDE_PAGE_IMAGES_ON_INJECTION: 'false'
       Tags:
         - Key: project
           Value: pulse

@@ -1,10 +1,13 @@
 // Property-based tests for Phased Cache Priming — Property 2: Priming prefix matches turn 3
 // Feature: phased-cache-priming, Property 2: priming call prefix matches turn 3 prefix
 // **Validates: Requirements 1.7, 5.1, 5.2, 5.3, 5.4, 5.6**
+// **Validates: Requirements 9.2, 9.3** (drop-page-images flag awareness)
 //
 // For any document session with a native document, the system prompt, document content block,
-// page image blocks, and cache point markers in the priming call SHALL be identical to those
-// in the Chat Lambda's turn 3 request for the same session — ensuring a cache hit.
+// page image blocks (when flag=true), and cache point markers in the priming call SHALL be
+// identical to those in the Chat Lambda's turn 3 request for the same session — ensuring a
+// cache hit. When includePageImages is false, page images are excluded from both priming and
+// turn 3, and the cache prefix must still be byte-identical between them.
 
 import { describe, it, expect, vi } from 'vitest'
 import fc from 'fast-check'
@@ -104,6 +107,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     itemName, itemDescription, itemType, docFormat, nativeDocBytes,
     pageCount, tenantId, itemId,
     frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+    includePageImages,
   }) {
     // Determine totalSections from frozenSnapshot (same as primeCacheAsync.mjs)
     let totalSections
@@ -131,6 +135,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
       isSelfReview: isSelfReview || false,
       timeLimitMinutes: timeLimitMinutes || 30,
       nativeDocumentAvailable: true,
+      includePageImages,
     })
 
     const systemBlocks = [
@@ -144,10 +149,12 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     // Document block
     userContent.push({ document: { format: docFormat, name: 'document', source: { bytes: nativeDocBytes } } })
 
-    // Page images (same order as primeCacheAsync)
-    for (let p = 1; p <= (pageCount || 0); p++) {
-      const pageBytes = fakePageBytes(p)
-      userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+    // Page images (same order as primeCacheAsync) — only when feature flag is enabled
+    if (includePageImages) {
+      for (let p = 1; p <= (pageCount || 0); p++) {
+        const pageBytes = fakePageBytes(p)
+        userContent.push({ image: { format: 'png', source: { bytes: pageBytes } } })
+      }
     }
 
     // Cache point after document + images
@@ -188,6 +195,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
     currentSection, closingState, windingDown,
     userMessage, history,
+    includePageImages,
   }) {
     // Determine totalSections from frozenSnapshot (same as Chat Lambda)
     let totalSections
@@ -216,6 +224,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
       isSelfReview,
       timeLimitMinutes,
       nativeDocumentAvailable: true,
+      includePageImages,
     })
 
     const systemBlocks = [
@@ -269,8 +278,8 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
       }
     }
 
-    // Attach page images on document injection turn (same as Chat Lambda)
-    if (pageCount > 0) {
+    // Attach page images on document injection turn (same as Chat Lambda) — only when flag is enabled
+    if (includePageImages && pageCount > 0) {
       const imgFirstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (imgFirstUserIdx !== -1) {
         const existingContent = [...coalescedMessages[imgFirstUserIdx].content]
@@ -293,7 +302,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
         coalescedMessages[imgFirstUserIdx] = { role: 'user', content: existingContent }
       }
     } else {
-      // pageCount === 0: separate cache point insertion (same as Chat Lambda)
+      // No page images: either pageCount === 0 or flag is false — insert cache point after document block
       const cpFirstUserIdx = coalescedMessages.findIndex(m => m.role === 'user')
       if (cpFirstUserIdx !== -1) {
         const existingContent = [...coalescedMessages[cpFirstUserIdx].content]
@@ -374,7 +383,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
   // Generator: the turn 3 user message
   const userMessageArb = fc.string({ minLength: 1, maxLength: 200 }).filter(s => s.trim().length > 0)
 
-  it('for any document session, priming and turn 3 have identical system prompt text', () => {
+  it('for any document session (flag=true), priming and turn 3 have identical system prompt text', () => {
     fc.assert(
       fc.property(
         itemNameArb,
@@ -400,6 +409,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription, itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId, itemId,
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            includePageImages: true,
           })
 
           const turn3 = buildTurn3Request({
@@ -408,6 +418,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
             currentSection, closingState, windingDown,
             userMessage, history,
+            includePageImages: true,
           })
 
           // Property: system prompt text is identical even when session state has changed
@@ -418,7 +429,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     )
   })
 
-  it('for any document session, priming and turn 3 have identical system-level cache point', () => {
+  it('for any document session (flag=true), priming and turn 3 have identical system-level cache point', () => {
     fc.assert(
       fc.property(
         itemNameArb,
@@ -433,6 +444,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription: '', itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId: 't', itemId: 'i',
             frozenSnapshot: null, timeLimitMinutes, isSelfReview, coverageMap: null,
+            includePageImages: true,
           })
 
           const turn3 = buildTurn3Request({
@@ -447,6 +459,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
               { role: 'user', content: 'msg 1' },
               { role: 'assistant', content: 'response 2' },
             ],
+            includePageImages: true,
           })
 
           // Property: both system blocks have exactly 2 elements
@@ -462,7 +475,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     )
   })
 
-  it('for any document session, priming and turn 3 have identical document/image cache prefix', () => {
+  it('for any document session (flag=true), priming and turn 3 have identical document/image cache prefix', () => {
     fc.assert(
       fc.property(
         itemNameArb,
@@ -488,6 +501,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription, itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId, itemId,
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            includePageImages: true,
           })
 
           const turn3 = buildTurn3Request({
@@ -496,6 +510,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
             currentSection, closingState, windingDown,
             userMessage, history,
+            includePageImages: true,
           })
 
           // Extract the first user message content from both
@@ -536,7 +551,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     )
   })
 
-  it('for any document session, page images are in the same order in priming and turn 3', () => {
+  it('for any document session (flag=true), page images are in the same order in priming and turn 3', () => {
     fc.assert(
       fc.property(
         docFormatArb,
@@ -548,6 +563,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName: 'Test', itemDescription: '', itemType: 'document', docFormat, nativeDocBytes,
             pageCount, tenantId: 't', itemId: 'i',
             frozenSnapshot: null, timeLimitMinutes: 30, isSelfReview: false, coverageMap: null,
+            includePageImages: true,
           })
 
           const turn3 = buildTurn3Request({
@@ -562,6 +578,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
               { role: 'user', content: 'm1' },
               { role: 'assistant', content: 'r2' },
             ],
+            includePageImages: true,
           })
 
           const primingContent = priming.messages[0].content
@@ -591,7 +608,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
     )
   })
 
-  it('for any document session with 0 pages, cache prefix still matches between priming and turn 3', () => {
+  it('for any document session with 0 pages (flag=true), cache prefix still matches between priming and turn 3', () => {
     fc.assert(
       fc.property(
         itemNameArb,
@@ -605,6 +622,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
             itemName, itemDescription: '', itemType: 'document', docFormat, nativeDocBytes,
             pageCount: 0, tenantId: 't', itemId: 'i',
             frozenSnapshot: null, timeLimitMinutes, isSelfReview, coverageMap: null,
+            includePageImages: true,
           })
 
           const turn3 = buildTurn3Request({
@@ -619,6 +637,7 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
               { role: 'user', content: 'm1' },
               { role: 'assistant', content: 'r2' },
             ],
+            includePageImages: true,
           })
 
           const primingContent = priming.messages[0].content
@@ -634,6 +653,239 @@ describe('Feature: phased-cache-priming, Property 2: priming call prefix matches
 
           // Property: prefixes are identical
           expect(contentBlocksEqual(primingPrefix, turn3Prefix)).toBe(true)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Feature: drop-page-images — flag=false path
+  // **Validates: Requirements 9.2, 9.3**
+  //
+  // When includePageImages is false, page images are excluded from both priming
+  // and turn 3, and the cache prefix must still be byte-identical between them.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  it('for any document session (flag=false), priming and turn 3 have identical system prompt text', () => {
+    fc.assert(
+      fc.property(
+        itemNameArb,
+        itemDescriptionArb,
+        itemContentArb,
+        docFormatArb,
+        pageCountArb,
+        timeLimitArb,
+        isSelfReviewArb,
+        fc.oneof(frozenSnapshotArb, fc.constant(null)),
+        coverageMapArb,
+        turn3HistoryArb,
+        userMessageArb,
+        currentSectionArb,
+        closingStateArb,
+        windingDownArb,
+        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage, currentSection, closingState, windingDown) => {
+          const tenantId = 'tenant-test'
+          const itemId = 'item-test'
+          const nativeDocBytes = fakeDocBytes(docFormat)
+
+          const priming = buildPrimingRequest({
+            itemName, itemDescription, itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId, itemId,
+            frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            includePageImages: false,
+          })
+
+          const turn3 = buildTurn3Request({
+            itemName, itemDescription, itemContent, itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId, itemId,
+            frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            currentSection, closingState, windingDown,
+            userMessage, history,
+            includePageImages: false,
+          })
+
+          // Property: system prompt text is identical even when session state has changed
+          expect(priming.systemBlocks[0].text).toBe(turn3.systemBlocks[0].text)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('for any document session (flag=false), priming and turn 3 have identical document cache prefix without images', () => {
+    fc.assert(
+      fc.property(
+        itemNameArb,
+        itemDescriptionArb,
+        itemContentArb,
+        docFormatArb,
+        pageCountArb,
+        timeLimitArb,
+        isSelfReviewArb,
+        fc.oneof(frozenSnapshotArb, fc.constant(null)),
+        coverageMapArb,
+        turn3HistoryArb,
+        userMessageArb,
+        currentSectionArb,
+        closingStateArb,
+        windingDownArb,
+        (itemName, itemDescription, itemContent, docFormat, pageCount, timeLimitMinutes, isSelfReview, frozenSnapshot, coverageMap, history, userMessage, currentSection, closingState, windingDown) => {
+          const tenantId = 'tenant-test'
+          const itemId = 'item-test'
+          const nativeDocBytes = fakeDocBytes(docFormat)
+
+          const priming = buildPrimingRequest({
+            itemName, itemDescription, itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId, itemId,
+            frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            includePageImages: false,
+          })
+
+          const turn3 = buildTurn3Request({
+            itemName, itemDescription, itemContent, itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId, itemId,
+            frozenSnapshot, timeLimitMinutes, isSelfReview, coverageMap,
+            currentSection, closingState, windingDown,
+            userMessage, history,
+            includePageImages: false,
+          })
+
+          // Extract the first user message content from both
+          const primingContent = priming.messages[0].content
+          const turn3FirstUserIdx = turn3.messages.findIndex(m => m.role === 'user')
+          expect(turn3FirstUserIdx).toBeGreaterThanOrEqual(0)
+          const turn3Content = turn3.messages[turn3FirstUserIdx].content
+
+          // Extract cache prefix (everything up to and including the document-level cachePoint)
+          const primingPrefix = extractCachePrefix(primingContent)
+          const turn3Prefix = extractCachePrefix(turn3Content)
+
+          // Property: cache prefixes have the same length
+          expect(primingPrefix.length).toBe(turn3Prefix.length)
+
+          // Property: cache prefixes are identical (document bytes, cache point — no images)
+          expect(contentBlocksEqual(primingPrefix, turn3Prefix)).toBe(true)
+
+          // Property: prefix structure is [document, cachePoint] — no image blocks regardless of pageCount
+          expect(primingPrefix.length).toBe(2) // doc + cachePoint only
+
+          // Property: no image blocks in prefix
+          const primingImages = primingPrefix.filter(b => 'image' in b)
+          const turn3Images = turn3Prefix.filter(b => 'image' in b)
+          expect(primingImages.length).toBe(0)
+          expect(turn3Images.length).toBe(0)
+
+          // Property: first block is a document block
+          expect(primingPrefix[0]).toHaveProperty('document')
+          expect(turn3Prefix[0]).toHaveProperty('document')
+
+          // Property: last block in prefix is a cachePoint
+          expect(primingPrefix[primingPrefix.length - 1]).toEqual({ cachePoint: { type: 'default' } })
+          expect(turn3Prefix[turn3Prefix.length - 1]).toEqual({ cachePoint: { type: 'default' } })
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('for any document session (flag=false), no image blocks appear in turn 3 user content', () => {
+    fc.assert(
+      fc.property(
+        docFormatArb,
+        fc.integer({ min: 1, max: 20 }),  // pageCount > 0 to verify images are excluded
+        (docFormat, pageCount) => {
+          const nativeDocBytes = fakeDocBytes(docFormat)
+
+          const priming = buildPrimingRequest({
+            itemName: 'Test', itemDescription: '', itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId: 't', itemId: 'i',
+            frozenSnapshot: null, timeLimitMinutes: 30, isSelfReview: false, coverageMap: null,
+            includePageImages: false,
+          })
+
+          const turn3 = buildTurn3Request({
+            itemName: 'Test', itemDescription: '', itemContent: '', itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId: 't', itemId: 'i',
+            frozenSnapshot: null, timeLimitMinutes: 30, isSelfReview: false, coverageMap: null,
+            userMessage: 'test',
+            history: [
+              { role: 'assistant', content: 'greeting' },
+              { role: 'user', content: '[__session_start__]' },
+              { role: 'assistant', content: 'r1' },
+              { role: 'user', content: 'm1' },
+              { role: 'assistant', content: 'r2' },
+            ],
+            includePageImages: false,
+          })
+
+          const primingContent = priming.messages[0].content
+          const turn3FirstUserIdx = turn3.messages.findIndex(m => m.role === 'user')
+          const turn3Content = turn3.messages[turn3FirstUserIdx].content
+
+          // Property: no image blocks in either priming or turn 3
+          const primingImages = primingContent.filter(b => 'image' in b)
+          const turn3Images = turn3Content.filter(b => 'image' in b)
+          expect(primingImages.length).toBe(0)
+          expect(turn3Images.length).toBe(0)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('for any document session, prefix consistency holds for both flag=true and flag=false', () => {
+    fc.assert(
+      fc.property(
+        itemNameArb,
+        docFormatArb,
+        pageCountArb,
+        timeLimitArb,
+        isSelfReviewArb,
+        fc.boolean(),  // includePageImages flag
+        (itemName, docFormat, pageCount, timeLimitMinutes, isSelfReview, includePageImages) => {
+          const nativeDocBytes = fakeDocBytes(docFormat)
+
+          const priming = buildPrimingRequest({
+            itemName, itemDescription: '', itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId: 't', itemId: 'i',
+            frozenSnapshot: null, timeLimitMinutes, isSelfReview, coverageMap: null,
+            includePageImages,
+          })
+
+          const turn3 = buildTurn3Request({
+            itemName, itemDescription: '', itemContent: '', itemType: 'document', docFormat, nativeDocBytes,
+            pageCount, tenantId: 't', itemId: 'i',
+            frozenSnapshot: null, timeLimitMinutes, isSelfReview, coverageMap: null,
+            userMessage: 'test',
+            history: [
+              { role: 'assistant', content: 'greeting' },
+              { role: 'user', content: '[__session_start__]' },
+              { role: 'assistant', content: 'r1' },
+              { role: 'user', content: 'm1' },
+              { role: 'assistant', content: 'r2' },
+            ],
+            includePageImages,
+          })
+
+          const primingContent = priming.messages[0].content
+          const turn3FirstUserIdx = turn3.messages.findIndex(m => m.role === 'user')
+          const turn3Content = turn3.messages[turn3FirstUserIdx].content
+
+          const primingPrefix = extractCachePrefix(primingContent)
+          const turn3Prefix = extractCachePrefix(turn3Content)
+
+          // Property: cache prefixes are always identical regardless of flag value
+          expect(primingPrefix.length).toBe(turn3Prefix.length)
+          expect(contentBlocksEqual(primingPrefix, turn3Prefix)).toBe(true)
+
+          // Property: system prompts are always identical regardless of flag value
+          expect(priming.systemBlocks[0].text).toBe(turn3.systemBlocks[0].text)
+
+          // Property: image count matches expectation based on flag
+          const primingImages = primingContent.filter(b => 'image' in b)
+          const expectedImageCount = includePageImages ? pageCount : 0
+          expect(primingImages.length).toBe(expectedImageCount)
         },
       ),
       { numRuns: 100 },
