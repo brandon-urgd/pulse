@@ -237,13 +237,13 @@ describe('generateRevision handler (async kick-off)', () => {
     expect(result.statusCode).toBe(404)
   })
 
-  it('returns 409 when item is not in closed status', async () => {
+  it('returns 409 when item is not in closed or revised status', async () => {
     mockFeatureFlag(true)
     dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'active' } } }) // item is active
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(409)
     const body = JSON.parse(result.body)
-    expect(body.message).toMatch(/closed status/i)
+    expect(body.message).toMatch(/closed/i)
   })
 
   it('returns 500 when DynamoDB PutItem fails without invoking worker', async () => {

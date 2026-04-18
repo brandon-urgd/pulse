@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ur/gd Pulse - AI-guided feedback platform (Spec 2 complete, Stage 6 promotion gate)'
+Description: 'ur/gd Pulse — AI-guided feedback platform. 64 Lambda functions, 7 DynamoDB tables, 18 feature flags, Bedrock Claude AI, Stripe billing.'
 
 # ─── Parameters ───────────────────────────────────────────────────────────────
 Parameters:

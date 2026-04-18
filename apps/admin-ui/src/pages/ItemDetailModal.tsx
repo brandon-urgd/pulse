@@ -618,17 +618,6 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                     {form.isSessionPreviewLoading ? labels.itemDetail.previewSessionLoading : labels.itemDetail.previewSessionButton}
                   </button>
                 )}
-                {(form.itemData?.status === 'draft' || form.itemData?.status === 'active') && !form.isExampleItem && (
-                  <button
-                    type="button"
-                    className={styles.headerActionSelfReview}
-                    onClick={() => form.handleSelfReview()}
-                    disabled={form.isSelfReviewLoading}
-                    title={labels.itemDetail.selfReviewTooltip}
-                  >
-                    {form.isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
-                  </button>
-                )}
               </div>
 
               {/* Section panel — or loading indicator while analyzing */}

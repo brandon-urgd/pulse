@@ -511,7 +511,24 @@
   flex-shrink: 0;
 }
 
+/* ── Public session badge ────────────────────────────────────────────────── */
+
+.publicSessionBadge {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
 /* ── Self-review button (Zone 1) ─────────────────────────────────────────── */
+
+.publicSessionDivider {
+  border-top: 1px dashed var(--color-border);
+  margin: var(--space-3) 0;
+}
 
 .selfReviewZoneRow {
   margin-top: var(--space-3);

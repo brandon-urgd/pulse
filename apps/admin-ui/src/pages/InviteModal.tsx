@@ -394,6 +394,7 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
             )}
 
             {/* Create public session form */}
+            <div className={styles.publicSessionDivider} />
             {maxSessionsPerItem !== null && (
               <p className={styles.publicSessionLimitHint}>
                 {labels.invitation.publicSessionLimitHint.replace('{max}', String(maxSessionsPerItem))}
@@ -447,7 +448,9 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
 
             {/* Private sessions list */}
             {privateSessions.length > 0 && (
-              <ul className={styles.sessionList} aria-label="Reviewer sessions">
+              <>
+                <h4 className={styles.subHeading}>{labels.invitation.reviewerSessionsSectionTitle ?? 'Reviewer Sessions'}</h4>
+                <ul className={styles.sessionList} aria-label="Reviewer sessions">
                 {privateSessions.map(session => (
                   <li key={session.sessionId} className={styles.sessionRow}>
                     <div className={styles.sessionInfo}>
@@ -495,6 +498,7 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
                   </li>
                 ))}
               </ul>
+              </>
             )}
 
             {privateSessions.length === 0 && publicSessions.length === 0 && (
@@ -514,6 +518,7 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
                         <span className={styles.maskedEmail}>
                           {session.sessionName ?? labels.invitation.publicSessionBadge}
                         </span>
+                        <span className={styles.publicSessionBadge}>Public</span>
                         <span className={`${styles.statusBadge} ${styles[`status_${session.status}`]}`}>
                           {sessionStatusLabel(session.status)}
                         </span>
@@ -639,6 +644,15 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
               <div className={styles.revisionsLinkRow}>
                 <Link to={`/admin/items/${itemId}/revisions`} className={styles.revisionsLink}>
                   {labels.itemCard.revisions}
+                </Link>
+              </div>
+            )}
+
+            {/* Pulse Check link — shown for active items (Close & Run) and closed/revised items */}
+            {itemStatus && itemStatus !== 'draft' && (
+              <div className={styles.revisionsLinkRow}>
+                <Link to={`/admin/pulse-check/${itemId}`} className={styles.revisionsLink}>
+                  {labels.itemCard.pulseCheck}
                 </Link>
               </div>
             )}

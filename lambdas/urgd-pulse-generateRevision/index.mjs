@@ -75,9 +75,9 @@ export const handler = async (event) => {
       return errorResponse(404, 'Item not found', {}, origin)
     }
 
-    if (itemResult.Item.status?.S !== 'closed') {
-      log('info', 'GenerateRevision: item not in closed status', { requestId, tenantId, itemId, status: itemResult.Item.status?.S })
-      return errorResponse(409, 'Item must be in closed status to generate a revision.', {}, origin)
+    if (itemResult.Item.status?.S !== 'closed' && itemResult.Item.status?.S !== 'revised') {
+      log('info', 'GenerateRevision: item not in closed or revised status', { requestId, tenantId, itemId, status: itemResult.Item.status?.S })
+      return errorResponse(409, 'Item must be closed before generating a revision.', {}, origin)
     }
 
     // 3. Get pulse check — must exist and be complete

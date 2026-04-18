@@ -311,6 +311,7 @@
   border: 1px solid var(--color-border);
   background: none;
   color: var(--color-text-secondary);
+  text-decoration: none;
 }
 
 .actionPulseCheck:hover {
@@ -341,6 +342,7 @@
   border: 1px solid var(--color-interactive);
   background: var(--color-interactive);
   color: var(--color-text-inverse);
+  text-decoration: none;
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
@@ -373,6 +375,13 @@
 @keyframes pulseGlow {
   0%, 100% { box-shadow: 0 0 0 2px var(--color-interactive-subtle); }
   50% { box-shadow: 0 0 0 4px var(--color-interactive-subtle), 0 0 8px var(--color-interactive-subtle); }
+}
+
+/* Glow on Pulse Check button when pulse check is ready to review */
+.actionPulseCheckGlow {
+  border-color: var(--color-interactive);
+  color: var(--color-interactive);
+  animation: pulseGlow 2s ease-in-out infinite;
 }
 
 .actionDelete {

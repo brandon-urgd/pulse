@@ -170,7 +170,7 @@ function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardCon
         {actions.includes('pulseCheck') && (
           <Link
             to={`/admin/pulse-check/${item.itemId}`}
-            className={`${styles.actionPulseCheck} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''}`}
+            className={`${styles.actionPulseCheck} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''} ${item.hasPulseCheck ? styles.actionPulseCheckGlow : ''}`}
             aria-label={`${labels.itemCard.pulseCheck} — ${item.itemName}`}
           >
             {shouldShowRerunDot(item) && <span className={styles.rerunDot} aria-hidden="true" />}
@@ -180,7 +180,7 @@ function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardCon
         {actions.includes('runPulseCheck') && (
           <Link
             to={`/admin/pulse-check/${item.itemId}`}
-            className={styles.actionPulseCheckReady}
+            className={styles.actionPulseCheck}
             aria-label={`${labels.itemCard.runPulseCheck} — ${item.itemName}`}
           >
             {labels.itemCard.runPulseCheck}
@@ -189,7 +189,7 @@ function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardCon
         {actions.includes('revisions') && (
           <Link
             to={`/admin/items/${item.itemId}/revisions`}
-            className={styles.actionPulseCheck}
+            className={`${styles.actionPulseCheck} ${item.hasCompletedRevision ? styles.actionPulseCheckGlow : ''}`}
             aria-label={`${labels.itemCard.revisions} — ${item.itemName}`}
           >
             {labels.itemCard.revisions}
@@ -393,6 +393,22 @@ export default function Items() {
           itemStatus={inviteTarget.status}
           hasCompletedRevision={inviteTarget.hasCompletedRevision}
           onClose={() => setInviteTarget(null)}
+          onSelfReview={async () => {
+            const newTab = window.open('', '_blank');
+            if (!newTab) return;
+            try {
+              const resp = await authedMutate(
+                `/api/manage/items/${inviteTarget.itemId}/self-review`,
+                'POST',
+                {},
+                navigate
+              ) as { data: { sessionId: string; sessionUrl: string } };
+              newTab.location.href = resp.data.sessionUrl;
+            } catch {
+              newTab.close();
+            }
+            setInviteTarget(null);
+          }}
         />
       )}
     </div>
