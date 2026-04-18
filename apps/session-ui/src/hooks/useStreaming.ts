@@ -100,14 +100,20 @@ export async function consumeStream(
         }
       }
 
-      // Flush all but trailing BUFFER_SIZE chars
+      // Flush all but trailing BUFFER_SIZE chars — but strip tags from the
+      // full buffer first so tags that straddle the safe/buffer boundary
+      // are caught before any text is emitted to the UI.
       if (buffer.length > BUFFER_SIZE) {
-        const safe = buffer.slice(0, -BUFFER_SIZE)
-        buffer = buffer.slice(-BUFFER_SIZE)
-        const stripped = stripTags(safe, onSection)
-        if (stripped) {
-          fullText += stripped
-          onToken(stripped)
+        // Strip tags from the entire buffer (tags may span the split point)
+        buffer = stripTags(buffer, onSection)
+        // Now flush everything except the trailing BUFFER_SIZE chars
+        if (buffer.length > BUFFER_SIZE) {
+          const safe = buffer.slice(0, -BUFFER_SIZE)
+          buffer = buffer.slice(-BUFFER_SIZE)
+          if (safe) {
+            fullText += safe
+            onToken(safe)
+          }
         }
       }
     }
