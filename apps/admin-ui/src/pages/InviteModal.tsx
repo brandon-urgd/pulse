@@ -105,6 +105,8 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
 
   // ── Session cap limit ──
   const { limit: maxSessionsPerItem } = useCan('maxSessionsPerItem');
+  const { allowed: canCreatePublicSessions } = useCan('publicSessions');
+  const { allowed: canSelfReview } = useCan('selfReview');
 
   // ── Derive item actions for Zone 3 ──
   const itemActions = itemStatus
@@ -384,8 +386,8 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
               </button>
             </form>
 
-            {/* Self-review button (moved from ItemDetail header) */}
-            {onSelfReview && (
+            {/* Self-review button — hidden for tiers without selfReview */}
+            {onSelfReview && canSelfReview && (
               <div className={styles.selfReviewZoneRow}>
                 <button type="button" className={styles.selfReviewButton} onClick={onSelfReview}>
                   {labels.itemDetail.selfReviewButton}
@@ -393,53 +395,59 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
               </div>
             )}
 
-            {/* Create public session form */}
-            <div className={styles.publicSessionDivider} />
-            {maxSessionsPerItem !== null && (
-              <p className={styles.publicSessionLimitHint}>
-                {labels.invitation.publicSessionLimitHint.replace('{max}', String(maxSessionsPerItem))}
-              </p>
+            {/* Create public session form — hidden for tiers without publicSessions */}
+            {canCreatePublicSessions && (
+              <>
+                <div className={styles.publicSessionDivider} />
+                <h4 className={styles.subHeading}>{labels.invitation.publicSessionTitle}</h4>
+                <p className={styles.hint}>{labels.invitation.publicSessionDescription}</p>
+                {maxSessionsPerItem !== null && (
+                  <p className={styles.publicSessionLimitHint}>
+                    {labels.invitation.publicSessionLimitHint.replace('{max}', String(maxSessionsPerItem))}
+                  </p>
+                )}
+                <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>
+                  <label htmlFor="publicSessionName" className={styles.label}>
+                    {labels.invitation.publicSessionNameLabel}
+                  </label>
+                  <p className={styles.hint}>{labels.invitation.publicSessionNameHint}</p>
+                  <input
+                    id="publicSessionName"
+                    type="text"
+                    className={styles.publicSessionNameInput}
+                    value={publicSessionName}
+                    onChange={e => setPublicSessionName(e.target.value)}
+                    placeholder={labels.invitation.publicSessionNamePlaceholder}
+                    disabled={isGenerating}
+                    maxLength={100}
+                  />
+                  <label htmlFor="publicSessionDate" className={styles.label} style={{ marginTop: '0.5rem' }}>
+                    {labels.invitation.publicSessionDeadlineLabel}
+                  </label>
+                  <div className={styles.extendRow}>
+                    <input
+                      id="publicSessionDate"
+                      type="datetime-local"
+                      className={styles.input}
+                      value={publicSessionDate}
+                      onChange={e => setPublicSessionDate(e.target.value)}
+                      min={nowDatetimeLocal()}
+                      disabled={isGenerating}
+                    />
+                    <button
+                      type="submit"
+                      className={styles.primaryButton}
+                      disabled={isGenerating || !publicSessionDate}
+                    >
+                      {isGenerating ? labels.invitation.publicSessionGenerating : labels.invitation.publicSessionGenerateButton}
+                    </button>
+                  </div>
+                  {publicSessionError && (
+                    <p role="alert" aria-live="polite" className={styles.error}>{publicSessionError}</p>
+                  )}
+                </form>
+              </>
             )}
-            <form onSubmit={handleGeneratePublicSession} noValidate className={styles.publicSessionPanel}>
-              <label htmlFor="publicSessionName" className={styles.label}>
-                {labels.invitation.publicSessionNameLabel}
-              </label>
-              <p className={styles.hint}>{labels.invitation.publicSessionNameHint}</p>
-              <input
-                id="publicSessionName"
-                type="text"
-                className={styles.publicSessionNameInput}
-                value={publicSessionName}
-                onChange={e => setPublicSessionName(e.target.value)}
-                placeholder={labels.invitation.publicSessionNamePlaceholder}
-                disabled={isGenerating}
-                maxLength={100}
-              />
-              <label htmlFor="publicSessionDate" className={styles.label} style={{ marginTop: '0.5rem' }}>
-                {labels.invitation.publicSessionDeadlineLabel}
-              </label>
-              <div className={styles.extendRow}>
-                <input
-                  id="publicSessionDate"
-                  type="datetime-local"
-                  className={styles.input}
-                  value={publicSessionDate}
-                  onChange={e => setPublicSessionDate(e.target.value)}
-                  min={nowDatetimeLocal()}
-                  disabled={isGenerating}
-                />
-                <button
-                  type="submit"
-                  className={styles.primaryButton}
-                  disabled={isGenerating || !publicSessionDate}
-                >
-                  {isGenerating ? labels.invitation.publicSessionGenerating : labels.invitation.publicSessionGenerateButton}
-                </button>
-              </div>
-              {publicSessionError && (
-                <p role="alert" aria-live="polite" className={styles.error}>{publicSessionError}</p>
-              )}
-            </form>
           </section>
 
           {/* ═══ Zone 2: Active Sessions ═══ */}
