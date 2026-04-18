@@ -191,6 +191,7 @@ if [ -n "$ENVIRONMENT" ]; then
     "urgd-pulse-purgeTranscripts-${ENVIRONMENT}"
     "urgd-pulse-sendPulseCheckReady-${ENVIRONMENT}"
     "urgd-pulse-sendReminder-${ENVIRONMENT}"
+    "urgd-pulse-sendRevisionReady-${ENVIRONMENT}"
     "urgd-pulse-shieldCallback-${ENVIRONMENT}"
     "urgd-pulse-usageReport-${ENVIRONMENT}"
     "urgd-pulse-renderPages-${ENVIRONMENT}"
