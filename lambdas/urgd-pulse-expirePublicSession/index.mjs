@@ -5,6 +5,7 @@
 
 import { DynamoDBClient, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { decrementCounter } from './shared/counters.mjs'
 
 requireEnv(['SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
@@ -58,21 +59,35 @@ export const handler = async (event) => {
 
     const now = new Date().toISOString()
 
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.SESSIONS_TABLE,
-      Key: {
-        tenantId: { S: tenantId },
-        sessionId: { S: sessionId },
-      },
-      UpdateExpression: 'SET expiresAt = :now, #st = :expired',
-      ExpressionAttributeNames: { '#st': 'status' },
-      ExpressionAttributeValues: {
-        ':now': { S: now },
-        ':expired': { S: 'expired' },
-      },
-    }))
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.SESSIONS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          sessionId: { S: sessionId },
+        },
+        UpdateExpression: 'SET expiresAt = :now, #st = :expired',
+        ConditionExpression: '#st IN (:not_started, :in_progress)',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':now': { S: now },
+          ':expired': { S: 'expired' },
+          ':not_started': { S: 'not_started' },
+          ':in_progress': { S: 'in_progress' },
+        },
+      }))
+    } catch (condErr) {
+      if (condErr.name === 'ConditionalCheckFailedException') {
+        log('warn', 'ExpirePublicSession: session already in terminal state (race avoided)', { requestId, tenantId, itemId, sessionId })
+        return errorResponse(409, 'Session is already in a terminal state', {}, origin)
+      }
+      throw condErr
+    }
 
     log('info', 'ExpirePublicSession: session expired', { requestId, tenantId, itemId, sessionId })
+
+    // Decrement monthly usage counter (failure does not block expire operation)
+    await decrementCounter({ tenantId, counterName: 'monthlyPublicSessionsTotal' })
 
     return createResponse(200, { sessionId, status: 'expired' }, {}, origin)
   } catch (err) {

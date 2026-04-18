@@ -1,6 +1,6 @@
 // Feature: feature-flag-system
 // Canonical tier definitions for Pulse feature flags.
-// Spec 2: 5 tiers × 17 flags. pulseCheckGroupMode removed. individual tier added.
+// Spec 2: 5 tiers × 18 flags. pulseCheckGroupMode removed. individual tier added. REVISION_DELIVERY_MODE added.
 // selfReview free tier changed from true → false.
 
 export const TIERS = {
@@ -22,6 +22,7 @@ export const TIERS = {
     monthlySessionsTotal: 9999,
     monthlyPublicSessionsTotal: 9999,
     monthlyItemsCreated: 9999,
+    REVISION_DELIVERY_MODE: 'async',
   },
   free: {
     maxActiveItems: 1,
@@ -41,6 +42,7 @@ export const TIERS = {
     monthlySessionsTotal: 5,
     monthlyPublicSessionsTotal: 0,
     monthlyItemsCreated: 2,
+    REVISION_DELIVERY_MODE: 'async',
   },
   individual: {
     maxActiveItems: 3,
@@ -60,6 +62,7 @@ export const TIERS = {
     monthlySessionsTotal: 15,
     monthlyPublicSessionsTotal: 5,
     monthlyItemsCreated: 5,
+    REVISION_DELIVERY_MODE: 'async',
   },
   pro: {
     maxActiveItems: 10,
@@ -79,6 +82,7 @@ export const TIERS = {
     monthlySessionsTotal: 50,
     monthlyPublicSessionsTotal: 20,
     monthlyItemsCreated: 20,
+    REVISION_DELIVERY_MODE: 'async',
   },
   enterprise: {
     maxActiveItems: 100,
@@ -98,6 +102,7 @@ export const TIERS = {
     monthlySessionsTotal: 500,
     monthlyPublicSessionsTotal: 200,
     monthlyItemsCreated: 100,
+    REVISION_DELIVERY_MODE: 'async',
   },
 }
 

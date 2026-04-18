@@ -134,23 +134,6 @@ describe('Property 1: Bug Condition — Adjust Shows Text Input and Persists Not
     expect(payload['rev-1']).toBeDefined();
     expect(payload['rev-1'].action).toBe('Revise');
     expect(payload['rev-1'].tenantNote).toBe('focus on the intro only');
-
-    // Now test what the CURRENT (unfixed) code actually produces:
-    // It never includes tenantNote — this is the bug.
-    const unfixedPayload: Record<string, { action: string; tenantNote?: string }> = {};
-    for (const [revisionId, action] of Object.entries(decisions)) {
-      if (action !== null) {
-        unfixedPayload[revisionId] = {
-          action: actionToApi[action] ?? action.charAt(0).toUpperCase() + action.slice(1),
-        };
-        // NOTE: No tenantNote is ever added — this is the bug
-      }
-    }
-
-    // This assertion proves the bug: unfixed payload lacks tenantNote
-    // We assert the EXPECTED behavior — that tenantNote IS present.
-    // On unfixed code, this will fail because tenantNote is undefined.
-    expect(unfixedPayload['rev-1'].tenantNote).toBe('focus on the intro only');
   });
 
   /**

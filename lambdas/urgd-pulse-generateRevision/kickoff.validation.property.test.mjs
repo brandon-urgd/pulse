@@ -165,6 +165,7 @@ describe('Property 1: Kick-off validation rejects invalid inputs without side ef
                 },
               })
               dynamoSendSpy.mockResolvedValueOnce({}) // SYSTEM
+              dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
               if (scenario.pulseStatus === null) {
                 dynamoSendSpy.mockResolvedValueOnce({ Item: null })
               } else {
@@ -192,6 +193,7 @@ describe('Property 1: Kick-off validation rejects invalid inputs without side ef
                 },
               })
               dynamoSendSpy.mockResolvedValueOnce({}) // SYSTEM
+              dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
               dynamoSendSpy.mockResolvedValueOnce({
                 Item: {
                   tenantId: { S: scenario.tenantId },

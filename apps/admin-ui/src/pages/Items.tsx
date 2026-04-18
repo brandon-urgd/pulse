@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthedQuery } from '../hooks/useAuthedQuery';
 import { authedMutate } from '../hooks/useAuthedMutation';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { labels } from '../config/labels-registry';
+import { getItemActions } from '../utils/itemActions';
 import ItemDetailModal from './ItemDetailModal';
 import InviteModal from './InviteModal';
 import styles from './Items.module.css';
@@ -19,6 +20,7 @@ interface Item {
   updatedAt: string;
   createdAt?: string;
   hasPulseCheck?: boolean;
+  hasCompletedRevision?: boolean;
   isExample?: boolean;
   pulseCheckGeneratedAt?: string;
   sessions?: Array<{ completedAt?: string }>;
@@ -80,25 +82,6 @@ function formatCloseDate(iso: string): string {
   } catch { return iso; }
 }
 
-// ─── Pulse Check button helpers ───────────────────────────────────────────────
-
-function pulseCheckButtonLabel(item: Item): string {
-  if (item.status === 'draft') return labels.items.pulseCheckButton;
-  if (item.status === 'active') return labels.items.pulseCheckInProgress;
-  if (item.status === 'closed' && !item.hasPulseCheck) return labels.items.pulseCheckStart;
-  return labels.items.pulseCheckReview;
-}
-
-function pulseCheckButtonClass(item: Item): string {
-  if (item.status === 'draft') return styles.actionPulseCheckDisabled;
-  if (item.status === 'closed' && !item.hasPulseCheck) return styles.actionPulseCheckReady;
-  return styles.actionPulseCheck;
-}
-
-function pulseCheckAriaLabel(item: Item): string {
-  return `${pulseCheckButtonLabel(item)} — ${item.itemName}`;
-}
-
 /** Show rerun indicator when any session completed after the last pulse check */
 function shouldShowRerunDot(item: Item): boolean {
   if (!item.hasPulseCheck || !item.pulseCheckGeneratedAt) return false;
@@ -114,19 +97,19 @@ interface ItemCardProps {
   item: Item;
   onOpen: () => void;
   onInvite: () => void;
-  onPulseCheck: () => void;
   onDeleted: () => void;
   canDeleteExample: boolean;
   cardContentRef?: React.Ref<HTMLButtonElement>;
 }
 
-function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteExample, cardContentRef }: ItemCardProps) {
+function ItemCard({ item, onOpen, onInvite, onDeleted, canDeleteExample, cardContentRef }: ItemCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting]     = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  const actions = getItemActions(item);
   async function handleDelete() {
     setDeleting(true);
     setDeleteError('');
@@ -179,21 +162,38 @@ function ItemCard({ item, onOpen, onInvite, onPulseCheck, onDeleted, canDeleteEx
         <button type="button" className={styles.actionEdit} onClick={onOpen}>
           Edit
         </button>
-        {item.status !== 'closed' && item.status !== 'revised' && (
+        {actions.includes('getFeedback') && (
           <button type="button" className={styles.actionInvite} onClick={onInvite}>
-            {labels.items.inviteButton}
+            {labels.itemCard.getFeedback}
           </button>
         )}
-        {item.status !== 'draft' && (
-          <button
-            type="button"
-            className={`${pulseCheckButtonClass(item)} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''}`}
-            onClick={onPulseCheck}
-            aria-label={pulseCheckAriaLabel(item)}
+        {actions.includes('pulseCheck') && (
+          <Link
+            to={`/admin/pulse-check/${item.itemId}`}
+            className={`${styles.actionPulseCheck} ${shouldShowRerunDot(item) ? styles.actionPulseCheckWithDot : ''}`}
+            aria-label={`${labels.itemCard.pulseCheck} — ${item.itemName}`}
           >
             {shouldShowRerunDot(item) && <span className={styles.rerunDot} aria-hidden="true" />}
-            {pulseCheckButtonLabel(item)}
-          </button>
+            {labels.itemCard.pulseCheck}
+          </Link>
+        )}
+        {actions.includes('runPulseCheck') && (
+          <Link
+            to={`/admin/pulse-check/${item.itemId}`}
+            className={styles.actionPulseCheckReady}
+            aria-label={`${labels.itemCard.runPulseCheck} — ${item.itemName}`}
+          >
+            {labels.itemCard.runPulseCheck}
+          </Link>
+        )}
+        {actions.includes('revisions') && (
+          <Link
+            to={`/admin/items/${item.itemId}/revisions`}
+            className={styles.actionPulseCheck}
+            aria-label={`${labels.itemCard.revisions} — ${item.itemName}`}
+          >
+            {labels.itemCard.revisions}
+          </Link>
         )}
         {confirming ? (
           <div className={styles.deleteConfirmRow}>
@@ -371,7 +371,6 @@ export default function Items() {
               item={item}
               onOpen={() => isMobile ? navigate(`/admin/items/${item.itemId}/edit`) : setModalTarget(item.itemId)}
               onInvite={() => setInviteTarget(item)}
-              onPulseCheck={() => navigate(`/admin/pulse-check/${item.itemId}`)}
               onDeleted={() => {}}
               canDeleteExample={hasRealItems}
               cardContentRef={setCardRef(item.itemId)}
@@ -391,6 +390,8 @@ export default function Items() {
         <InviteModal
           itemId={inviteTarget.itemId}
           itemName={inviteTarget.itemName}
+          itemStatus={inviteTarget.status}
+          hasCompletedRevision={inviteTarget.hasCompletedRevision}
           onClose={() => setInviteTarget(null)}
         />
       )}

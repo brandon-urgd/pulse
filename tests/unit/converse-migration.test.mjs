@@ -14,6 +14,8 @@ vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 vi.stubEnv('PULSE_CHECKS_TABLE', 'urgd-pulse-pulsechecks-dev')
 vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
+vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
+vi.stubEnv('SEND_REVISION_READY_FUNCTION_NAME', 'urgd-pulse-sendRevisionReady-dev')
 
 // ── Spy factories ──
 
@@ -475,13 +477,6 @@ describe('processRevision — Converse migration', () => {
   // The spies are shared — we just use the same chatDynamoSpy etc.
   // (Both Lambdas share the mock module.)
 
-  beforeEach(() => {
-    chatDynamoSpy.mockReset()
-    chatS3Spy.mockReset()
-    chatBedrockSpy.mockReset()
-    chatCwSpy.mockReset()
-  })
-
   function makePulseCheck() {
     return {
       Item: {
@@ -520,6 +515,11 @@ describe('processRevision — Converse migration', () => {
   // Import processRevision handler
   let revisionHandler
   beforeEach(async () => {
+    chatDynamoSpy.mockReset()
+    chatS3Spy.mockReset()
+    chatBedrockSpy.mockReset()
+    chatCwSpy.mockReset()
+    chatLambdaSpy.mockReset()
     // Dynamic import — uses the same mocked modules
     const mod = await import('../../lambdas/urgd-pulse-processRevision/index.mjs')
     revisionHandler = mod.handler
@@ -549,6 +549,10 @@ describe('processRevision — Converse migration', () => {
     chatDynamoSpy.mockResolvedValueOnce({})
     // DynamoDB: UpdateItem item → revised
     chatDynamoSpy.mockResolvedValueOnce({})
+    // DynamoDB: GetItem SYSTEM record (for delivery mode)
+    chatDynamoSpy.mockResolvedValueOnce({ Item: undefined })
+    // Lambda: sendRevisionReady invocation (async mode is default)
+    chatLambdaSpy.mockResolvedValueOnce({})
     // CloudWatch
     chatCwSpy.mockResolvedValue({})
 
@@ -589,6 +593,10 @@ describe('processRevision — Converse migration', () => {
     // DynamoDB updates
     chatDynamoSpy.mockResolvedValueOnce({})
     chatDynamoSpy.mockResolvedValueOnce({})
+    // DynamoDB: GetItem SYSTEM record (for delivery mode)
+    chatDynamoSpy.mockResolvedValueOnce({ Item: undefined })
+    // Lambda: sendRevisionReady invocation
+    chatLambdaSpy.mockResolvedValueOnce({})
     chatCwSpy.mockResolvedValue({})
 
     await revisionHandler(makeRevisionEvent())
@@ -629,6 +637,10 @@ describe('processRevision — Converse migration', () => {
     // DynamoDB updates
     chatDynamoSpy.mockResolvedValueOnce({})
     chatDynamoSpy.mockResolvedValueOnce({})
+    // DynamoDB: GetItem SYSTEM record (for delivery mode)
+    chatDynamoSpy.mockResolvedValueOnce({ Item: undefined })
+    // Lambda: sendRevisionReady invocation
+    chatLambdaSpy.mockResolvedValueOnce({})
     chatCwSpy.mockResolvedValue({})
 
     // Should NOT throw

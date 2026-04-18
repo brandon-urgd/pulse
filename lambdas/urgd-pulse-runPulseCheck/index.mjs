@@ -5,7 +5,7 @@
 // fires processPulseCheck async (InvocationType: Event), returns 202 immediately.
 // The frontend polls GET /pulse-check until status flips to 'complete' or 'failed'.
 
-import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, GetItemCommand, QueryCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 import { resolveFeature } from './shared/features.mjs'
@@ -118,11 +118,24 @@ export const handler = async (event) => {
     }))
 
     // 4. Fire processPulseCheck async — InvocationType: Event means fire-and-forget
-    await lambda.send(new InvokeCommand({
-      FunctionName: process.env.PROCESS_FUNCTION_NAME,
-      InvocationType: 'Event',
-      Payload: JSON.stringify({ tenantId, itemId, startedAt }),
-    }))
+    try {
+      await lambda.send(new InvokeCommand({
+        FunctionName: process.env.PROCESS_FUNCTION_NAME,
+        InvocationType: 'Event',
+        Payload: JSON.stringify({ tenantId, itemId, startedAt }),
+      }))
+    } catch (invokeErr) {
+      log('error', 'RunPulseCheck: async invocation failed', { requestId, tenantId, itemId, errorName: invokeErr.name })
+      // Mark pulse check as failed so the frontend stops polling
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.PULSE_CHECKS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET #status = :failed',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':failed': { S: 'failed' } },
+      })).catch(() => {})
+      return errorResponse(500, 'Failed to start pulse check', {}, origin)
+    }
 
     log('info', 'RunPulseCheck: dispatched to processPulseCheck', { requestId, tenantId, itemId })
 

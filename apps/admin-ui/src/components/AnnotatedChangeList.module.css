@@ -1,0 +1,104 @@
+/* ── AnnotatedChangeList — Structured change cards for PDF/DOCX revisions ── */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Location badge ────────────────────────────────────────────────────── */
+
+.locationBadge {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  margin: 0;
+  align-self: flex-start;
+}
+
+/* ── Field label ───────────────────────────────────────────────────────── */
+
+.fieldLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-1);
+}
+
+/* ── Original text (del-styled, light red bg) ──────────────────────────── */
+
+.originalBlock {
+  background: color-mix(in srgb, #ef4444 8%, var(--color-surface));
+  border-left: 3px solid color-mix(in srgb, #ef4444 40%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.originalText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.originalText del {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #ef4444 50%, transparent);
+}
+
+/* ── Replacement text (ins-styled, light green bg) ─────────────────────── */
+
+.replacementBlock {
+  background: color-mix(in srgb, #22c55e 8%, var(--color-surface));
+  border-left: 3px solid color-mix(in srgb, #22c55e 40%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.replacementText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.replacementText ins {
+  text-decoration: none;
+}
+
+/* ── Rationale ─────────────────────────────────────────────────────────── */
+
+.rationale {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

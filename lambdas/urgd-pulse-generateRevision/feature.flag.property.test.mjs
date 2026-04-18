@@ -130,6 +130,8 @@ describe('Property 27: Feature Flag Enforcement Property (async kick-off)', () =
           })
           // SYSTEM record
           dynamoSendSpy.mockResolvedValueOnce({})
+          // Item status check: must be closed
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } })
           // Pulse check
           dynamoSendSpy.mockResolvedValueOnce(makeCompletePulseCheck(tenantId, itemId))
           // PutItem revision record
@@ -174,6 +176,7 @@ describe('Property 27: Feature Flag Enforcement Property (async kick-off)', () =
           dynamoSendSpy.mockResolvedValueOnce({})
 
           if (flagEnabled) {
+            dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
             dynamoSendSpy.mockResolvedValueOnce(makeCompletePulseCheck(tenantId, itemId))
             dynamoSendSpy.mockResolvedValueOnce({}) // PutItem
           }

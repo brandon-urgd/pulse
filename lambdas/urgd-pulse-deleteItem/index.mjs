@@ -4,6 +4,7 @@
 import { DynamoDBClient, GetItemCommand, QueryCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { decrementCounter } from './shared/counters.mjs'
 
 // Fail-fast env var validation
 requireEnv([
@@ -84,6 +85,31 @@ async function deleteS3Prefix(bucket, prefix) {
 
     continuationToken = listResult.IsTruncated ? listResult.NextContinuationToken : undefined
   } while (continuationToken)
+}
+
+/**
+ * Computes the number of sessions eligible for counter decrements during cascading delete.
+ * Sessions with status 'cancelled' or 'discarded' are excluded because they were already
+ * decremented (or never counted) when they entered those states.
+ *
+ * @param {Array<object>} sessions - Raw DynamoDB session items from the item-index GSI query
+ * @returns {{ sessionDecrement: number, publicSessionDecrement: number }}
+ */
+export function computeSessionDecrements(sessions) {
+  const EXCLUDED_STATUSES = ['cancelled', 'discarded']
+  let sessionDecrement = 0
+  let publicSessionDecrement = 0
+
+  for (const session of sessions) {
+    const status = session.status?.S
+    if (EXCLUDED_STATUSES.includes(status)) continue
+    sessionDecrement++
+    if (session.isPublic?.BOOL === true) {
+      publicSessionDecrement++
+    }
+  }
+
+  return { sessionDecrement, publicSessionDecrement }
 }
 
 export const handler = async (event) => {
@@ -199,6 +225,29 @@ export const handler = async (event) => {
         itemId: { S: itemId },
       },
     }))
+
+    // 10. Decrement usage counters (failures do not block the delete operation)
+    try {
+      await decrementCounter({ tenantId, counterName: 'monthlyItemsCreated' })
+
+      const { sessionDecrement, publicSessionDecrement } = computeSessionDecrements(sessions)
+
+      if (sessionDecrement > 0) {
+        await decrementCounter({ tenantId, counterName: 'monthlySessionsTotal', amount: sessionDecrement })
+      }
+      if (publicSessionDecrement > 0) {
+        await decrementCounter({ tenantId, counterName: 'monthlyPublicSessionsTotal', amount: publicSessionDecrement })
+      }
+
+      log('info', 'DeleteItem: counter decrements applied', {
+        requestId, tenantId, itemId,
+        sessionDecrement, publicSessionDecrement,
+      })
+    } catch (err) {
+      log('warn', 'DeleteItem: counter decrement failed, continuing', {
+        requestId, tenantId, itemId, errorName: err.name,
+      })
+    }
 
     log('info', 'DeleteItem: cascading delete complete', { requestId, tenantId, itemId })
 

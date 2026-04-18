@@ -219,6 +219,10 @@ export const handler = async (event) => {
       }
     }
 
+    // Guard: atomic check that item is still in draft state at write time (F-01 TOCTOU fix)
+    expressionNames['#status'] = 'status'
+    expressionValues[':draft'] = { S: 'draft' }
+
     const updateResult = await dynamo.send(new UpdateItemCommand({
       TableName: process.env.ITEMS_TABLE,
       Key: {
@@ -226,6 +230,7 @@ export const handler = async (event) => {
         itemId: { S: itemId },
       },
       UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ConditionExpression: '#status = :draft',
       ExpressionAttributeNames: expressionNames,
       ExpressionAttributeValues: expressionValues,
       ReturnValues: 'ALL_NEW',
@@ -264,6 +269,10 @@ export const handler = async (event) => {
 
     return createResponse(200, { data: updatedItem }, {}, origin)
   } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      log('warn', 'UpdateItem: item status changed between read and write (TOCTOU)', { requestId, tenantId, itemId })
+      return errorResponse(409, 'Item can no longer be edited — it has been activated or closed', {}, origin)
+    }
     log('error', 'UpdateItem: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
     return errorResponse(500, 'Failed to update item', {}, origin)
   }

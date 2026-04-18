@@ -40,6 +40,8 @@ export interface Item {
   feedbackSections?: string[];
   sectionDepthPreferences?: Record<string, 'deep' | 'explore' | 'skim'>;
   coverageMap?: Record<string, { sessionCount: number; avgDepth?: string; reviewerIds?: string[] }>;
+  hasPulseCheck?: boolean;
+  hasCompletedRevision?: boolean;
   renderStatus?: string;
   pageCount?: number;
   pageCountActual?: number;

@@ -65,6 +65,106 @@ function firstOfCurrentMonth() {
 }
 
 /**
+ * Decrements a monthly usage counter by the specified amount.
+ * Clamps at 0 — never goes negative. Logs a warning if drift is detected.
+ * Resilient to missing records.
+ *
+ * Uses an atomic conditional decrement to avoid race conditions:
+ * 1. Try ADD with a ConditionExpression ensuring counter >= amount.
+ * 2. If the condition fails (counter < amount), fall back to read + clamp to 0.
+ * The normal path is a single atomic operation; only the drift path needs read-then-write,
+ * and clamping to zero is idempotent so the race there is harmless.
+ *
+ * @param {object} params
+ * @param {string} params.tenantId
+ * @param {string} params.counterName - One of VALID_COUNTERS
+ * @param {number} [params.amount=1] - Amount to decrement
+ * @returns {Promise<{ success: boolean, newCount?: number }>}
+ */
+export async function decrementCounter({ tenantId, counterName, amount = 1 }) {
+  if (!VALID_COUNTERS.includes(counterName)) {
+    log('error', 'counters: invalid counter name for decrement', { tenantId, counterName })
+    return { success: false }
+  }
+
+  const tableName = process.env.TENANTS_TABLE
+
+  try {
+    // Atomic decrement: only succeeds if counter >= amount (won't go negative)
+    await dynamo.send(new UpdateItemCommand({
+      TableName: tableName,
+      Key: { tenantId: { S: tenantId } },
+      UpdateExpression: 'ADD usageCounters.#counter.#count :neg',
+      ConditionExpression: 'usageCounters.#counter.#count >= :amount',
+      ExpressionAttributeNames: {
+        '#counter': counterName,
+        '#count': 'count',
+      },
+      ExpressionAttributeValues: {
+        ':neg': { N: String(-amount) },
+        ':amount': { N: String(amount) },
+      },
+    }))
+
+    log('info', 'counters: decremented', { tenantId, counterName })
+    return { success: true }
+  } catch (err) {
+    if (err.name !== 'ConditionalCheckFailedException') {
+      // Unexpected error — fail gracefully
+      log('error', 'counters: decrement failed', { tenantId, counterName, errorName: err.name })
+      return { success: true }
+    }
+
+    // ConditionExpression failed — either counter < amount, or record/counter doesn't exist.
+    // Fall back to read-then-clamp-to-zero (idempotent, so safe even under concurrency).
+    try {
+      const result = await dynamo.send(new GetItemCommand({
+        TableName: tableName,
+        Key: { tenantId: { S: tenantId } },
+        ProjectionExpression: 'usageCounters',
+      }))
+
+      if (!result.Item) {
+        log('info', 'counters: tenant record not found for decrement, no-op', { tenantId, counterName })
+        return { success: true }
+      }
+
+      const counterMap = result.Item.usageCounters?.M?.[counterName]?.M
+      if (!counterMap) {
+        log('info', 'counters: counter not found for decrement, no-op', { tenantId, counterName })
+        return { success: true }
+      }
+
+      const currentCount = counterMap.count?.N ? Number(counterMap.count.N) : 0
+
+      // Drift detected — clamp to 0
+      log('warn', 'counters: drift detected during decrement, clamping to 0', {
+        tenantId, counterName, currentCount, requestedDecrement: amount,
+      })
+
+      await dynamo.send(new UpdateItemCommand({
+        TableName: tableName,
+        Key: { tenantId: { S: tenantId } },
+        UpdateExpression: 'SET usageCounters.#counter.#count = :zero',
+        ExpressionAttributeNames: {
+          '#counter': counterName,
+          '#count': 'count',
+        },
+        ExpressionAttributeValues: {
+          ':zero': { N: '0' },
+        },
+      }))
+
+      log('info', 'counters: decremented (clamped to 0)', { tenantId, counterName, newCount: 0 })
+      return { success: true, newCount: 0 }
+    } catch (fallbackErr) {
+      log('error', 'counters: decrement clamp fallback failed', { tenantId, counterName, errorName: fallbackErr.name })
+      return { success: true }
+    }
+  }
+}
+
+/**
  * Check a monthly usage counter and increment if below limit.
  * Handles lazy reset for free tier, org-aware counter routing, and atomic increment.
  *

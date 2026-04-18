@@ -97,6 +97,8 @@ export const handler = async (event) => {
           featuresMap[key] = { BOOL: value }
         } else if (typeof value === 'number') {
           featuresMap[key] = { N: String(value) }
+        } else if (typeof value === 'string') {
+          featuresMap[key] = { S: value }
         }
       }
       await dynamo.send(new PutItemCommand({

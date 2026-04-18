@@ -185,10 +185,13 @@ export const handler = async (event) => {
         itemId: { S: itemId },
       },
       UpdateExpression: 'SET documentStatus = :status, documentKey = :key, updatedAt = :now',
+      ConditionExpression: '#status = :draft',
+      ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':status': { S: 'scanning' },
         ':key': { S: key },
         ':now': { S: new Date().toISOString() },
+        ':draft': { S: 'draft' },
       },
     }))
 
@@ -196,6 +199,10 @@ export const handler = async (event) => {
 
     return createResponse(200, { data: { uploadUrl, key } }, {}, origin)
   } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      log('warn', 'GetUploadUrl: item status changed before write', { requestId, tenantId, itemId })
+      return errorResponse(409, 'Item can no longer accept uploads', {}, origin)
+    }
     log('error', 'GetUploadUrl: unexpected error', { requestId, tenantId, itemId, errorName: err.name })
     return errorResponse(500, 'Failed to generate upload URL', {}, origin)
   }

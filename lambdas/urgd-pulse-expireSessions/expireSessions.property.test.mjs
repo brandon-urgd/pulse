@@ -97,10 +97,12 @@ describe('Property 28: Session Expiration Property', () => {
           const eligibleSessions = sessions.filter(
             s => s.isPast && s.status !== 'completed' && s.status !== 'expired'
           )
-          expect(updateCalls.length).toBe(eligibleSessions.length)
+          // Filter to session-table updates only (excludes counter decrement calls to tenants table)
+          const sessionUpdates = updateCalls.filter(c => c.TableName === process.env.SESSIONS_TABLE)
+          expect(sessionUpdates.length).toBe(eligibleSessions.length)
 
-          // Each update must set status to "expired"
-          for (const call of updateCalls) {
+          // Each session update must set status to "expired"
+          for (const call of sessionUpdates) {
             const newStatus = call.ExpressionAttributeValues?.[':expired']?.S
             expect(newStatus).toBe('expired')
           }

@@ -100,6 +100,29 @@
   min-height: 0;
 }
 
+/* ── Zone layout ─────────────────────────────────────────────────────────── */
+
+.zone {
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.zone:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.zoneHeading {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-4);
+}
+
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 
 .inviteForm,
@@ -488,7 +511,13 @@
   flex-shrink: 0;
 }
 
-/* ── Self-review footer button ───────────────────────────────────────────── */
+/* ── Self-review button (Zone 1) ─────────────────────────────────────────── */
+
+.selfReviewZoneRow {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
 
 .selfReviewButton {
   align-self: flex-start;
@@ -506,6 +535,33 @@
 .selfReviewButton:hover {
   background: var(--color-bg-secondary);
   border-color: var(--color-text-secondary);
+}
+
+/* ── Revisions link (Zone 3) ─────────────────────────────────────────────── */
+
+.revisionsLinkRow {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
+
+.revisionsLink {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-accent-pulse);
+  border: 1px solid var(--color-accent-pulse);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.revisionsLink:hover {
+  background: var(--color-accent-pulse-subtle);
+  color: var(--color-accent-pulse);
 }
 
 /* ── Mobile — sheet style from bottom ───────────────────────────────────── */

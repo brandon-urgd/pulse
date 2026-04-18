@@ -14,6 +14,7 @@
 import { DynamoDBClient, ScanCommand, UpdateItemCommand, QueryCommand, GetItemCommand } from '@aws-sdk/client-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { log, requireEnv } from './shared/utils.mjs'
+import { decrementCounter } from './shared/counters.mjs'
 
 // Fail-fast env var validation
 requireEnv(['SESSIONS_TABLE'])
@@ -124,6 +125,9 @@ export const handler = async (event) => {
 
         log('info', 'ExpireSessions: session expired', { tenantId, sessionId })
         totalExpired++
+
+        // Decrement monthly usage counter (failure does not block expire operation)
+        await decrementCounter({ tenantId, counterName: 'monthlySessionsTotal' })
 
         // Track this item for the post-loop pulse check trigger
         const itemId = session.itemId?.S

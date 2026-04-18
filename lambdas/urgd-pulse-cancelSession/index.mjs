@@ -4,6 +4,7 @@
 
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { decrementCounter } from './shared/counters.mjs'
 
 requireEnv(['SESSIONS_TABLE', 'ITEMS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
@@ -83,19 +84,29 @@ export const handler = async (event) => {
 
     log('info', 'CancelSession: session cancelled', { requestId, tenantId, itemId, sessionId })
 
+    // Decrement monthly usage counter (failure does not block cancel operation)
+    await decrementCounter({ tenantId, counterName: 'monthlySessionsTotal' })
+
     // Decrement sessionCount on the item so the display reflects active sessions
+    // Floor guard: only decrement if sessionCount > 0 to prevent negative values
     try {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.ITEMS_TABLE,
         Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
         UpdateExpression: 'SET updatedAt = :now ADD sessionCount :neg',
+        ConditionExpression: 'sessionCount > :zero',
         ExpressionAttributeValues: {
           ':now': { S: new Date().toISOString() },
           ':neg': { N: '-1' },
+          ':zero': { N: '0' },
         },
       }))
     } catch (decErr) {
-      log('warn', 'CancelSession: failed to decrement sessionCount', { tenantId, itemId, errorName: decErr.name })
+      if (decErr.name === 'ConditionalCheckFailedException') {
+        log('warn', 'CancelSession: sessionCount already at zero, skipping decrement', { tenantId, itemId })
+      } else {
+        log('warn', 'CancelSession: failed to decrement sessionCount', { tenantId, itemId, errorName: decErr.name })
+      }
     }
 
     return createResponse(200, { message: 'Session cancelled' }, {}, origin)

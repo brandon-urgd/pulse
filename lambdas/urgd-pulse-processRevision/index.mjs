@@ -9,17 +9,69 @@ import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/clie
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime'
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch'
-import { log, requireEnv } from './shared/utils.mjs'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
+import { log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
+import { resolveDeliveryMode } from './shared/features.mjs'
 
 requireEnv([
   'PULSE_CHECKS_TABLE', 'ITEMS_TABLE', 'REVISIONS_TABLE',
   'DATA_BUCKET', 'BEDROCK_MODEL_ID',
+  'TENANTS_TABLE', 'SEND_REVISION_READY_FUNCTION_NAME',
 ])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' })
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-west-2' })
 const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' })
+const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' })
+
+// --- Prompt selection based on document type ---
+
+const FULL_REWRITE_PROMPT = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
+
+CRITICAL RULES:
+- Only incorporate the ACCEPTED and REVISED feedback points listed below
+- For ACCEPT decisions: incorporate the feedback as-is into the document
+- For REVISE decisions: incorporate the feedback with any tenant notes as guidance
+- Preserve the document's original structure, voice, and formatting
+- Do not add new sections or content not implied by the feedback
+- Do not remove sections unless explicitly indicated by the feedback
+- Return ONLY the revised document text — no preamble, no explanation, no metadata`
+
+const ANNOTATED_CHANGE_LIST_PROMPT = `You are a professional document editor. The user has a PDF/DOCX document they cannot directly edit from your output. Instead of rewriting the full document, produce a structured change list that the user can apply in their original design tool.
+
+For each change, output a Markdown section in this exact format:
+
+### Change N
+- **Location:** Page X, paragraph/section Y
+- **Original:** "exact original text"
+- **Replacement:** "proposed replacement text"
+- **Rationale:** Brief explanation
+
+RULES:
+- Number changes sequentially starting from 1
+- Be specific about location — reference page numbers, section headings, or paragraph positions
+- Quote the original text exactly so the user can find it
+- Only include changes for the ACCEPTED and REVISED feedback points below
+- For REVISE decisions, incorporate tenant notes as guidance`
+
+/**
+ * Returns the appropriate system prompt based on the document's file extension.
+ * PDF/DOCX items get the annotated change list prompt; all others (md, txt, null/undefined)
+ * get the full-document rewrite prompt.
+ *
+ * @param {string|null|undefined} documentKey - S3 key of the original document
+ * @returns {string} The system prompt to use for Bedrock
+ */
+export function selectPrompt(documentKey) {
+  if (documentKey) {
+    const ext = documentKey.split('.').pop()?.toLowerCase()
+    if (ext === 'pdf' || ext === 'docx') {
+      return ANNOTATED_CHANGE_LIST_PROMPT
+    }
+  }
+  return FULL_REWRITE_PROMPT
+}
 
 async function putMetrics(metrics) {
   try {
@@ -94,6 +146,7 @@ export const handler = async (event) => {
     // 1b. Load item record to get documentKey for native document context
     let documentKey = null
     let pageCount = 0
+    let itemName = 'your item'
     try {
       const itemResult = await dynamo.send(new GetItemCommand({
         TableName: process.env.ITEMS_TABLE,
@@ -102,6 +155,7 @@ export const handler = async (event) => {
       if (itemResult.Item) {
         documentKey = itemResult.Item.documentKey?.S || null
         pageCount = itemResult.Item.pageCount?.N ? parseInt(itemResult.Item.pageCount.N, 10) : 0
+        itemName = itemResult.Item.itemName?.S || 'your item'
       }
     } catch (err) {
       log('warn', 'ProcessRevision: failed to load item record for document context', { tenantId, itemId, revisionId, errorName: err.name })
@@ -149,16 +203,7 @@ export const handler = async (event) => {
       return `${i + 1}. [${d.action.toUpperCase()}]${typeText} ${d.proposal}${noteText}`
     }).join('\n')
 
-    const systemPrompt = `You are a professional document editor. Your task is to revise the following document based on the feedback decisions provided.
-
-CRITICAL RULES:
-- Only incorporate the ACCEPTED and REVISED feedback points listed below
-- For ACCEPT decisions: incorporate the feedback as-is into the document
-- For REVISE decisions: incorporate the feedback with any tenant notes as guidance
-- Preserve the document's original structure, voice, and formatting
-- Do not add new sections or content not implied by the feedback
-- Do not remove sections unless explicitly indicated by the feedback
-- Return ONLY the revised document text — no preamble, no explanation, no metadata`
+    const systemPrompt = selectPrompt(documentKey)
 
     const userMessage = `Original Document:
 ---
@@ -292,6 +337,33 @@ Revised Document:`
       } else {
         throw condErr
       }
+    }
+
+    // 7b. Invoke sendRevisionReady if delivery mode is async
+    try {
+      const systemResult = await dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: 'SYSTEM' } },
+        ProjectionExpression: 'features',
+      }))
+      const systemFeatures = systemResult.Item?.features?.M
+        ? unmarshalFeatures(systemResult.Item.features.M)
+        : {}
+      const systemRecord = { features: systemFeatures }
+      const deliveryMode = resolveDeliveryMode(systemRecord)
+
+      if (deliveryMode === 'async') {
+        await lambda.send(new InvokeCommand({
+          FunctionName: process.env.SEND_REVISION_READY_FUNCTION_NAME,
+          InvocationType: 'Event',
+          Payload: JSON.stringify({ tenantId, itemId, itemName, revisionId }),
+        }))
+        log('info', 'ProcessRevision: sendRevisionReady invoked', { tenantId, itemId, revisionId })
+      } else {
+        log('info', 'ProcessRevision: delivery mode is sync, skipping revision-ready email', { tenantId, itemId, revisionId })
+      }
+    } catch (emailErr) {
+      log('warn', 'ProcessRevision: failed to invoke sendRevisionReady, continuing', { tenantId, itemId, revisionId, errorName: emailErr.name })
     }
 
     // 8. Publish CloudWatch metrics

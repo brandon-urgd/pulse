@@ -58,6 +58,7 @@ function tenantRecord(tenantId = 'test-tenant') {
         monthlySessionsTotal: { N: '5' },
         monthlyPublicSessionsTotal: { N: '0' },
         monthlyItemsCreated: { N: '2' },
+        REVISION_DELIVERY_MODE: { S: 'async' },
       },
     },
     serviceFlags: { M: {} },
@@ -101,7 +102,7 @@ describe('getSettings handler', () => {
     expect(body.data.enrichedFeatures).toBeDefined()
 
     const enrichedKeys = Object.keys(body.data.enrichedFeatures)
-    expect(enrichedKeys.length).toBe(17)
+    expect(enrichedKeys.length).toBe(18)
 
     for (const flag of VALID_FLAGS) {
       const entry = body.data.enrichedFeatures[flag]
@@ -129,7 +130,7 @@ describe('getSettings handler', () => {
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
     expect(body.data.enrichedFeatures).toBeDefined()
-    expect(Object.keys(body.data.enrichedFeatures).length).toBe(17)
+    expect(Object.keys(body.data.enrichedFeatures).length).toBe(18)
   })
 
   // Requirement 6.1 — verify BatchGetItem is used (not individual GetItems)

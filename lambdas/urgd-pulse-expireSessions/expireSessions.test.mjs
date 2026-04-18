@@ -63,10 +63,12 @@ describe('urgd-pulse-expireSessions', () => {
 
       expect(result.totalExpired).toBe(1)
       expect(result.totalSkipped).toBe(0)
-      expect(updateCalls).toHaveLength(1)
-      expect(updateCalls[0].Key.tenantId.S).toBe('tenant-abc')
-      expect(updateCalls[0].Key.sessionId.S).toBe('session-1')
-      expect(updateCalls[0].ExpressionAttributeValues[':expired'].S).toBe('expired')
+      // Filter to session-table updates only (excludes counter decrement calls to tenants table)
+      const sessionUpdates = updateCalls.filter(c => c.TableName === process.env.SESSIONS_TABLE)
+      expect(sessionUpdates).toHaveLength(1)
+      expect(sessionUpdates[0].Key.tenantId.S).toBe('tenant-abc')
+      expect(sessionUpdates[0].Key.sessionId.S).toBe('session-1')
+      expect(sessionUpdates[0].ExpressionAttributeValues[':expired'].S).toBe('expired')
     })
 
     it('expires in_progress sessions with past expiresAt', async () => {
@@ -110,7 +112,9 @@ describe('urgd-pulse-expireSessions', () => {
       const result = await handler({})
 
       expect(result.totalExpired).toBe(3)
-      expect(updateCalls).toHaveLength(3)
+      // Filter to session-table updates only (excludes counter decrement calls to tenants table)
+      const sessionUpdates = updateCalls.filter(c => c.TableName === process.env.SESSIONS_TABLE)
+      expect(sessionUpdates).toHaveLength(3)
     })
   })
 
@@ -167,10 +171,12 @@ describe('urgd-pulse-expireSessions', () => {
 
       await handler({})
 
-      expect(updateCalls).toHaveLength(1)
+      // Filter to session-table updates only (excludes counter decrement calls to tenants table)
+      const sessionUpdates = updateCalls.filter(c => c.TableName === process.env.SESSIONS_TABLE)
+      expect(sessionUpdates).toHaveLength(1)
       // Verify the conditional expression is present
-      expect(updateCalls[0].ConditionExpression).toContain('<>')
-      expect(updateCalls[0].ExpressionAttributeValues[':completed'].S).toBe('completed')
+      expect(sessionUpdates[0].ConditionExpression).toContain('<>')
+      expect(sessionUpdates[0].ExpressionAttributeValues[':completed'].S).toBe('completed')
     })
   })
 
@@ -280,7 +286,9 @@ describe('urgd-pulse-expireSessions', () => {
 
       expect(scanCallCount).toBe(2)
       expect(result.totalExpired).toBe(2)
-      expect(updateCalls).toHaveLength(2)
+      // Filter to session-table updates only (excludes counter decrement calls to tenants table)
+      const sessionUpdates = updateCalls.filter(c => c.TableName === process.env.SESSIONS_TABLE)
+      expect(sessionUpdates).toHaveLength(2)
     })
   })
 })

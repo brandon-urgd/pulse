@@ -75,10 +75,13 @@ export const handler = async (event) => {
       TableName: process.env.SESSIONS_TABLE,
       Key: { tenantId: { S: tenantId }, sessionId: { S: sessionId } },
       UpdateExpression: 'SET #status = :status, discardedAt = :discardedAt',
+      ConditionExpression: '#status <> :completed AND #status <> :expired',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':status': { S: 'discarded' },
         ':discardedAt': { S: new Date().toISOString() },
+        ':completed': { S: 'completed' },
+        ':expired': { S: 'expired' },
       },
     }))
 
@@ -87,6 +90,10 @@ export const handler = async (event) => {
     // 6. Return 200
     return createResponse(200, { data: { discarded: true } }, {}, origin)
   } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      log('warn', 'DeleteSessionTranscript: session state changed before write', { requestId, sessionId, tenantId })
+      return errorResponse(409, 'Session can no longer be discarded', {}, origin)
+    }
     log('error', 'DeleteSessionTranscript: unexpected error', { requestId, sessionId, tenantId, errorName: err.name })
     return errorResponse(500, 'Failed to discard session', {}, origin)
   }

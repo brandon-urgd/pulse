@@ -3,3 +3,4 @@
 
 export { APP_VERSION } from './version';
 export { ABOUT_CONTENT } from './about-content';
+export { PulseWaveLoader } from './PulseWaveLoader';

@@ -43,7 +43,7 @@ function makeEvent(overrides = {}) {
 }
 
 /** Sets up dynamo mocks for tenant + SYSTEM feature flag lookup */
-function mockFeatureFlag(flagValue) {
+function mockFeatureFlag(flagValue, deliveryMode) {
   // First call: tenant record
   dynamoSendSpy.mockResolvedValueOnce({
     Item: {
@@ -51,8 +51,17 @@ function mockFeatureFlag(flagValue) {
       features: { M: { itemRevisionLoop: { BOOL: flagValue } } },
     },
   })
-  // Second call: SYSTEM record (no maintenance flags)
-  dynamoSendSpy.mockResolvedValueOnce({})
+  // Second call: SYSTEM record
+  if (deliveryMode) {
+    dynamoSendSpy.mockResolvedValueOnce({
+      Item: {
+        tenantId: { S: 'SYSTEM' },
+        features: { M: { REVISION_DELIVERY_MODE: { S: deliveryMode } } },
+      },
+    })
+  } else {
+    dynamoSendSpy.mockResolvedValueOnce({})
+  }
 }
 
 function makePulseCheck(status = 'complete') {
@@ -83,6 +92,7 @@ function makePulseCheck(status = 'complete') {
 /** Sets up all mocks for a successful happy path through validation + PutItem + Lambda invoke */
 function mockHappyPath() {
   mockFeatureFlag(true)
+  dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
   dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('complete')) // pulse check
   dynamoSendSpy.mockResolvedValueOnce({}) // PutItem revision record
 }
@@ -114,6 +124,7 @@ describe('generateRevision handler (async kick-off)', () => {
 
   it('returns 409 when no completed pulse check exists', async () => {
     mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
     dynamoSendSpy.mockResolvedValueOnce({ Item: null })
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(409)
@@ -121,6 +132,7 @@ describe('generateRevision handler (async kick-off)', () => {
 
   it('returns 409 when pulse check is not complete', async () => {
     mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
     dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('generating'))
     const result = await handler(makeEvent())
     expect(result.statusCode).toBe(409)
@@ -128,6 +140,7 @@ describe('generateRevision handler (async kick-off)', () => {
 
   it('returns 409 when no accepted/revised decisions', async () => {
     mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
     dynamoSendSpy.mockResolvedValueOnce({
       Item: {
         tenantId: { S: 'tenant-123' },
@@ -143,7 +156,7 @@ describe('generateRevision handler (async kick-off)', () => {
     expect(body.message).toMatch(/no accepted or revised decisions/i)
   })
 
-  it('returns 202 with revisionId and status on happy path', async () => {
+  it('returns 202 with revisionId, status, and deliveryMode on happy path', async () => {
     mockHappyPath()
 
     const result = await handler(makeEvent())
@@ -152,6 +165,21 @@ describe('generateRevision handler (async kick-off)', () => {
     const body = JSON.parse(result.body)
     expect(body.data.revisionId).toBeTruthy()
     expect(body.data.status).toBe('generating')
+    expect(body.data.deliveryMode).toBe('async')
+  })
+
+  it('returns deliveryMode sync when SYSTEM record has REVISION_DELIVERY_MODE sync', async () => {
+    mockFeatureFlag(true, 'sync')
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
+    dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('complete')) // pulse check
+    dynamoSendSpy.mockResolvedValueOnce({}) // PutItem revision record
+    lambdaSendSpy.mockResolvedValue({})
+
+    const result = await handler(makeEvent())
+    expect(result.statusCode).toBe(202)
+
+    const body = JSON.parse(result.body)
+    expect(body.data.deliveryMode).toBe('sync')
   })
 
   it('writes revision record to DynamoDB on happy path', async () => {
@@ -202,8 +230,25 @@ describe('generateRevision handler (async kick-off)', () => {
     expect(updateCall[0].input.ExpressionAttributeValues[':failed'].S).toBe('failed')
   })
 
+  it('returns 404 when item not found', async () => {
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: undefined }) // item not found
+    const result = await handler(makeEvent())
+    expect(result.statusCode).toBe(404)
+  })
+
+  it('returns 409 when item is not in closed status', async () => {
+    mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'active' } } }) // item is active
+    const result = await handler(makeEvent())
+    expect(result.statusCode).toBe(409)
+    const body = JSON.parse(result.body)
+    expect(body.message).toMatch(/closed status/i)
+  })
+
   it('returns 500 when DynamoDB PutItem fails without invoking worker', async () => {
     mockFeatureFlag(true)
+    dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } }) // item status check
     dynamoSendSpy.mockResolvedValueOnce(makePulseCheck('complete')) // pulse check
     dynamoSendSpy.mockRejectedValueOnce(new Error('DynamoDB PutItem failed')) // PutItem fails
 

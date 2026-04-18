@@ -65,7 +65,7 @@ describe('Property P1: Tier Definition Completeness and Parity', () => {
  *
  * For any tier in TIERS, Object.keys(TIERS[tier]) is exactly equal to
  * VALID_FLAGS (same elements, though order may differ). VALID_FLAGS contains
- * exactly 17 entries. VALID_TIERS contains exactly 5 entries matching
+ * exactly 18 entries. VALID_TIERS contains exactly 5 entries matching
  * ['admin', 'free', 'individual', 'pro', 'enterprise'].
  *
  * Validates: Requirements 1.2, 1.3, 13.2, 13.4
@@ -82,8 +82,8 @@ describe('Property P5: VALID_FLAGS ↔ Tier Definition Structural Parity', () =>
     )
   })
 
-  it('VALID_FLAGS contains exactly 17 entries', () => {
-    expect(VALID_FLAGS.length).toBe(17)
+  it('VALID_FLAGS contains exactly 18 entries', () => {
+    expect(VALID_FLAGS.length).toBe(18)
   })
 
   it('VALID_TIERS contains exactly 5 entries', () => {

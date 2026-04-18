@@ -91,6 +91,8 @@ describe('Property 2: Kick-off happy path produces correct response, record, and
           })
           // SYSTEM record
           dynamoSendSpy.mockResolvedValueOnce({})
+          // Item status check: must be closed
+          dynamoSendSpy.mockResolvedValueOnce({ Item: { status: { S: 'closed' } } })
           // Pulse check: complete with decisions
           dynamoSendSpy.mockResolvedValueOnce({
             Item: {

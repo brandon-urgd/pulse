@@ -286,6 +286,11 @@ Parameters:
     Default: pulse/lambda-packages/urgd-pulse-sendPulseCheckReady/latest.zip
     Description: S3 key for urgd-pulse-sendPulseCheckReady Lambda ZIP
 
+  SendRevisionReadyCodeKey:
+    Type: String
+    Default: pulse/lambda-packages/urgd-pulse-sendRevisionReady/latest.zip
+    Description: S3 key for urgd-pulse-sendRevisionReady Lambda ZIP
+
   PreviewSessionCodeKey:
     Type: String
     Default: pulse/lambda-packages/urgd-pulse-previewSession/latest.zip
@@ -488,6 +493,7 @@ Mappings:
       GetRevisions: 3
       ProcessRevision: 3
       SendPulseCheckReady: 3
+      SendRevisionReady: 3
       PreviewSession: 3
       CreateSelfSession: 3
       SubmitReport: 3
@@ -563,6 +569,7 @@ Mappings:
       GetRevisions: 5
       ProcessRevision: 5
       SendPulseCheckReady: 5
+      SendRevisionReady: 5
       PreviewSession: 5
       CreateSelfSession: 5
       SubmitReport: 5
@@ -638,6 +645,7 @@ Mappings:
       GetRevisions: 10
       ProcessRevision: 25
       SendPulseCheckReady: 5
+      SendRevisionReady: 10
       PreviewSession: 10
       CreateSelfSession: 10
       SubmitReport: 5
@@ -2465,6 +2473,13 @@ Resources:
                 Resource:
                   - !GetAtt PulseSessionsTable.Arn
                   - !Sub '${PulseSessionsTable.Arn}/index/*'
+              # Spec 4 — Query revisions table for hasCompletedRevision check
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt PulseRevisionsTable.Arn
+                  - !Sub '${PulseRevisionsTable.Arn}/index/itemId-index'
 
   # ══════════════════════════════════════════════════════════════════════════════
   # S1: Lambda Functions
@@ -2735,6 +2750,7 @@ Resources:
         Variables:
           ITEMS_TABLE: !Ref PulseItemsTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          REVISIONS_TABLE: !Ref PulseRevisionsTable
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           CORS_ALLOWED_METHODS: 'GET,POST,PUT,DELETE,OPTIONS'
           CORS_ALLOWED_HEADERS: 'Content-Type,Authorization'
@@ -7562,6 +7578,17 @@ Resources:
         - Key: environment
           Value: !Ref Environment
 
+  PulseSendRevisionReadyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/urgd-pulse-sendRevisionReady-${Environment}'
+      RetentionInDays: !FindInMap [EnvConfig, !Ref Environment, LogRetentionDays]
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: environment
+          Value: !Ref Environment
+
   # ── S6 IAM Execution Roles ───────────────────────────────────────────────────
 
   PulseGenerateRevisionFunctionRole:
@@ -7688,6 +7715,7 @@ Resources:
                 Resource:
                   - !GetAtt PulsePulseChecksTable.Arn
                   - !GetAtt PulseItemsTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:UpdateItem
@@ -7721,6 +7749,10 @@ Resources:
                 Action:
                   - cloudwatch:PutMetricData
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PulseSendRevisionReadyFunction.Arn
 
   PulseSendPulseCheckReadyFunctionRole:
     # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
@@ -7736,6 +7768,53 @@ Resources:
             Action: sts:AssumeRole
       Policies:
         - PolicyName: SendPulseCheckReadyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/urgd-pulse-*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt PulseTenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PulseAlertsTopic
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey*
+                  - kms:Decrypt
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/alias/aws/sns'
+
+  PulseSendRevisionReadyFunctionRole:
+    # checkov:skip=CKV_AWS_111:ses:SendEmail requires Resource:* — SES does not support resource-level ARNs for SendEmail
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'urgd-pulse-sendRevisionReady-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendRevisionReadyPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -7977,6 +8056,8 @@ Resources:
           REVISIONS_TABLE: !Ref PulseRevisionsTable
           DATA_BUCKET: !Ref PulseDataBucket
           BEDROCK_MODEL_ID: !Ref BedrockModelId
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          SEND_REVISION_READY_FUNCTION_NAME: !Ref PulseSendRevisionReadyFunction
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:
         - Key: project
@@ -8006,6 +8087,41 @@ Resources:
       Timeout: 30
       MemorySize: 512
       ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SendPulseCheckReady]
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TENANTS_TABLE: !Ref PulseTenantsTable
+          ALERTS_TOPIC_ARN: !Ref PulseAlertsTopic
+          APP_URL: !Sub 'https://${FrontendDomainName}'
+      Tags:
+        - Key: project
+          Value: pulse
+        - Key: brand
+          Value: urgd
+        - Key: studio
+          Value: orbit
+        - Key: environment
+          Value: !Ref Environment
+        - Key: cfn-stack-name
+          Value: !Ref AWS::StackName
+        - Key: license
+          Value: proprietary
+
+  PulseSendRevisionReadyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PulseSendRevisionReadyLogGroup
+    Properties:
+      FunctionName: !Sub 'urgd-pulse-sendRevisionReady-${Environment}'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt PulseSendRevisionReadyFunctionRole.Arn
+      Code:
+        S3Bucket: urgd-applicationdata
+        S3Key: !Ref SendRevisionReadyCodeKey
+      Timeout: 30
+      MemorySize: 512
+      ReservedConcurrentExecutions: !FindInMap [Concurrency, !Ref Environment, SendRevisionReady]
       TracingConfig:
         Mode: Active
       Environment:

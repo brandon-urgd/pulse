@@ -9,7 +9,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
-import { resolveFeature } from './shared/features.mjs'
+import { resolveFeature, resolveDeliveryMode } from './shared/features.mjs'
 import { randomUUID } from 'crypto'
 
 requireEnv([
@@ -48,6 +48,7 @@ export const handler = async (event) => {
       serviceFlags: unmarshalFeatures(tenantResult.Item.serviceFlags?.M),
     } : { tier: 'free', features: {}, serviceFlags: {} }
     const systemRecord = systemResult.Item ? {
+      features: unmarshalFeatures(systemResult.Item.features?.M),
       serviceFlags: unmarshalFeatures(systemResult.Item.serviceFlags?.M),
     } : null
 
@@ -61,7 +62,25 @@ export const handler = async (event) => {
       )
     }
 
-    // 2. Get pulse check — must exist and be complete
+    // 2. Verify item is in closed status before generating a revision
+    const itemResult = await dynamo.send(new GetItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      ProjectionExpression: '#status',
+      ExpressionAttributeNames: { '#status': 'status' },
+    }))
+
+    if (!itemResult.Item) {
+      log('info', 'GenerateRevision: item not found', { requestId, tenantId, itemId })
+      return errorResponse(404, 'Item not found', {}, origin)
+    }
+
+    if (itemResult.Item.status?.S !== 'closed') {
+      log('info', 'GenerateRevision: item not in closed status', { requestId, tenantId, itemId, status: itemResult.Item.status?.S })
+      return errorResponse(409, 'Item must be in closed status to generate a revision.', {}, origin)
+    }
+
+    // 3. Get pulse check — must exist and be complete
     const pulseCheckResult = await dynamo.send(new GetItemCommand({
       TableName: process.env.PULSE_CHECKS_TABLE,
       Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
@@ -74,7 +93,7 @@ export const handler = async (event) => {
 
     const pulseCheck = pulseCheckResult.Item
 
-    // 3. Extract decisions — must have at least one accepted/revised
+    // 4. Extract decisions — must have at least one accepted/revised
     const decisionsMap = pulseCheck.decisions?.M ?? {}
     const proposedRevisions = pulseCheck.proposedRevisions?.L ?? []
 
@@ -89,7 +108,7 @@ export const handler = async (event) => {
       return errorResponse(409, 'No accepted or revised decisions found. Accept or revise at least one feedback point before generating a revision.', {}, origin)
     }
 
-    // 4. Generate revision record with status: 'generating'
+    // 5. Generate revision record with status: 'generating'
     const revisionId = randomUUID()
     const startedAt = new Date().toISOString()
 
@@ -105,7 +124,7 @@ export const handler = async (event) => {
       },
     }))
 
-    // 5. Invoke processRevision Lambda asynchronously
+    // 6. Invoke processRevision Lambda asynchronously
     try {
       await lambda.send(new InvokeCommand({
         FunctionName: process.env.PROCESS_FUNCTION_NAME,
@@ -127,10 +146,13 @@ export const handler = async (event) => {
 
     log('info', 'GenerateRevision: dispatched to processRevision', { requestId, tenantId, itemId, revisionId })
 
+    const deliveryMode = resolveDeliveryMode(systemRecord)
+
     return createResponse(202, {
       data: {
         revisionId,
         status: 'generating',
+        deliveryMode,
       },
     }, {}, origin)
   } catch (err) {

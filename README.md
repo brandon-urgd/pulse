@@ -8,7 +8,7 @@ Pulse pairs human reviewers with an AI conversation agent to extract structured,
 
 **Frontend:** Two React 19 + Vite + TypeScript apps — `admin-ui` (tenant-facing, 13 pages, 17 components) and `session-ui` (reviewer-facing, 22 pages/components). S3 + CloudFront hosting, WAF-protected via Shield, Cognito-authenticated. React Query, Zod validation, CSS modules with design tokens.
 
-**Backend:** 63 Lambda functions (Node.js 22.x, ES modules), API Gateway REST API (51 routes), dual authorizer system (Cognito JWT for admin routes, session token for reviewer routes). Bedrock Claude for AI conversation, Pulse Check synthesis, and document revision.
+**Backend:** 64 Lambda functions (Node.js 22.x, ES modules), API Gateway REST API (51 routes), dual authorizer system (Cognito JWT for admin routes, session token for reviewer routes). Bedrock Claude for AI conversation, Pulse Check synthesis, and document revision.
 
 **Data:** 7 DynamoDB tables (PAY_PER_REQUEST, PITR enabled), S3 for document/image storage with Shield quarantine scanning.
 
@@ -27,12 +27,12 @@ pulse/
 ├── cloudformation/
 │   └── pulse-stack.yaml               # All infrastructure (9,400 lines)
 ├── lambdas/
-│   ├── shared/                        # utils.mjs, features.mjs, tiers.mjs
-│   └── urgd-pulse-{function}/         # 63 individual Lambda functions
+│   ├── shared/                        # utils.mjs, features.mjs, tiers.mjs, counters.mjs
+│   └── urgd-pulse-{function}/         # 64 individual Lambda functions
 ├── scripts/
 │   ├── build-lambdas.sh               # Package and upload Lambda ZIPs
 │   ├── deploy-frontend.sh             # S3 sync with cache headers
-│   ├── smoke.sh                       # Post-deploy smoke tests (63 Lambda coverage)
+│   ├── smoke.sh                       # Post-deploy smoke tests (64 Lambda coverage)
 │   └── register-with-shield.py        # Shield WAF integration
 └── tests/
     └── property/                      # Property-based tests (fast-check)
@@ -49,8 +49,11 @@ pulse/
 - Public session links with QR codes for anonymous feedback collection
 - Session summaries, reports, and PDF export
 - Stripe billing integration with usage-based counters
+- Async revision delivery with email notification when revisions complete
+- Annotated change lists for PDF/DOCX revisions (location-specific edits instead of full rewrite)
+- Counter decrement accuracy — cancelled, expired, and deleted sessions/items subtracted from monthly usage counters
 
-## Lambda Functions (63)
+## Lambda Functions (64)
 
 | Category | Functions |
 |---|---|
@@ -60,7 +63,7 @@ pulse/
 | Sessions | inviteReviewer, getItemSessions, cancelSession, resendInvite, extendDeadline, sendReminder, expireSessions, createPublicSession, getPublicSessionQr, expirePublicSession, previewSession, createSelfSession |
 | Conversation | chat, getSessionState, getSessionSummary, generateSessionSummary, deleteSessionTranscript, getSessionFile, emailSessionSummary, submitReport |
 | Pulse Check | runPulseCheck, processPulseCheck, getPulseCheck, savePCDecisions, sendPulseCheckReady |
-| Revisions | generateRevision, processRevision, getRevisions |
+| Revisions | generateRevision, processRevision, getRevisions, sendRevisionReady |
 | Reports | generateReport, getReport |
 | AI Helpers | suggestDescription |
 | Admin | getSettings, updateSettings, deleteAccount, adminTenants, publicConfig, usageReport |
@@ -81,7 +84,7 @@ npm run dev --workspace=apps/session-ui # Run session UI locally
 
 - Push to `main` → auto-deploys to dev
 - Manual dispatch → promote to staging or prod (requires "DEPLOY" confirmation for prod)
-- CI/CD: GitHub Actions with OIDC, Semgrep + Checkov security scanning, smoke tests covering all 63 Lambdas
+- CI/CD: GitHub Actions with OIDC, Semgrep + Checkov security scanning, smoke tests covering all 64 Lambdas
 
 ### Environment URLs
 
@@ -98,6 +101,20 @@ See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and S
 ---
 
 ## Version History
+
+### v1.2 — April 2026
+
+Async revision delivery + counter accuracy + UX improvements.
+
+- **Async revision delivery** — revisions now default to async mode controlled by `REVISION_DELIVERY_MODE` feature flag (`'async'` default, `'sync'` for rollback). Frontend shows confirmation message instead of polling spinner; user receives a branded SES email with a direct link when the revision is ready. Flag flip to `'sync'` restores polling UX — no deploy needed
+- **`sendRevisionReady` Lambda (#64)** — new Lambda async-invoked by `processRevision` when delivery mode is `'async'`. Sends branded email via SES. On SES failure: logs error, publishes SNS alert, does NOT mark revision as failed
+- **Annotated change lists for PDF/DOCX** — `processRevision` uses a structured change list prompt for PDF/DOCX items, producing `### Change N` Markdown with location, original text, replacement, and rationale. Frontend detects format and renders change cards instead of full-document rewrite
+- **Counter decrement accuracy** — new `decrementCounter()` shared utility in `counters.mjs` ensures cancelled, expired, and deleted sessions/items are subtracted from monthly usage counters. Zero-clamping prevents negative drift. Used by `cancelSession`, `expireSessions`, `expirePublicSession`, and `deleteItem`
+- **`hasCompletedRevision` on items API** — `getItems` queries REVISIONS_TABLE GSI for completed revisions, added to item response for frontend action button logic
+- **State-responsive action buttons** — `getItemActions()` pure function maps item lifecycle state to visible actions (max 2). Used on item cards, detail modal, and invite modal
+- **Invite Modal restructure** — renamed to "Sessions & Feedback" with 3-zone layout: Create Sessions (with self-review), Active Sessions, and Item Actions (with Revisions link)
+- **Upload format nudge** — informational hint for PDF/DOCX uploads suggesting `.md`/`.txt` for better revision experience
+- **Feature flag count: 18** (added `REVISION_DELIVERY_MODE` string flag resolved via `resolveDeliveryMode()`, not `resolveFeature()`)
 
 ### v1.1 — April 2026
 
@@ -128,4 +145,4 @@ Session start redesign + platform hardening.
 Initial release. AI-guided feedback sessions, Pulse Check synthesis, proposed revisions, tiered billing, public session links, QR codes, PDF export.
 
 ---
-*Pulse v1.1 — ur/gd Studios — us-west-2*
+*Pulse v1.2 — ur/gd Studios — us-west-2*

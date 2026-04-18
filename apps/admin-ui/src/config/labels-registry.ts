@@ -180,6 +180,7 @@ export const labels = {
     analyzingDocument: 'Analyzing your document\u2026',
     analysisTimeout: 'Analysis is taking longer than expected.',
     sessionCapWarning: '{used} of {max} sessions used',
+    uploadFormatNudge: 'For the best revision experience, upload as .md or .txt.',
   },
 
   // Invitation section (within ItemDetail)
@@ -413,6 +414,8 @@ export const labels = {
     retryButton: 'Try again',
     downloadPdf: 'Download PDF',
     downloadingPdf: 'Generating PDF…',
+    asyncConfirmation: "We've started generating your revision. We'll email you when it's ready.",
+    backToItems: 'Back to items',
   },
 
   // Forgot password
@@ -574,6 +577,19 @@ export const labels = {
     errorMessage: "Couldn't send your report. Try again.",
     charLimitWarning: '{remaining} characters remaining',
     charLimitExceeded: 'Message must be 5,000 characters or fewer',
+  },
+
+  // Invite Modal
+  inviteModal: {
+    title: 'Sessions & Feedback',
+  },
+
+  // Item Card — state-responsive action buttons
+  itemCard: {
+    revisions: 'Revisions',
+    getFeedback: 'Get Feedback',
+    pulseCheck: 'Pulse Check',
+    runPulseCheck: 'Run Pulse Check',
   },
 
   // Error boundary

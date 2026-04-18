@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useItemForm, fileStatusLabel, todayIso } from '../hooks/useItemForm';
 import { useCan } from '../hooks/useCan';
 import { labels } from '../config/labels-registry';
+import { getItemActions } from '../utils/itemActions';
 import InviteModal from './InviteModal';
 import DocumentPreviewPanel from '../components/DocumentPreviewPanel';
 import SectionPanel from '../components/SectionPanel';
@@ -193,17 +195,19 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                   <p className={styles.timeLimitHint}>{labels.itemDetail.timeLimitHint}</p>
                 </div>
               )}
-              {(form.itemData?.status === 'draft' || form.itemData?.status === 'active') && !form.isExampleItem && (
-                <button
-                  type="button"
-                  className={styles.headerActionSelfReview}
-                  onClick={() => form.handleSelfReview()}
-                  disabled={form.isSelfReviewLoading}
-                  title={labels.itemDetail.selfReviewTooltip}
-                >
-                  {form.isSelfReviewLoading ? labels.itemDetail.selfReviewLoading : labels.itemDetail.selfReviewButton}
-                </button>
-              )}
+              {/* State-responsive actions — Revisions link when applicable */}
+              {form.itemData && (() => {
+                const actions = getItemActions(form.itemData!);
+                return actions.includes('revisions') ? (
+                  <Link
+                    to={`/admin/items/${form.itemData!.itemId}/revisions`}
+                    className={styles.headerActionPreview}
+                    aria-label={`${labels.itemCard.revisions} — ${form.itemData!.itemName}`}
+                  >
+                    {labels.itemCard.revisions}
+                  </Link>
+                ) : null;
+              })()}
               {!form.isExampleItem && (
                 <button
                   type="button"
@@ -409,6 +413,17 @@ export default function ItemDetailModal({ itemId, onClose, variant = 'modal' }: 
                             </div>
                           );
                         })}
+
+                        {/* Upload format nudge — shown for .pdf/.docx files, not for .md/.txt */}
+                        {(() => {
+                          const fileNames = Object.keys(form.fileStatuses);
+                          const hasPdfOrDocx = fileNames.some((name) => /\.(pdf|docx)$/i.test(name));
+                          return hasPdfOrDocx ? (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', margin: '4px 0 0', width: '100%', textAlign: 'center' }}>
+                              {labels.itemDetail.uploadFormatNudge}
+                            </p>
+                          ) : null;
+                        })()}
 
                         {/* Page limit warning — visual context unavailable but text review works */}
                         {form.itemData?.renderStatus === 'page_limit_exceeded' && (

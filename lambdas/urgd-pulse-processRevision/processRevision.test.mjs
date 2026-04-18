@@ -9,11 +9,14 @@ vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
 vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
 vi.stubEnv('AWS_REGION', 'us-west-2')
+vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
+vi.stubEnv('SEND_REVISION_READY_FUNCTION_NAME', 'urgd-pulse-sendRevisionReady-dev')
 
 const dynamoSendSpy = vi.fn()
 const s3SendSpy = vi.fn()
 const bedrockSendSpy = vi.fn()
 const cwSendSpy = vi.fn()
+const lambdaSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
@@ -39,6 +42,12 @@ vi.mock('@aws-sdk/client-cloudwatch', () => {
   class CloudWatchClient { send(...args) { return cwSendSpy(...args) } }
   class PutMetricDataCommand { constructor(input) { this.input = input; this.name = 'PutMetricDataCommand' } }
   return { CloudWatchClient, PutMetricDataCommand }
+})
+
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send(...args) { return lambdaSendSpy(...args) } }
+  class InvokeCommand { constructor(input) { this.input = input; this.name = 'InvokeCommand' } }
+  return { LambdaClient, InvokeCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -98,7 +107,7 @@ function mockHappyPath() {
   s3SendSpy.mockResolvedValueOnce(makeS3TextBody('# Original Document'))
   // DynamoDB: GetItem item record (for documentKey/pageCount)
   dynamoSendSpy.mockResolvedValueOnce({
-    Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' } },
+    Item: { tenantId: { S: 'tenant-123' }, itemId: { S: 'item-456' }, itemName: { S: 'Test Item' } },
   })
   // DynamoDB: pulse check
   dynamoSendSpy.mockResolvedValueOnce(makePulseCheck())
@@ -110,6 +119,12 @@ function mockHappyPath() {
   dynamoSendSpy.mockResolvedValueOnce({})
   // DynamoDB: UpdateItem item → revised
   dynamoSendSpy.mockResolvedValueOnce({})
+  // DynamoDB: GetItem SYSTEM record (for delivery mode)
+  dynamoSendSpy.mockResolvedValueOnce({
+    Item: { tenantId: { S: 'SYSTEM' }, features: { M: { REVISION_DELIVERY_MODE: { S: 'async' } } } },
+  })
+  // Lambda: sendRevisionReady invocation
+  lambdaSendSpy.mockResolvedValueOnce({})
 }
 
 describe('processRevision handler (worker)', () => {
@@ -118,6 +133,7 @@ describe('processRevision handler (worker)', () => {
     s3SendSpy.mockReset()
     bedrockSendSpy.mockReset()
     cwSendSpy.mockReset()
+    lambdaSendSpy.mockReset()
     cwSendSpy.mockResolvedValue({})
   })
 

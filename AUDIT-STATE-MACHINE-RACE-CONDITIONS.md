@@ -1,8 +1,8 @@
-# Pulse — State Machine & Race Condition Audit
+# Pulse State Machine & Race Condition Audit
 
-**Date:** 2026-07-14  
-**Scope:** `urgd_repositories/pulse/` — Lambdas, CloudFormation, React frontend  
-**Auditor:** Kiro automated audit
+**Date:** 2026-07-17
+**Scope:** 64 Lambda functions, 7 DynamoDB tables, CloudFormation infrastructure
+**Focus:** Recently modified counter-decrement Lambdas, async revision generation, CORS preflight
 
 ---
 
@@ -10,293 +10,319 @@
 
 | Severity | Count |
 |----------|-------|
-| CRITICAL | 4     |
+| CRITICAL | 1     |
 | HIGH     | 5     |
 | MEDIUM   | 6     |
 | LOW      | 3     |
-| **Total** | **18** |
 
 ---
 
-## 1. Race Conditions & Async Timing
+## 1. State Transition Consistency
 
-### FINDING RC-1: closeItem writes item status without ConditionExpression
+### Item Status Transitions: `draft → active → closed → revised`
+
+| Lambda | Transition | ConditionExpression | Verdict |
+|--------|-----------|-------------------|---------|
+| closeItem | draft/active → closed | `#status IN (:draft, :active)` | ✅ |
+| closeExpiredItems | active → closed | `#status = :active` | ✅ |
+| processRevision | closed → revised | `#status = :closed` | ✅ |
+| analyzeDocument | writes sectionMap | `#status IN (:draft, :active)` | ✅ |
+| inviteReviewer | draft → active | `#status = :draft` | ✅ |
+| createPublicSession | draft → active | `#status = :draft` | ✅ |
+| createSelfSession | draft → active | `#status = :draft` | ✅ |
+| extendDeadline | updates closeDate | `#status IN (:draft, :active)` | ✅ |
+| processPulseCheck | writes hasPulseCheck | **NONE** | ⚠️ See F-06 |
+| updateItem | updates draft fields | **NONE** | ⚠️ See F-01 |
+| getUploadUrl | writes documentStatus | **NONE** | ⚠️ See F-07 |
+
+### Session Status Transitions: `not_started → in_progress → completed/expired/cancelled/discarded`
+
+| Lambda | Transition | ConditionExpression | Verdict |
+|--------|-----------|-------------------|---------|
+| chat | not_started → in_progress | `#status IN (:not_started, :in_progress)` | ✅ |
+| chat | in_progress → completed | `#status IN (:not_started, :in_progress)` | ✅ |
+| cancelSession | not_started/in_progress → cancelled | `#status IN (:not_started, :in_progress)` | ✅ |
+| expireSessions | * → expired | `#status <> :completed AND #status <> :cancelled AND #status <> :discarded` | ✅ |
+| closeItem | not_started → expired | `#status = :not_started` | ✅ |
+| closeExpiredItems | * → expired | `#status <> :completed` | ✅ |
+| expirePublicSession | not_started/in_progress → expired | **NONE** | 🔴 See F-02 |
+| deleteSessionTranscript | * → discarded | **NONE** | 🔴 See F-03 |
+| validateSession | discarded → not_started | `#status = :discarded` | ✅ |
+| sendReminder | writes lastReminderSent | **NONE** (non-status field) | ✅ Acceptable |
+
+---
+
+## 2. Findings
+
+### F-01 — updateItem: No ConditionExpression on DynamoDB write
+- **Severity:** HIGH
+- **File:** `lambdas/urgd-pulse-updateItem/index.mjs` (line ~230)
+- **Description:** The `UpdateItemCommand` that writes item fields has no `ConditionExpression`. The Lambda does a read-then-check (`if (currentItem.status !== 'draft')`) but this is a TOCTOU race. Between the `GetItemCommand` and the `UpdateItemCommand`, another Lambda (e.g., `inviteReviewer`) could transition the item from `draft` to `active`, and the update would still succeed — writing to a locked item.
+- **Impact:** An item that has been activated could have its name, description, or closeDate overwritten by a concurrent updateItem call.
+- **Suggested Fix:** Add `ConditionExpression: '#status = :draft'` to the `UpdateItemCommand`:
+  ```javascript
+  ConditionExpression: '#status = :draft',
+  ExpressionAttributeNames: { ...expressionNames, '#status': 'status' },
+  ExpressionAttributeValues: { ...expressionValues, ':draft': { S: 'draft' } },
+  ```
+
+### F-02 — expirePublicSession: No ConditionExpression on status write
 - **Severity:** CRITICAL
-- **File:** `lambdas/urgd-pulse-closeItem/index.mjs`
-- **Line:** 43–52
-- **Description:** `closeItem` reads the current status with `GetItemCommand`, checks `if (currentStatus === 'closed')` in application code, then writes `status = 'closed'` via `UpdateItemCommand` — but the `UpdateItemCommand` has **no `ConditionExpression`**. Between the read and the write, another Lambda (e.g., `closeExpiredItems`, `processRevision`) could change the item status. This is a classic TOCTOU (time-of-check-time-of-use) race.
-- **Impact:** Could overwrite a `revised` status back to `closed`, violating the `closed → revised` transition rule. Two concurrent close requests could both succeed.
-- **Suggested Fix:**
+- **File:** `lambdas/urgd-pulse-expirePublicSession/index.mjs` (line ~72)
+- **Description:** The `UpdateItemCommand` that sets `status = 'expired'` has **no ConditionExpression**. The Lambda does a read-then-check (`if (currentStatus !== 'not_started' && currentStatus !== 'in_progress')`) but this is a TOCTOU race. Between the `QueryCommand` and the `UpdateItemCommand`, the session could be completed by the chat Lambda, and this write would overwrite `completed` with `expired` — destroying a terminal state.
+- **Impact:** A completed session could be silently overwritten to `expired`, losing the reviewer's feedback and corrupting the pulse check.
+- **Suggested Fix:** Add a `ConditionExpression` to the `UpdateItemCommand`:
+  ```javascript
+  ConditionExpression: '#st IN (:not_started, :in_progress)',
+  ExpressionAttributeValues: {
+    ':now': { S: now },
+    ':expired': { S: 'expired' },
+    ':not_started': { S: 'not_started' },
+    ':in_progress': { S: 'in_progress' },
+  },
+  ```
+
+### F-03 — deleteSessionTranscript: No ConditionExpression on status write
+- **Severity:** HIGH
+- **File:** `lambdas/urgd-pulse-deleteSessionTranscript/index.mjs` (line ~76)
+- **Description:** The `UpdateItemCommand` that sets `status = 'discarded'` has **no ConditionExpression**. The Lambda checks `if (session.status?.S === 'completed')` before writing, but this is a TOCTOU race. A session could complete between the read and the write, and the `discarded` status would overwrite `completed`.
+- **Impact:** A completed session could be overwritten to `discarded`, losing the reviewer's feedback.
+- **Suggested Fix:** Add a `ConditionExpression`:
+  ```javascript
+  ConditionExpression: '#status <> :completed AND #status <> :expired',
+  ExpressionAttributeNames: { '#status': 'status' },
+  ExpressionAttributeValues: {
+    ':status': { S: 'discarded' },
+    ':discardedAt': { S: new Date().toISOString() },
+    ':completed': { S: 'completed' },
+    ':expired': { S: 'expired' },
+  },
+  ```
+
+### F-04 — decrementCounter: Read-then-write race condition
+- **Severity:** MEDIUM
+- **File:** `lambdas/shared/counters.mjs` (lines ~90–130)
+- **Description:** The `decrementCounter` function reads the current counter value with `GetItemCommand`, checks if `currentCount < amount`, then writes with a separate `UpdateItemCommand` using `ADD :neg`. Between the read and the write, another Lambda could also decrement the same counter (e.g., two sessions expiring simultaneously for the same tenant), causing the counter to go negative despite the clamp-to-zero logic.
+- **Impact:** Counter drift — the monthly usage counter could go negative. The clamp-to-zero path only fires if the read sees a low value, but two concurrent reads could both see `count=1` and both issue `ADD -1`, resulting in `count=-1`.
+- **Suggested Fix:** Use a single atomic `UpdateItemCommand` with a `ConditionExpression` to prevent going below zero:
   ```javascript
   await dynamo.send(new UpdateItemCommand({
-    TableName: process.env.ITEMS_TABLE,
-    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-    UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
-    ConditionExpression: '#status IN (:draft, :active)',
-    ExpressionAttributeNames: { '#status': 'status' },
+    TableName: tableName,
+    Key: { tenantId: { S: tenantId } },
+    UpdateExpression: 'ADD usageCounters.#counter.#count :neg',
+    ConditionExpression: 'usageCounters.#counter.#count >= :amount',
+    ExpressionAttributeNames: { '#counter': counterName, '#count': 'count' },
     ExpressionAttributeValues: {
-      ':closed': { S: 'closed' },
-      ':now': { S: now },
-      ':draft': { S: 'draft' },
-      ':active': { S: 'active' },
+      ':neg': { N: String(-amount) },
+      ':amount': { N: String(amount) },
     },
   }))
   ```
+  Catch `ConditionalCheckFailedException` and clamp to zero in the catch block.
 
-### FINDING RC-2: closeExpiredItems writes item status without ConditionExpression
-- **Severity:** CRITICAL
-- **File:** `lambdas/urgd-pulse-closeExpiredItems/index.mjs`
-- **Line:** 125–134
-- **Description:** The scheduled `closeExpiredItems` Lambda scans for active items past their close date and writes `status = 'closed'` without a `ConditionExpression`. If `processRevision` has already transitioned the item to `revised`, this Lambda would overwrite it back to `closed`.
-- **Impact:** Could revert a `revised` item back to `closed`, losing the revision state.
-- **Suggested Fix:** Add `ConditionExpression: '#status = :active'` to the item status update.
-
-### FINDING RC-3: inviteReviewer draft→active transition without ConditionExpression
-- **Severity:** HIGH
-- **File:** `lambdas/urgd-pulse-inviteReviewer/index.mjs`
-- **Line:** 404–419
-- **Description:** When `isFirstInvitation` is true, `inviteReviewer` sets `status = 'active'` without a `ConditionExpression`. Compare with `createSelfSession` (line 247) which correctly uses `ConditionExpression: '#status = :draft'`. If two invite requests arrive concurrently, both could attempt the draft→active transition, and the second could overwrite fields set by the first.
-- **Impact:** Concurrent invitations could cause sessionCount drift or overwrite `lockedAt`.
-- **Suggested Fix:** Add `ConditionExpression: '#status = :draft'` matching the pattern in `createSelfSession`.
-
-### FINDING RC-4: createPublicSession draft→active transition without ConditionExpression
-- **Severity:** HIGH
-- **File:** `lambdas/urgd-pulse-createPublicSession/index.mjs`
-- **Line:** 263–274
-- **Description:** Same pattern as RC-3. When `isFirstSession` is true, the item status is set to `active` without a `ConditionExpression`. The `createSelfSession` Lambda correctly guards this with `ConditionExpression: '#status = :draft'`, but `createPublicSession` does not.
-- **Impact:** Same as RC-3 — concurrent session creation could cause state corruption.
-- **Suggested Fix:** Add `ConditionExpression: '#status = :draft'` and handle `ConditionalCheckFailedException`.
-
-### FINDING RC-5: analyzeDocument writes sectionMap without ConditionExpression or closed-item guard
+### F-05 — cancelSession: sessionCount decrement without floor guard
 - **Severity:** MEDIUM
-- **File:** `lambdas/urgd-pulse-analyzeDocument/index.mjs`
-- **Line:** 164–175
-- **Description:** `analyzeDocument` is invoked async (fire-and-forget) by `createItem`, `updateItem`, `extractText`, and `shieldCallback`. It writes `sectionMap` to the item record without checking the item's current status. If the item has been closed or revised by the time Bedrock returns, the write still proceeds. No `ConditionExpression` guards the update.
-- **Impact:** Could write stale sectionMap data to a closed/revised item. Low practical risk since sectionMap is metadata, but violates the principle that closed items should not be mutated.
-- **Suggested Fix:** Add `ConditionExpression: '#status IN (:draft, :active)'` or at minimum check item status before writing.
+- **File:** `lambdas/urgd-pulse-cancelSession/index.mjs` (line ~93)
+- **Description:** The `sessionCount` decrement on the items table uses `ADD sessionCount :neg` with value `-1` but has no `ConditionExpression` to prevent the count from going below zero. If two cancellations race, or if the count is already 0 due to a prior deleteItem, the count could go negative.
+- **Impact:** Negative `sessionCount` displayed in the UI. Cosmetic but confusing.
+- **Suggested Fix:** Add a condition or use a SET expression with a floor:
+  ```javascript
+  ConditionExpression: 'sessionCount > :zero',
+  ExpressionAttributeValues: {
+    ':now': { S: new Date().toISOString() },
+    ':neg': { N: '-1' },
+    ':zero': { N: '0' },
+  },
+  ```
 
-### FINDING RC-6: DynamoDB eventual consistency on write-then-read across Lambdas
-- **Severity:** MEDIUM
-- **File:** Multiple Lambdas (fire-and-forget chains)
-- **Description:** Several Lambda chains use `InvocationType: 'Event'` (fire-and-forget) where Lambda A writes to DynamoDB and Lambda B reads immediately:
-  - `runPulseCheck` writes `status: 'generating'` to pulse_checks table, then fires `processPulseCheck` which reads the same record
-  - `generateRevision` writes revision record, then fires `processRevision` which reads it
-  - `chat` writes session completion, then fires `generateReport` and `generateSessionSummary` which read the session
-  
-  DynamoDB eventually consistent reads (the default) could return stale data if the async Lambda starts before the write propagates. However, all these Lambdas use the default strongly consistent reads for `GetItemCommand` on primary keys, which mitigates this. The risk is primarily on GSI queries (which are always eventually consistent).
-- **Impact:** Low practical risk for primary key reads. GSI-based queries in `processPulseCheck` (querying sessions by item-index) could miss recently completed sessions.
-- **Suggested Fix:** Document this as an accepted risk. For critical paths, consider adding a small delay or using `ConsistentRead: true` where applicable (not available on GSIs — accepted limitation).
-
-### FINDING RC-7: Fire-and-forget without completion verification
+### F-06 — processPulseCheck: hasPulseCheck write without ConditionExpression
 - **Severity:** LOW
-- **File:** Multiple Lambdas
-- **Description:** 15+ `InvocationType: 'Event'` invocations across the codebase where the caller returns success to the client without verifying the async worker completed. Key instances:
-  - `runPulseCheck` → `processPulseCheck` (mitigated: frontend polls for completion)
-  - `generateRevision` → `processRevision` (mitigated: frontend polls for completion)
-  - `chat` → `generateReport` + `generateSessionSummary` (mitigated: non-blocking, reports appear when ready)
-  - `extractText` → `analyzeDocument` (mitigated: frontend polls documentStatus)
-  - `validateSession` / `createSelfSession` / `previewSession` → `primeCacheWorker` (mitigated: cache priming is best-effort optimization)
-  
-  This is an intentional architectural pattern (async dispatch + polling) and is well-implemented. The `generateRevision` Lambda even handles invocation failure by marking the revision as `failed`.
-- **Impact:** Acceptable. All fire-and-forget patterns have either polling-based completion detection or are best-effort operations.
-- **Suggested Fix:** No action needed. Pattern is sound. Consider adding DLQ (Dead Letter Queue) configuration for async Lambda invocations to catch silent failures.
+- **File:** `lambdas/urgd-pulse-processPulseCheck/index.mjs` (line ~502)
+- **Description:** The `UpdateItemCommand` that stamps `hasPulseCheck = true` on the item record has no `ConditionExpression`. This is a non-status field write (boolean flag + timestamp), so the risk is low — it's idempotent and only sets `true`. However, it could write to an item that has been deleted between the pulse check start and completion.
+- **Impact:** Minimal — writing to a deleted item would recreate a partial record. The `.catch()` handler swallows errors gracefully.
+- **Suggested Fix:** Add `ConditionExpression: 'attribute_exists(tenantId)'` to ensure the item still exists.
 
----
-
-## 2. State Transition Consistency
-
-### FINDING ST-1: closeItem allows closing from ANY non-closed status
+### F-07 — getUploadUrl: documentStatus write without ConditionExpression
 - **Severity:** HIGH
-- **File:** `lambdas/urgd-pulse-closeItem/index.mjs`
-- **Line:** 37–39
-- **Description:** The guard clause only checks `if (currentStatus === 'closed')` and returns 409. This means a `revised` item can be closed again (`revised → closed`), which may not be a valid transition. The valid transition chain is `draft → active → closed → revised`. Going `revised → closed` would allow re-running the revision loop indefinitely.
-- **Impact:** Depends on business rules. If `revised → closed` is intentional (to allow re-running pulse check after revision), this is acceptable. If not, it's a state machine violation.
-- **Suggested Fix:** If `revised` is terminal, add: `if (currentStatus === 'revised') return errorResponse(409, 'Revised items cannot be closed again', {}, origin)`. If re-closing revised items is intentional, document it.
+- **File:** `lambdas/urgd-pulse-getUploadUrl/index.mjs` (line ~195)
+- **Description:** The `UpdateItemCommand` that sets `documentStatus = 'scanning'` has no `ConditionExpression`. The Lambda checks `if (itemStatus !== 'draft')` before writing, but this is a TOCTOU race. Between the read and the write, the item could transition to `active` (via inviteReviewer), and the write would overwrite `documentStatus` on an active item.
+- **Impact:** Could overwrite `documentStatus` on an active item, potentially resetting a `ready` status back to `scanning`.
+- **Suggested Fix:** Add `ConditionExpression: '#status = :draft'`:
+  ```javascript
+  ConditionExpression: '#status = :draft',
+  ExpressionAttributeNames: { '#status': 'status' },
+  ```
 
-### FINDING ST-2: processRevision correctly guards closed→revised transition ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-processRevision/index.mjs`
-- **Line:** 279–289
-- **Description:** `processRevision` uses `ConditionExpression: '#status = :closed'` when transitioning item status from `closed` to `revised`. This correctly prevents the transition from any other state. Well implemented.
-
-### FINDING ST-3: createSelfSession correctly guards draft→active transition ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-createSelfSession/index.mjs`
-- **Line:** 247–260
-- **Description:** Uses `ConditionExpression: '#status = :draft'` with proper `ConditionalCheckFailedException` handling. This is the gold standard pattern that RC-3 and RC-4 should follow.
-
-### FINDING ST-4: chat Lambda correctly guards session status transitions ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-chat/index.mjs`
-- **Line:** 882–884
-- **Description:** Uses `ConditionExpression: '#status IN (:not_started, :in_progress)'` to prevent overwriting terminal session states. Handles `ConditionalCheckFailedException` gracefully.
-
-### FINDING ST-5: cancelSession correctly guards terminal states ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-cancelSession/index.mjs`
-- **Line:** 67–77
-- **Description:** Uses `ConditionExpression: '#status IN (:not_started, :in_progress)'` to prevent cancelling completed/expired sessions.
-
-### FINDING ST-6: expireSessions correctly guards terminal states ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-expireSessions/index.mjs`
-- **Line:** 113
-- **Description:** Uses `ConditionExpression: '#status <> :completed AND #status <> :cancelled AND #status <> :discarded'` to prevent overwriting terminal session states.
-
-### FINDING ST-7: validateSession reactivates discarded sessions with ConditionExpression ✅
-- **Severity:** N/A (positive finding)
-- **File:** `lambdas/urgd-pulse-validateSession/index.mjs`
-- **Line:** 95–102
-- **Description:** Uses `ConditionExpression: '#status = :discarded'` when reactivating a discarded session. Correctly scoped.
-
----
-
-## 3. Guard Clauses on Closed Items
-
-### FINDING GC-1: inviteReviewer blocks closed items ✅
-- **File:** `lambdas/urgd-pulse-inviteReviewer/index.mjs`, Line 161
-- **Guard:** `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409
-- **Status:** Correct. Blocks closed, revised, and any other status.
-
-### FINDING GC-2: createSelfSession blocks closed items ✅
-- **File:** `lambdas/urgd-pulse-createSelfSession/index.mjs`, Line 82
-- **Guard:** `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409
-- **Status:** Correct.
-
-### FINDING GC-3: createPublicSession blocks closed items ✅
-- **File:** `lambdas/urgd-pulse-createPublicSession/index.mjs`, Line 113
-- **Guard:** `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409
-- **Status:** Correct.
-
-### FINDING GC-4: updateItem blocks closed items ✅
-- **File:** `lambdas/urgd-pulse-updateItem/index.mjs`, Line 131
-- **Guard:** `if (currentItem.status !== 'draft')` → 409
-- **Status:** Correct. Even stricter — only allows draft items.
-
-### FINDING GC-5: extendDeadline blocks closed and revised items ✅
-- **File:** `lambdas/urgd-pulse-extendDeadline/index.mjs`, Line 91
-- **Guard:** `if (currentItem.status === 'closed' || currentItem.status === 'revised')` → 409
-- **Status:** Correct.
-
-### FINDING GC-6: getUploadUrl blocks non-draft items ✅
-- **File:** `lambdas/urgd-pulse-getUploadUrl/index.mjs`, Line 143
-- **Guard:** `if (itemStatus !== 'draft')` → 409
-- **Status:** Correct.
-
-### FINDING GC-7: removeDocument blocks non-draft items ✅
-- **File:** `lambdas/urgd-pulse-removeDocument/index.mjs`, Line 47
-- **Guard:** `if (item.status?.S !== 'draft')` → 409
-- **Status:** Correct.
-
-### FINDING GC-8: extendDeadline UpdateItemCommand has no ConditionExpression
+### F-08 — generateRevision: No item status guard
 - **Severity:** MEDIUM
-- **File:** `lambdas/urgd-pulse-extendDeadline/index.mjs`
-- **Line:** 103–118
-- **Description:** While `extendDeadline` has an application-level guard checking `status === 'closed' || status === 'revised'`, the actual `UpdateItemCommand` that writes the new closeDate has no `ConditionExpression`. Between the read and write, the item could be closed by `closeExpiredItems` or `closeItem`. The deadline extension would then apply to a closed item.
-- **Impact:** A deadline extension could be written to a closed item, creating an inconsistent state where a closed item has a future closeDate.
-- **Suggested Fix:** Add `ConditionExpression: '#status IN (:draft, :active)'` to the UpdateItemCommand.
+- **File:** `lambdas/urgd-pulse-generateRevision/index.mjs` (line ~60)
+- **Description:** The `generateRevision` Lambda checks that a pulse check exists and is `complete`, but does **not** verify the item status is `closed`. A revised item could have another revision generated. The downstream `processRevision` does guard with `ConditionExpression: '#status = :closed'`, so the revision would fail at step 7, but only after consuming Bedrock tokens and S3 writes.
+- **Impact:** Wasted Bedrock invocation costs if a revision is triggered on an already-revised item. The processRevision guard prevents data corruption, but the work is wasted.
+- **Suggested Fix:** Add an item status check in `generateRevision`:
+  ```javascript
+  const itemResult = await dynamo.send(new GetItemCommand({
+    TableName: process.env.ITEMS_TABLE,
+    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+    ProjectionExpression: '#status',
+    ExpressionAttributeNames: { '#status': 'status' },
+  }))
+  if (itemResult.Item?.status?.S !== 'closed') {
+    return errorResponse(409, 'Item must be closed to generate a revision', {}, origin)
+  }
+  ```
 
-### FINDING GC-9: sendReminder writes lastReminderSent without status guard
+### F-09 — generateRevision: Async invocation failure marks revision as failed without ConditionExpression
 - **Severity:** LOW
-- **File:** `lambdas/urgd-pulse-sendReminder/index.mjs`
-- **Line:** 308–320
-- **Description:** `sendReminder` updates `lastReminderSent` on session records without checking if the session is still active. If a session was completed or expired between the scan and the update, the write still proceeds.
-- **Impact:** Minimal — `lastReminderSent` is metadata and doesn't affect session state. The reminder email would have already been sent.
-- **Suggested Fix:** Low priority. Could add `ConditionExpression: '#status = :not_started'` but the impact is negligible.
+- **File:** `lambdas/urgd-pulse-generateRevision/index.mjs` (line ~107)
+- **Description:** When the async invocation of `processRevision` fails, the catch block marks the revision as `failed` using `UpdateItemCommand` without a `ConditionExpression`. This is acceptable because the revision was just created with `PutItemCommand` moments before, so no race is realistic. However, the `.catch(() => {})` swallows the error silently.
+- **Impact:** Minimal — the revision record is brand new, so no concurrent mutation is possible.
+- **Suggested Fix:** No change needed, but consider logging the swallowed error.
 
 ---
 
-## 4. Frontend Optimistic Updates
+## 3. Race Conditions & Async Timing
 
-### FINDING FE-1: InviteModal optimistic update AFTER API success ✅
-- **Severity:** N/A (positive finding)
-- **File:** `apps/admin-ui/src/pages/InviteModal.tsx`, Line 158
-- **Description:** `queryClient.setQueryData` is called AFTER `authedMutate` succeeds (inside the `try` block, after the `await`). This is correct — it's a cache update after confirmed success, not a speculative optimistic update. Additionally calls `refetchSessions()` and `invalidateQueries` for consistency.
+### F-10 — Fire-and-forget Lambda invocations: Failure handling audit
 
-### FINDING FE-2: InviteModal cancel optimistic update without rollback
+| Caller | Target | Failure Handling | Verdict |
+|--------|--------|-----------------|---------|
+| chat | generateSessionSummary | try/catch, logs warning | ✅ |
+| chat | generateReport | try/catch, logs warning | ✅ |
+| expireSessions | generateReport | try/catch, logs warning | ✅ |
+| expireSessions | runPulseCheck | try/catch, logs warning | ✅ |
+| closeExpiredItems | generateReport | try/catch, logs warning | ✅ |
+| closeExpiredItems | runPulseCheck | try/catch, logs error | ✅ |
+| closeExpiredItems | sendPulseCheckReady | try/catch, logs error | ✅ |
+| generateRevision | processRevision | try/catch, marks revision failed, returns 500 | ✅ |
+| processRevision | sendRevisionReady | try/catch, logs warning | ✅ |
+| runPulseCheck | processPulseCheck | **No try/catch** | ⚠️ See F-11 |
+| validateSession | primeCacheWorker | try/catch, logs warning | ✅ |
+| extractText | analyzeDocument | try/catch, logs warning | ✅ |
+| extractText | renderPages | try/catch, logs warning | ✅ |
+| updateItem | analyzeDocument | try/catch, logs warning | ✅ |
+| createItem | analyzeDocument | try/catch, logs warning | ✅ |
+| shieldCallback | analyzeDocument | try/catch, logs warning | ✅ |
+| shieldCallback | extractText | try/catch, logs warning | ✅ |
+
+### F-11 — runPulseCheck: Async invocation not wrapped in try/catch
 - **Severity:** MEDIUM
-- **File:** `apps/admin-ui/src/pages/InviteModal.tsx`, Line 184
-- **Description:** After a successful `DELETE` call to cancel a session, the code sets the session status to `not_started` in the cache via `queryClient.setQueryData`. However, the server actually sets the status to `cancelled`. The optimistic update shows `not_started` while the server has `cancelled`. The subsequent `invalidateQueries` on `['items']` doesn't invalidate `['sessions', itemId]`, so the stale cache persists until the next full refetch.
-- **Impact:** UI briefly shows the cancelled session as `not_started` instead of `cancelled`. Self-corrects on next page load or refetch.
-- **Suggested Fix:** Either set the optimistic status to `'cancelled'` to match the server, or add `queryClient.invalidateQueries({ queryKey: ['sessions', itemId] })`.
+- **File:** `lambdas/urgd-pulse-runPulseCheck/index.mjs` (line ~122)
+- **Description:** The `InvokeCommand` for `processPulseCheck` is not wrapped in its own try/catch. If the invocation fails, the outer catch returns a generic 500 error, but the pulse check record has already been written with `status: 'generating'`. The record will be stuck in `generating` state forever with no retry mechanism.
+- **Impact:** Orphaned `generating` pulse check record. The frontend will poll indefinitely until timeout.
+- **Suggested Fix:** Wrap the invocation in try/catch and update the pulse check record to `failed` on invocation failure (same pattern as `generateRevision`).
 
-### FINDING FE-3: InviteModal endPublicSession optimistic update is correct ✅
-- **Severity:** N/A (positive finding)
-- **File:** `apps/admin-ui/src/pages/InviteModal.tsx`, Line 279
-- **Description:** Sets status to `'expired'` after successful API call, matching the server behavior. Correct pattern.
+### F-12 — Frontend optimistic updates: Missing rollback
+- **Severity:** MEDIUM
+- **File:** `apps/admin-ui/src/pages/InviteModal.tsx` (lines 174, 199, 295)
+- **Description:** Three `queryClient.setQueryData` calls perform optimistic cache updates:
+  1. **Line 174:** After invite success — sets new sessions in cache. This is safe because it's post-success, not pre-mutation.
+  2. **Line 199:** After cancel success — sets session status to `cancelled`. Also post-success.
+  3. **Line 295:** After expire public session — sets session status to `expired`. Also post-success.
 
-### FINDING FE-4: useItemForm setQueryData after polling confirmation ✅
-- **Severity:** N/A (positive finding)
-- **File:** `apps/admin-ui/src/hooks/useItemForm.ts`, Lines 484, 516
-- **Description:** Both `setQueryData` calls happen after polling confirms the server state (documentStatus is `ready`/`rejected`/`extraction_failed`, or sectionMap exists). This is a cache-warming pattern, not an optimistic update. Correct.
+  All three are **post-success** optimistic updates (the mutation has already succeeded), followed by `invalidateQueries` to refetch. This is the correct pattern — no rollback needed.
+- **Impact:** None — these are not true optimistic updates (pre-mutation). They're cache priming after confirmed success.
+- **Verdict:** ✅ No issue.
 
----
-
-## 5. CORS Preflight (OPTIONS) Coverage
-
-### FINDING CORS-1: Global proxy OPTIONS method provides fallback coverage ✅
-- **Severity:** N/A (positive finding)
-- **File:** `cloudformation/pulse-stack.yaml`, Line 1451
-- **Description:** `PulseOptionsMethod` is defined on `PulseProxyResource` (`{proxy+}`), which acts as a catch-all OPTIONS handler for any path not explicitly covered. This provides baseline CORS preflight coverage.
-
-### FINDING CORS-2: All PUT/DELETE/PATCH resources have explicit OPTIONS methods ✅
-- **Severity:** N/A (positive finding)
-- **Description:** Verified the following resources have explicit OPTIONS methods:
-  - `/api/manage/settings` (PUT) → `PulseManageSettingsOptionsMethod` ✅
-  - `/api/manage/account` (DELETE) → `PulseManageAccountOptionsMethod` ✅
-  - `/api/manage/items/{itemId}` (PUT, DELETE) → `PulseManageItemOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/sessions/{sessionId}` (DELETE) → `PulseManageItemSessionOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/deadline` (PUT) → `PulseManageItemDeadlineOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/sessions/{sessionId}/expire` (PUT) → `PulseManageItemSessionExpireOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/close` (PUT) → `PulseManageItemCloseOptionsMethod` ✅
-  - `/api/session/{sessionId}/summary` (PATCH) → `PulseSessionSummaryOptionsMethod` ✅
-  - `/api/session/{sessionId}/transcript` (DELETE) → `PulseSessionTranscriptOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/document` (DELETE) → `PulseManageItemDocumentOptionsMethod` ✅
-  - `/api/manage/items/{itemId}/pulse-check/decisions` (PUT) → `PulseManageItemPCDecisionsOptionsMethod` ✅
-  - `/api/admin/tenants` → `PulseAdminTenantOptionsMethod` ✅
-  - `/api/webhooks/stripe` → `PulseWebhooksStripeOptionsMethod` ✅
-  - `/api/manage/checkout` → `PulseManageCheckoutOptionsMethod` ✅
-
-### FINDING CORS-3: No missing OPTIONS methods detected
-- **Severity:** N/A (positive finding)
-- **Description:** Every API Gateway resource that accepts PUT, PATCH, or DELETE has either an explicit OPTIONS method or is covered by the `{proxy+}` catch-all. CORS preflight coverage is complete.
+### F-13 — useItemForm: Cache update without rollback
+- **Severity:** LOW
+- **File:** `apps/admin-ui/src/hooks/useItemForm.ts` (lines 486, 518)
+- **Description:** `queryClient.setQueryData(['item', targetItemId], { data: refreshed })` is called after a successful GET response (polling for document status). This is a cache update from a fresh server response, not an optimistic mutation. No rollback needed.
+- **Verdict:** ✅ No issue.
 
 ---
 
-## 6. Prioritized Remediation Plan
+## 4. CORS Preflight Coverage
 
-### Immediate (CRITICAL)
-1. **RC-1:** Add `ConditionExpression: '#status IN (:draft, :active)'` to `closeItem` UpdateItemCommand
-2. **RC-2:** Add `ConditionExpression: '#status = :active'` to `closeExpiredItems` item status update
+### Methods requiring OPTIONS preflight (PATCH, PUT, DELETE):
 
-### High Priority
-3. **RC-3:** Add `ConditionExpression: '#status = :draft'` to `inviteReviewer` draft→active transition (match `createSelfSession` pattern)
-4. **RC-4:** Add `ConditionExpression: '#status = :draft'` to `createPublicSession` draft→active transition
-5. **ST-1:** Decide if `revised → closed` is valid. If not, add guard in `closeItem`
+| Resource | Method | OPTIONS Present | Verdict |
+|----------|--------|----------------|---------|
+| PulseManageSettingsResource | PUT (line 2853) | ✅ (line 2866) | ✅ |
+| PulseManageAccountResource | DELETE (line 2900) | ✅ (line 2913) | ✅ |
+| PulseManageItemResource | PUT (line 3747) | ✅ (line 3773) | ✅ |
+| PulseManageItemResource | DELETE (line 3760) | ✅ (line 3773) | ✅ |
+| PulseManageItemSessionResource | DELETE (line 5020) | ✅ (line 5033) | ✅ |
+| PulseManageItemDeadlineResource | PUT (line 5067) | ✅ (line 5080) | ✅ |
+| PulseManageItemSessionExpireResource | PUT (line 5156) | ✅ (line 5169) | ✅ |
+| PulseManageItemCloseResource | PUT (line 5203) | ✅ (line 5216) | ✅ |
+| PulseSessionSummaryResource | PATCH (line 6479) | ✅ (line 6492) | ✅ |
+| PulseSessionTranscriptResource | DELETE (line 6526) | ✅ (line 6539) | ✅ |
+| PulseManageItemDocumentResource | DELETE (line 6622) | ✅ (line 6635) | ✅ |
+| PulseManageItemPulseCheckDecisionsResource | PUT (line 7501) | ✅ (line 7514) | ✅ |
+| PulseAdminTenantIdResource | PATCH (line 8733) | ✅ (line 8746) | ✅ |
 
-### Medium Priority
-6. **GC-8:** Add `ConditionExpression` to `extendDeadline` UpdateItemCommand
-7. **RC-5:** Add status guard to `analyzeDocument` UpdateItemCommand
-8. **FE-2:** Fix `InviteModal` cancel optimistic update to use `'cancelled'` status
-
-### Low Priority / Accepted Risk
-9. **RC-6:** Document eventual consistency risk on GSI queries as accepted
-10. **RC-7:** Consider DLQ configuration for async Lambda invocations
-11. **GC-9:** Optional status guard on `sendReminder` lastReminderSent update
+**CORS Verdict: All PATCH/PUT/DELETE endpoints have corresponding OPTIONS methods. No issues found.**
 
 ---
 
-## Well-Implemented Patterns (Commendations)
+## 5. Guard Clauses on Closed/Revised Items
 
-The codebase demonstrates strong defensive patterns in several areas:
+| Lambda | Operation | Guard Against Closed/Revised | Verdict |
+|--------|-----------|------------------------------|---------|
+| inviteReviewer | Create session | `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409 | ✅ |
+| createPublicSession | Create session | `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409 | ✅ |
+| createSelfSession | Create session | `if (itemStatus !== 'draft' && itemStatus !== 'active')` → 409 | ✅ |
+| updateItem | Update item fields | `if (currentItem.status !== 'draft')` → 409 | ⚠️ Read-only guard (F-01) |
+| extendDeadline | Extend closeDate | Read check + `ConditionExpression: '#status IN (:draft, :active)'` | ✅ |
+| getUploadUrl | Upload document | `if (itemStatus !== 'draft')` → 409 | ⚠️ Read-only guard (F-07) |
+| closeItem | Close item | `ConditionExpression: '#status IN (:draft, :active)'` | ✅ |
+| generateRevision | Generate revision | Checks pulse check status only, not item status | ⚠️ See F-08 |
+| runPulseCheck | Run pulse check | `if (itemStatus !== 'closed')` → 409 | ✅ |
+| analyzeDocument | Write sectionMap | `ConditionExpression: '#status IN (:draft, :active)'` | ✅ |
 
-1. **Chat Lambda streaming lock** (`streamingLock` with `ConditionExpression`) — prevents concurrent Bedrock calls for the same session
-2. **Chat Lambda session status guard** (`ConditionExpression: '#status IN (:not_started, :in_progress)'`) — prevents overwriting terminal states
-3. **cancelSession** — proper `ConditionExpression` preventing cancellation of terminal sessions
-4. **expireSessions** — comprehensive terminal state exclusion in `ConditionExpression`
-5. **processRevision** — correct `ConditionExpression: '#status = :closed'` for closed→revised transition
-6. **createSelfSession** — gold standard draft→active transition with `ConditionExpression` and `ConditionalCheckFailedException` handling
-7. **updateItemCoverageMap** — optimistic locking with retry loop for concurrent coverage updates
-8. **Frontend patterns** — cache updates happen after API confirmation, not before. Polling patterns for async operations are well-implemented.
-9. **CORS coverage** — complete OPTIONS method coverage across all API Gateway resources
-10. **Tenant registration** — `ConditionExpression: 'attribute_not_exists(tenantId)'` prevents duplicate tenant creation
+---
+
+## 6. Recently Modified Files — Targeted Audit
+
+### `cancelSession/index.mjs` — Counter decrement after cancel
+- **Session status guard:** ✅ `ConditionExpression: '#status IN (:not_started, :in_progress)'`
+- **Counter decrement:** ⚠️ `decrementCounter` has read-then-write race (F-04)
+- **sessionCount decrement:** ⚠️ No floor guard (F-05)
+- **Overall:** Session transition is safe. Counter operations have minor race windows.
+
+### `expireSessions/index.mjs` — Counter decrement per expired session
+- **Session status guard:** ✅ `ConditionExpression: '#status <> :completed AND #status <> :cancelled AND #status <> :discarded'`
+- **Counter decrement:** ⚠️ Same `decrementCounter` race (F-04). In a batch expire of many sessions for the same tenant, multiple decrements could race.
+- **Overall:** Session transition is safe. Counter drift risk scales with batch size.
+
+### `expirePublicSession/index.mjs` — Counter decrement
+- **Session status guard:** 🔴 **No ConditionExpression** (F-02)
+- **Counter decrement:** ⚠️ Same `decrementCounter` race (F-04)
+- **Overall:** Critical — terminal state can be overwritten.
+
+### `deleteItem/index.mjs` — Cascading counter decrements
+- **Item deletion:** ✅ Uses `DeleteItemCommand` (not a status transition)
+- **Counter decrements:** Uses `computeSessionDecrements` to exclude cancelled/discarded sessions — correct logic. But `decrementCounter` with `amount > 1` still has the read-then-write race (F-04).
+- **Overall:** Logic is sound. Counter race is the same shared issue.
+
+### `processRevision/index.mjs` — Async invocation of sendRevisionReady
+- **Revision status guard:** ✅ `ConditionExpression: '#status = :generating'`
+- **Item status guard:** ✅ `ConditionExpression: '#status = :closed'`
+- **sendRevisionReady invocation:** ✅ Wrapped in try/catch, logs warning on failure
+- **Feature flag check:** ✅ Checks `deliveryMode` before invoking
+- **Overall:** Well-guarded. No issues.
+
+### `generateRevision/index.mjs` — deliveryMode in response
+- **Item status guard:** ⚠️ Missing (F-08)
+- **Async invocation guard:** ✅ Marks revision as `failed` on invocation failure
+- **deliveryMode:** ✅ Correctly resolved from SYSTEM record
+- **Overall:** Missing item status check wastes Bedrock tokens on revised items.
+
+### `getItems/index.mjs` — hasCompletedRevision query
+- **Implementation:** ✅ Queries `REVISIONS_TABLE` itemId-index GSI with `Limit: 1`
+- **Error handling:** ✅ Returns `false` on failure (fail-open)
+- **Performance:** ✅ Only queries for closed/revised items
+- **Overall:** Clean implementation. No issues.
+
+---
+
+## Priority Fix Order
+
+1. **F-02** (CRITICAL) — `expirePublicSession` missing ConditionExpression → can overwrite completed sessions
+2. **F-01** (HIGH) — `updateItem` missing ConditionExpression → TOCTOU race on draft check
+3. **F-03** (HIGH) — `deleteSessionTranscript` missing ConditionExpression → can overwrite completed sessions
+4. **F-07** (HIGH) — `getUploadUrl` missing ConditionExpression → can write to active items
+5. **F-04** (MEDIUM) — `decrementCounter` read-then-write race → counter drift
+6. **F-11** (MEDIUM) — `runPulseCheck` async invocation not guarded → orphaned generating records
+7. **F-08** (MEDIUM) — `generateRevision` missing item status check → wasted Bedrock costs
+8. **F-05** (MEDIUM) — `cancelSession` sessionCount decrement without floor → negative counts

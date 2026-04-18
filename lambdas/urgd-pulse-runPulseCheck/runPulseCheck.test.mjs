@@ -17,7 +17,8 @@ vi.mock('@aws-sdk/client-dynamodb', () => {
   class QueryCommand { constructor(input) { this.input = input; this._type = 'Query' } }
   class PutItemCommand { constructor(input) { this.input = input; this._type = 'PutItem' } }
   class GetItemCommand { constructor(input) { this.input = input; this._type = 'GetItem' } }
-  return { DynamoDBClient, QueryCommand, PutItemCommand, GetItemCommand }
+  class UpdateItemCommand { constructor(input) { this.input = input; this._type = 'UpdateItem' } }
+  return { DynamoDBClient, QueryCommand, PutItemCommand, GetItemCommand, UpdateItemCommand }
 })
 
 vi.mock('@aws-sdk/client-lambda', () => {
@@ -156,6 +157,20 @@ describe('urgd-pulse-runPulseCheck', () => {
       sendSpy.mockRejectedValue(new Error('DynamoDB error'))
       const result = await handler(makeEvent('tenant-1', 'item-1'))
       expect(result.statusCode).toBe(500)
+    })
+
+    it('returns 500 and marks pulse check failed when Lambda invocation fails', async () => {
+      mockStandardFlow(COMPLETED_SESSIONS)
+      lambdaSendSpy.mockRejectedValueOnce(new Error('Lambda invocation failed'))
+
+      const result = await handler(makeEvent('tenant-1', 'item-1'))
+      expect(result.statusCode).toBe(500)
+
+      // Verify UpdateItem was called to mark pulse check as failed
+      const updateCall = sendSpy.mock.calls.find(([cmd]) => cmd._type === 'UpdateItem')
+      expect(updateCall).toBeDefined()
+      expect(updateCall[0].input.TableName).toBe('urgd-pulse-pulseChecks-dev')
+      expect(updateCall[0].input.ExpressionAttributeValues[':failed'].S).toBe('failed')
     })
   })
 })

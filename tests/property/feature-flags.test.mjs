@@ -99,8 +99,13 @@ describe('Property P3: Resolution Order Determinism', () => {
   })
 
   it('tenant override wins over tier default', () => {
+    // Filter out string-valued flags (e.g. REVISION_DELIVERY_MODE) — those are
+    // resolved via resolveDeliveryMode(), not resolveFeature()
+    const boolOrNumFlags = VALID_FLAGS.filter(
+      (f) => typeof TIERS.free[f] === 'boolean' || typeof TIERS.free[f] === 'number',
+    )
     fc.assert(
-      fc.property(fc.constantFrom(...VALID_FLAGS), (flag) => {
+      fc.property(fc.constantFrom(...boolOrNumFlags), (flag) => {
         // Use free tier — pick an override value that differs from the free default
         const freeDefault = TIERS.free[flag]
         let overrideValue
@@ -145,8 +150,13 @@ describe('Property P3: Resolution Order Determinism', () => {
   })
 
   it('boolean true override → allowed, boolean false → tier_limit, number → allowed with limit', () => {
+    // Filter out string-valued flags (e.g. REVISION_DELIVERY_MODE) — those are
+    // resolved via resolveDeliveryMode(), not resolveFeature()
+    const boolOrNumFlags = VALID_FLAGS.filter(
+      (f) => typeof TIERS.free[f] === 'boolean' || typeof TIERS.free[f] === 'number',
+    )
     fc.assert(
-      fc.property(fc.constantFrom(...VALID_FLAGS), (flag) => {
+      fc.property(fc.constantFrom(...boolOrNumFlags), (flag) => {
         const base = { tier: 'free', serviceFlags: {} }
 
         // boolean true → allowed

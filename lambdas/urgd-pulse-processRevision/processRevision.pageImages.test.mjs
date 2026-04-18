@@ -8,11 +8,14 @@ vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
 vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
 vi.stubEnv('AWS_REGION', 'us-west-2')
+vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
+vi.stubEnv('SEND_REVISION_READY_FUNCTION_NAME', 'urgd-pulse-sendRevisionReady-dev')
 
 const dynamoSendSpy = vi.fn()
 const s3SendSpy = vi.fn()
 const bedrockSendSpy = vi.fn()
 const cwSendSpy = vi.fn()
+const lambdaSendSpy = vi.fn()
 
 vi.mock('@aws-sdk/client-dynamodb', () => {
   class DynamoDBClient { send(...args) { return dynamoSendSpy(...args) } }
@@ -40,9 +43,25 @@ vi.mock('@aws-sdk/client-cloudwatch', () => {
   return { CloudWatchClient, PutMetricDataCommand }
 })
 
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send(...args) { return lambdaSendSpy(...args) } }
+  class InvokeCommand { constructor(input) { this.input = input; this.name = 'InvokeCommand' } }
+  return { LambdaClient, InvokeCommand }
+})
+
 vi.mock('./shared/utils.mjs', () => ({
   log: vi.fn(),
   requireEnv: vi.fn(),
+  unmarshalFeatures: vi.fn((m) => {
+    if (!m) return {}
+    const result = {}
+    for (const [key, val] of Object.entries(m)) {
+      if ('S' in val) result[key] = val.S
+      else if ('N' in val) result[key] = Number(val.N)
+      else if ('BOOL' in val) result[key] = val.BOOL
+    }
+    return result
+  }),
 }))
 
 const { handler } = await import('./index.mjs')
@@ -139,6 +158,12 @@ function mockHappyPathWithPages(pageCount) {
   dynamoSendSpy.mockResolvedValueOnce({})
   // DynamoDB: UpdateItem item → revised
   dynamoSendSpy.mockResolvedValueOnce({})
+  // DynamoDB: GetItem SYSTEM record (for delivery mode)
+  dynamoSendSpy.mockResolvedValueOnce({
+    Item: { tenantId: { S: 'SYSTEM' }, features: { M: { REVISION_DELIVERY_MODE: { S: 'async' } } } },
+  })
+  // Lambda: sendRevisionReady invocation
+  lambdaSendSpy.mockResolvedValueOnce({})
 }
 
 // ── Tests ──
@@ -149,6 +174,7 @@ describe('processRevision — page image attachment', () => {
     s3SendSpy.mockReset()
     bedrockSendSpy.mockReset()
     cwSendSpy.mockReset()
+    lambdaSendSpy.mockReset()
     cwSendSpy.mockResolvedValue({})
   })
 
@@ -187,6 +213,12 @@ describe('processRevision — page image attachment', () => {
     dynamoSendSpy.mockResolvedValueOnce({})
     // DynamoDB: UpdateItem item → revised
     dynamoSendSpy.mockResolvedValueOnce({})
+    // DynamoDB: GetItem SYSTEM record (for delivery mode)
+    dynamoSendSpy.mockResolvedValueOnce({
+      Item: { tenantId: { S: 'SYSTEM' }, features: { M: { REVISION_DELIVERY_MODE: { S: 'async' } } } },
+    })
+    // Lambda: sendRevisionReady invocation
+    lambdaSendSpy.mockResolvedValueOnce({})
 
     await handler(makeEvent())
 
@@ -217,6 +249,12 @@ describe('processRevision — page image attachment', () => {
     dynamoSendSpy.mockResolvedValueOnce({})
     // DynamoDB: UpdateItem item → revised
     dynamoSendSpy.mockResolvedValueOnce({})
+    // DynamoDB: GetItem SYSTEM record (for delivery mode)
+    dynamoSendSpy.mockResolvedValueOnce({
+      Item: { tenantId: { S: 'SYSTEM' }, features: { M: { REVISION_DELIVERY_MODE: { S: 'async' } } } },
+    })
+    // Lambda: sendRevisionReady invocation
+    lambdaSendSpy.mockResolvedValueOnce({})
 
     await handler(makeEvent())
 

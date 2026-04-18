@@ -6,6 +6,7 @@ import { useAuthedMutation } from '../hooks/useAuthedMutation';
 import { labels } from '../config/labels-registry';
 import { downloadRevisionPdf } from '../utils/downloadPdf';
 import PulseCheckOverlay from '../components/PulseCheckOverlay';
+import AnnotatedChangeList, { isAnnotatedChangeList } from '../components/AnnotatedChangeList';
 import styles from './ItemRevision.module.css';
 
 // ─── Revision overlay phases ──────────────────────────────────────────────────
@@ -99,6 +100,7 @@ export default function ItemRevision() {
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayDone, setOverlayDone] = useState(false);
   const [overlayError, setOverlayError] = useState('');
+  const [asyncConfirmation, setAsyncConfirmation] = useState(false);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [originalContent, setOriginalContent] = useState<string | null>(null);
   const [revisionContent, setRevisionContent] = useState<string | null>(null);
@@ -142,17 +144,27 @@ export default function ItemRevision() {
     ? revisions.find(r => r.revisionId === selectedRevisionId) ?? latestRevision
     : latestRevision;
 
-  const generateMutation = useAuthedMutation<{ data: { revisionId: string; status: string } }, undefined>(
+  const generateMutation = useAuthedMutation<{ data: { revisionId: string; status: string; deliveryMode?: string } }, undefined>(
     `/api/manage/items/${itemId}/revise`,
     'POST',
     {
-      onSuccess: () => {
-        setGenerating(true);
+      onSuccess: (response) => {
         setGenerateError('');
-        setOverlayVisible(true);
-        setOverlayDone(false);
-        setOverlayError('');
-        startPolling();
+        setAsyncConfirmation(false);
+
+        if (response.data.deliveryMode === 'async') {
+          // Async mode: show confirmation card, no polling, no overlay
+          setAsyncConfirmation(true);
+          setGenerating(false);
+          setOverlayVisible(false);
+        } else {
+          // Sync mode (or absent for backward compat): preserve current polling + overlay behavior
+          setGenerating(true);
+          setOverlayVisible(true);
+          setOverlayDone(false);
+          setOverlayError('');
+          startPolling();
+        }
       },
       onError: (err) => {
         const status = (err as Error & { status?: number }).status;
@@ -304,8 +316,8 @@ export default function ItemRevision() {
         )}
       </div>
 
-      {/* Generating overlay */}
-      {overlayVisible && (
+      {/* Generating overlay (hidden in async mode) */}
+      {overlayVisible && !asyncConfirmation && (
         <PulseCheckOverlay
           itemName={itemName}
           done={overlayDone}
@@ -338,8 +350,20 @@ export default function ItemRevision() {
         </div>
       )}
 
+      {/* Async confirmation card */}
+      {asyncConfirmation && (
+        <div className={styles.asyncConfirmationCard} aria-live="polite">
+          <p className={styles.asyncConfirmationMessage}>
+            {labels.revision.asyncConfirmation}
+          </p>
+          <Link to="/admin/items" className={styles.asyncConfirmationLink}>
+            {labels.revision.backToItems}
+          </Link>
+        </div>
+      )}
+
       {/* Empty state — no revisions yet */}
-      {!generating && !hasRevisions && !generateError && (
+      {!generating && !hasRevisions && !generateError && !asyncConfirmation && (
         hasPulseCheck ? (
           // Action-forward empty state
           <div className={styles.emptyActionState}>
@@ -410,6 +434,8 @@ export default function ItemRevision() {
 
           {contentLoading ? (
             <p className={styles.loadingText}>{labels.revision.loading}</p>
+          ) : isAnnotatedChangeList(revisionContent ?? '') ? (
+            <AnnotatedChangeList content={revisionContent ?? ''} />
           ) : (
             <>
               {/* Desktop: side-by-side */}

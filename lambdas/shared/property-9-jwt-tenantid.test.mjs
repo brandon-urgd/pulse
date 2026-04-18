@@ -11,6 +11,7 @@ import * as fc from 'fast-check'
 vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
 vi.stubEnv('ITEMS_TABLE', 'urgd-pulse-items-dev')
 vi.stubEnv('SESSIONS_TABLE', 'urgd-pulse-sessions-dev')
+vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
 vi.stubEnv('CORS_ALLOWED_ORIGINS', 'https://pulse.urgdstudios.com')
 vi.stubEnv('AWS_REGION', 'us-west-2')
 

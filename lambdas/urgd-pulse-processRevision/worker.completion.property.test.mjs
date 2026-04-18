@@ -17,6 +17,8 @@ vi.stubEnv('REVISIONS_TABLE', 'urgd-pulse-revisions-dev')
 vi.stubEnv('DATA_BUCKET', 'urgd-pulse-data-dev')
 vi.stubEnv('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-6')
 vi.stubEnv('AWS_REGION', 'us-west-2')
+vi.stubEnv('TENANTS_TABLE', 'urgd-pulse-tenants-dev')
+vi.stubEnv('SEND_REVISION_READY_FUNCTION_NAME', 'urgd-pulse-sendRevisionReady-dev')
 
 const dynamoSendSpy = vi.fn()
 const s3SendSpy = vi.fn()
@@ -47,6 +49,12 @@ vi.mock('@aws-sdk/client-cloudwatch', () => {
   class CloudWatchClient { send(...args) { return cwSendSpy(...args) } }
   class PutMetricDataCommand { constructor(input) { this.input = input; this.name = 'PutMetricDataCommand' } }
   return { CloudWatchClient, PutMetricDataCommand }
+})
+
+vi.mock('@aws-sdk/client-lambda', () => {
+  class LambdaClient { send() { return Promise.resolve({}) } }
+  class InvokeCommand { constructor(input) { this.input = input; this.name = 'InvokeCommand' } }
+  return { LambdaClient, InvokeCommand }
 })
 
 const { handler } = await import('./index.mjs')
@@ -127,6 +135,10 @@ describe('Property 3: Worker completion transitions revision to complete with st
           dynamoSendSpy.mockResolvedValueOnce({})
           // DynamoDB: UpdateItem item → revised
           dynamoSendSpy.mockResolvedValueOnce({})
+          // DynamoDB: GetItem SYSTEM record (for delivery mode)
+          dynamoSendSpy.mockResolvedValueOnce({
+            Item: { tenantId: { S: 'SYSTEM' }, features: { M: { REVISION_DELIVERY_MODE: { S: 'async' } } } },
+          })
 
           // Bedrock response
           bedrockSendSpy.mockResolvedValueOnce({

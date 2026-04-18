@@ -130,8 +130,8 @@ describe('register handler', () => {
     expect(mockCognitoSend).toHaveBeenCalledTimes(1)
   })
 
-  // Requirement 4.1, 4.5 — seeded features match getTierDefaults('free') with all 17 flags
-  it('seeds new tenant with all 17 flags from getTierDefaults("free")', async () => {
+  // Requirement 4.1, 4.5 — seeded features match getTierDefaults('free') with all 18 flags
+  it('seeds new tenant with all 18 flags from getTierDefaults("free")', async () => {
     mockSend.mockResolvedValueOnce(systemActive())
     mockCognitoSend.mockResolvedValueOnce(cognitoSuccess())
     mockSend.mockResolvedValueOnce({})
@@ -145,9 +145,9 @@ describe('register handler', () => {
     const defaults = getTierDefaults('free')
     const defaultKeys = Object.keys(defaults)
 
-    // All 17 flags must be present
-    expect(defaultKeys.length).toBe(17)
-    expect(Object.keys(featuresMap).length).toBe(17)
+    // All 18 flags must be present
+    expect(defaultKeys.length).toBe(18)
+    expect(Object.keys(featuresMap).length).toBe(18)
 
     for (const key of defaultKeys) {
       expect(featuresMap).toHaveProperty(key)
@@ -156,6 +156,8 @@ describe('register handler', () => {
         expect(featuresMap[key]).toEqual({ BOOL: val })
       } else if (typeof val === 'number') {
         expect(featuresMap[key]).toEqual({ N: String(val) })
+      } else if (typeof val === 'string') {
+        expect(featuresMap[key]).toEqual({ S: val })
       }
     }
   })

@@ -72,3 +72,20 @@ export function resolveAllFeatures(tenantRecord, systemRecord = null) {
   }
   return result
 }
+
+/**
+ * Resolves the REVISION_DELIVERY_MODE flag from the SYSTEM record.
+ * Returns 'async' (default) or 'sync'.
+ *
+ * This is intentionally separate from resolveFeature() because that function
+ * returns { allowed, reason, limit } for boolean/number flags.
+ * REVISION_DELIVERY_MODE is a string enum — it reads from the SYSTEM record's
+ * features map and defaults to 'async' for any missing or unrecognized value.
+ *
+ * @param {object|null} systemRecord - Unmarshalled SYSTEM record
+ * @returns {'async' | 'sync'}
+ */
+export function resolveDeliveryMode(systemRecord) {
+  const raw = systemRecord?.features?.REVISION_DELIVERY_MODE
+  return raw === 'sync' ? 'sync' : 'async'
+}
