@@ -263,12 +263,12 @@ Revised Document:`
       TableName: process.env.REVISIONS_TABLE,
       Key: { tenantId: { S: tenantId }, revisionId: { S: revisionId } },
       UpdateExpression: 'SET #status = :complete, completedAt = :completedAt',
-      ConditionExpression: '#status = :processing',
+      ConditionExpression: '#status = :generating',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':complete': { S: 'complete' },
         ':completedAt': { S: completedAt },
-        ':processing': { S: 'processing' },
+        ':generating': { S: 'generating' },
       },
     }))
 
