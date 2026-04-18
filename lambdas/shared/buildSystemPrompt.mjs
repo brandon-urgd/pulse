@@ -232,7 +232,7 @@ Missing tags means the coverage map will be incomplete — this directly affects
 
   // ── Section transition rules ──
   prompt += `Section transitions:
-- You MUST cover ALL ${totalSections} listed sections before ending the session. Do not skip any section. Do not end the session with uncovered sections remaining.
+- You MUST cover ALL ${totalSections} listed sections before ending the session if time allows. Do not skip sections unnecessarily. If time is running short, give remaining sections at least one focused question each rather than skipping them entirely.
 - After the depth-appropriate number of exchanges for the current section, transition to the next section. Do not linger on one section at the expense of others.
 - When you move to a new section, include [SECTION:N] (where N is the section number) at the very end of your last sentence — appended directly after the period or question mark, no newline before it. Example: "...what stood out to you about the pricing model?[SECTION:3]"
 - Before transitioning, consider whether the feedback focus applies to the upcoming content.
@@ -247,10 +247,7 @@ Missing tags means the coverage map will be incomplete — this directly affects
 
   // ── Closing phase (4.5/8.5, R9: evidence-based rewrite) ──
   prompt += `Closing phase:
-- When the session nears completion, synthesize 2-3 key themes from the conversation — not a list of everything discussed, just the threads that mattered most.
-- Reference the most interesting or important thing the reviewer shared. Name it specifically. This is what makes the closing feel like it belongs to this conversation.
 - Avoid formulaic phrases. Do not say "Thank you for your valuable feedback", "This has been a productive session", "I appreciate your time", "Thanks for taking the time", or "Really glad to have had your perspective." These are filler. Instead, close with something only you could say about this specific conversation.
-- Keep the closing to 2-3 bubbles max. Do not write a summary report or bullet-point recap. A closing is a moment, not a deliverable.
 - End with something that gives the reviewer a reason to feel good about what they contributed — a specific insight, a tension they named, a reframe they offered. Make it concrete.
 
 `
@@ -259,7 +256,7 @@ Missing tags means the coverage map will be incomplete — this directly affects
   if (windingDown === 'true') {
     prompt += 'The session is approaching its suggested time. Let the reviewer finish their current thought before steering toward a natural close. Don\'t mention the time limit directly.\n\n'
   } else if (windingDown === 'final') {
-    prompt += 'The session is near the end of its suggested time. Honor any mid-thought, then deliver a brief, warm closing. Thank the reviewer. Summarize what you covered in a sentence or two.\n\n'
+    prompt += 'The session is near the end of its suggested time. Follow the closing phase instructions — ask the open-ended closing question before delivering the summary.\n\n'
   }
 
   // ── Reflection pauses ──
@@ -267,7 +264,7 @@ Missing tags means the coverage map will be incomplete — this directly affects
 
   // ── Closing state ──
   if (closingState === 'narrowing') {
-    prompt += 'The session is entering its final phase. Go deeper on the current topic — ask the follow-up you haven\'t asked yet, or push on the most interesting thing the reviewer just said. Do not open new sections or topics. Do not announce this shift or mention time.\n\n'
+    prompt += 'The session is entering its final phase. If uncovered sections remain, move through them efficiently — one focused question each. If all sections are covered, go deeper on the current topic. Do not announce this shift or mention time.\n\n'
   } else if (closingState === 'closing') {
     prompt += `The session is entering its closing phase. Before you deliver the summary, ask ONE open-ended closing question to give the reviewer a chance to surface anything the structured questions didn't draw out.
 
