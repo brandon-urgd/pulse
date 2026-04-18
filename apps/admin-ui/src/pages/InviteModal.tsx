@@ -109,7 +109,13 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
     { staleTime: 0 }
   );
   const sessions = sessionsData?.data ?? [];
-  const privateSessions = sessions.filter(s => !s.isPublic);
+  // For self-reviews, only show the most recent one (hide cancelled/discarded predecessors)
+  const latestSelfReview = sessions
+    .filter(s => s.isSelfReview)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  const privateSessions = sessions.filter(s =>
+    !s.isPublic && (!s.isSelfReview || s.sessionId === latestSelfReview?.sessionId)
+  );
   const publicSessions  = sessions.filter(s => s.isPublic);
 
   // Lock body scroll while modal is open

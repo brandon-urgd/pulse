@@ -8,7 +8,7 @@ Pulse pairs human reviewers with an AI conversation agent to extract structured,
 
 **Frontend:** Two React 19 + Vite + TypeScript apps — `admin-ui` (tenant-facing, 13 pages, 17 components) and `session-ui` (reviewer-facing, 22 pages/components). S3 + CloudFront hosting, WAF-protected via Shield, Cognito-authenticated. React Query, Zod validation, CSS modules with design tokens.
 
-**Backend:** 61 Lambda functions (Node.js 22.x, ES modules), API Gateway REST API (51 routes), dual authorizer system (Cognito JWT for admin routes, session token for reviewer routes). Bedrock Claude for AI conversation, Pulse Check synthesis, and document revision.
+**Backend:** 63 Lambda functions (Node.js 22.x, ES modules), API Gateway REST API (51 routes), dual authorizer system (Cognito JWT for admin routes, session token for reviewer routes). Bedrock Claude for AI conversation, Pulse Check synthesis, and document revision.
 
 **Data:** 7 DynamoDB tables (PAY_PER_REQUEST, PITR enabled), S3 for document/image storage with Shield quarantine scanning.
 
@@ -28,11 +28,11 @@ pulse/
 │   └── pulse-stack.yaml               # All infrastructure (9,400 lines)
 ├── lambdas/
 │   ├── shared/                        # utils.mjs, features.mjs, tiers.mjs
-│   └── urgd-pulse-{function}/         # 61 individual Lambda functions
+│   └── urgd-pulse-{function}/         # 63 individual Lambda functions
 ├── scripts/
 │   ├── build-lambdas.sh               # Package and upload Lambda ZIPs
 │   ├── deploy-frontend.sh             # S3 sync with cache headers
-│   ├── smoke.sh                       # Post-deploy smoke tests (61 Lambda coverage)
+│   ├── smoke.sh                       # Post-deploy smoke tests (63 Lambda coverage)
 │   └── register-with-shield.py        # Shield WAF integration
 └── tests/
     └── property/                      # Property-based tests (fast-check)
@@ -50,13 +50,13 @@ pulse/
 - Session summaries, reports, and PDF export
 - Stripe billing integration with usage-based counters
 
-## Lambda Functions (61)
+## Lambda Functions (63)
 
 | Category | Functions |
 |---|---|
 | Auth | cognitoAuth, sessionAuth, register, createTenant, validateSession, acceptConfidentiality |
 | Items | getItems, createItem, getItem, updateItem, deleteItem, closeItem |
-| Documents | getUploadUrl, extractText, getDocumentUrl, removeDocument, analyzeDocument |
+| Documents | getUploadUrl, extractText, getDocumentUrl, removeDocument, analyzeDocument, renderPages |
 | Sessions | inviteReviewer, getItemSessions, cancelSession, resendInvite, extendDeadline, sendReminder, expireSessions, createPublicSession, getPublicSessionQr, expirePublicSession, previewSession, createSelfSession |
 | Conversation | chat, getSessionState, getSessionSummary, generateSessionSummary, deleteSessionTranscript, getSessionFile, emailSessionSummary, submitReport |
 | Pulse Check | runPulseCheck, processPulseCheck, getPulseCheck, savePCDecisions, sendPulseCheckReady |
@@ -66,6 +66,7 @@ pulse/
 | Admin | getSettings, updateSettings, deleteAccount, adminTenants, publicConfig, usageReport |
 | Billing | stripeWebhook, createCheckoutSession |
 | Scheduling | closeExpiredItems, purgeTranscripts |
+| Cache | primeCacheWorker |
 | Security | health, bedrockHealth, shieldCallback |
 
 ## Development
@@ -80,7 +81,7 @@ npm run dev --workspace=apps/session-ui # Run session UI locally
 
 - Push to `main` → auto-deploys to dev
 - Manual dispatch → promote to staging or prod (requires "DEPLOY" confirmation for prod)
-- CI/CD: GitHub Actions with OIDC, Semgrep + Checkov security scanning, smoke tests covering all 61 Lambdas
+- CI/CD: GitHub Actions with OIDC, Semgrep + Checkov security scanning, smoke tests covering all 63 Lambdas
 
 ### Environment URLs
 
@@ -112,6 +113,15 @@ Session start redesign + platform hardening.
 - **Security hardening** — input validation on template greeting writes, path traversal guard in renderPages, ConditionExpression guards on session status transitions
 - **PreGenerate retirement** — Lambda invocations removed from AcceptConfidentiality and CreateSelfSession; IAM permissions and env vars cleaned up from CloudFormation. Lambda code retained for potential future use
 - **75 new tests** — 7 property-based tests (fast-check), 8 unit test suites, 1 frontend test suite covering the full two-phase flow
+- **Drop page images from Turn 3** — page images removed from default document injection behind `INCLUDE_PAGE_IMAGES_ON_INJECTION` feature flag (default: false). Reduces worst-case TTFT from ~43s to ~10s. Native PDF block provides document structure, layout, and text without vision encoder latency. One-click rollback via env var.
+- **TTFT instrumentation** — time-to-first-token measured and logged for all streaming responses. CloudWatch metric `TimeToFirstToken` published in `Pulse/Chat` namespace for latency monitoring.
+- **Phased cache priming** — Priming Worker warms Bedrock prompt cache at session entry. Cache prefix alignment maintained between priming and Turn 3 for both flag states.
+- **System prompt honesty guardrail** — when page images are excluded, the model accurately describes its capabilities and redirects photo/graphic questions to observable metadata (position, captions, alt text) without revealing technical details.
+- **State machine hardening** — ConditionExpression guards added to 6 DynamoDB write paths (closeItem, closeExpiredItems, inviteReviewer, createPublicSession, analyzeDocument, extendDeadline) preventing TOCTOU race conditions on item status transitions.
+- **CloudFormation test visibility** — 3 property tests renamed from .js to .mjs and added to vitest config, surfacing concurrency budget validation.
+- **Streaming paragraph fix** — fixed newline collapse in session-ui streaming where `\n\n` paragraph breaks were stripped by intermediate chunk processing.
+- **Self-review session display** — InviteModal now shows only the most recent self-review session, hiding cancelled predecessors from "start over" flow.
+- **Pulse DevTools MCP** — custom MCP server for dev/staging debugging (session lookup, conversation transcripts, CloudWatch log tailing, metrics) — no AWS console context-switching needed.
 
 ### v1.0 — March 2026
 

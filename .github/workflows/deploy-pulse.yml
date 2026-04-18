@@ -586,6 +586,16 @@ jobs:
           done
           echo "✅ All required outputs present"
 
+      - name: Enable termination protection (prod only)
+        if: env.ENVIRONMENT == 'prod'
+        run: |
+          set -euo pipefail
+          aws cloudformation update-termination-protection \
+            --enable-termination-protection \
+            --stack-name "$STACK_NAME" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Termination protection enabled on $STACK_NAME"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

@@ -30,7 +30,6 @@ function stripTags(
     .replace(TAG_SECTION, ' ')
     .replace(TAG_COMPLETE, '')
     .replace(/  +/g, ' ')
-    .replace(/\n\s*$/g, '')
 }
 
 /**
@@ -121,6 +120,9 @@ export async function consumeStream(
         onToken(stripped)
       }
       buffer = ''
+
+      // Trim trailing whitespace from the complete text
+      fullText = fullText.replace(/\n\s*$/g, '')
 
       // Check for session complete in the full raw stream
       // (the tag may have been in the buffer)

@@ -697,6 +697,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-tenants-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -726,6 +727,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-items-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -759,6 +761,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-sessions-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -825,6 +828,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-transcripts-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -858,6 +862,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-reports-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -902,6 +907,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-pulsechecks-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
@@ -935,6 +941,7 @@ Resources:
     Properties:
       TableName: !Sub 'urgd-pulse-revisions-${Environment}'
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
