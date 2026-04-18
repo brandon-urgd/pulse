@@ -10,7 +10,7 @@ import styles from './InviteModal.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired' | 'discarded';
+type SessionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired' | 'discarded' | 'cancelled';
 
 interface Session {
   sessionId: string;
@@ -57,6 +57,7 @@ function sessionStatusLabel(status: SessionStatus): string {
     case 'completed':    return labels.invitation.statusCompleted;
     case 'expired':      return labels.invitation.statusExpired;
     case 'discarded':    return labels.invitation.statusDiscarded;
+    case 'cancelled':   return labels.invitation.statusCancelled;
   }
 }
 
@@ -180,12 +181,12 @@ export default function InviteModal({ itemId, itemName, onClose, skipLabel, onSe
         undefined,
         navigate
       );
-      // Revert to not_started so the slot is visible and can be re-invited
       queryClient.setQueryData<{ data: Session[] }>(['sessions', itemId], (old) => ({
         data: (old?.data ?? []).map(s =>
-          s.sessionId === sessionId ? { ...s, status: 'not_started' as SessionStatus } : s
+          s.sessionId === sessionId ? { ...s, status: 'cancelled' as SessionStatus } : s
         ),
       }));
+      queryClient.invalidateQueries({ queryKey: ['sessions', itemId] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
     } catch {
       setCancelMessages(prev => ({ ...prev, [sessionId]: 'Failed to cancel. Try again.' }));

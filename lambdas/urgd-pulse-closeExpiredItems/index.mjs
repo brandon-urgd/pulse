@@ -121,17 +121,27 @@ async function closeItem(itemId, tenantId) {
 
   const now = new Date().toISOString()
 
-  // 2. Set item status → closed
-  await dynamo.send(new UpdateItemCommand({
-    TableName: process.env.ITEMS_TABLE,
-    Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-    UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
-    ExpressionAttributeNames: { '#status': 'status' },
-    ExpressionAttributeValues: {
-      ':closed': { S: 'closed' },
-      ':now': { S: now },
-    },
-  }))
+  // 2. Set item status → closed (atomic guard — only close if still active)
+  try {
+    await dynamo.send(new UpdateItemCommand({
+      TableName: process.env.ITEMS_TABLE,
+      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+      UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
+      ConditionExpression: '#status = :active',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':closed': { S: 'closed' },
+        ':now': { S: now },
+        ':active': { S: 'active' },
+      },
+    }))
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      log('warn', 'CloseExpiredItems: item status changed concurrently, skipping', { itemId, tenantId })
+      return
+    }
+    throw err
+  }
 
   log('info', 'CloseExpiredItems: item status set to closed', { itemId, tenantId })
 

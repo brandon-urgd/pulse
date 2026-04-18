@@ -160,19 +160,31 @@ Rules:
       return // Graceful fallback
     }
 
-    // 4. Write sectionMap to item record
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.ITEMS_TABLE,
-      Key: {
-        tenantId: { S: tenantId },
-        itemId: { S: itemId },
-      },
-      UpdateExpression: 'SET sectionMap = :sm, updatedAt = :now',
-      ExpressionAttributeValues: {
-        ':sm': marshalSectionMap(sectionMap),
-        ':now': { S: new Date().toISOString() },
-      },
-    }))
+    // 4. Write sectionMap to item record (only if item is still draft or active)
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          itemId: { S: itemId },
+        },
+        UpdateExpression: 'SET sectionMap = :sm, updatedAt = :now',
+        ConditionExpression: '#status IN (:draft, :active)',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':sm': marshalSectionMap(sectionMap),
+          ':now': { S: new Date().toISOString() },
+          ':draft': { S: 'draft' },
+          ':active': { S: 'active' },
+        },
+      }))
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        log('warn', 'AnalyzeDocument: item was closed/revised before analysis completed, skipping write', { tenantId, itemId })
+        return
+      }
+      throw err
+    }
 
     log('info', 'AnalyzeDocument: sectionMap written', {
       tenantId, itemId,

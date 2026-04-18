@@ -401,22 +401,33 @@ export const handler = async (event) => {
 
     // Update item: always increment sessionCount; on first invitation also set status → active
     if (isFirstInvitation) {
-      await dynamo.send(new UpdateItemCommand({
-        TableName: process.env.ITEMS_TABLE,
-        Key: {
-          tenantId: { S: tenantId },
-          itemId: { S: itemId },
-        },
-        UpdateExpression: 'SET #status = :active, lockedAt = :lockedAt, updatedAt = :now ADD sessionCount :n',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':active': { S: 'active' },
-          ':lockedAt': { S: now },
-          ':now': { S: now },
-          ':n': { N: String(createdSessions.length) },
-        },
-      }))
-      log('info', 'InviteReviewer: item status updated to active', { requestId, tenantId, itemId })
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.ITEMS_TABLE,
+          Key: {
+            tenantId: { S: tenantId },
+            itemId: { S: itemId },
+          },
+          UpdateExpression: 'SET #status = :active, lockedAt = :lockedAt, updatedAt = :now ADD sessionCount :n',
+          ConditionExpression: '#status = :draft',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':active': { S: 'active' },
+            ':draft': { S: 'draft' },
+            ':lockedAt': { S: now },
+            ':now': { S: now },
+            ':n': { N: String(createdSessions.length) },
+          },
+        }))
+        log('info', 'InviteReviewer: item status updated to active', { requestId, tenantId, itemId })
+      } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+          // Item was already activated by a concurrent request — safe to continue
+          log('info', 'InviteReviewer: item already activated concurrently', { requestId, tenantId, itemId })
+        } else {
+          throw err
+        }
+      }
     } else {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.ITEMS_TABLE,

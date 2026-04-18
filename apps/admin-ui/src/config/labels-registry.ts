@@ -204,6 +204,7 @@ export const labels = {
     statusCompleted: 'Completed',
     statusExpired: 'Expired',
     statusDiscarded: 'Not started',
+    statusCancelled: 'Cancelled',
     extendDeadlineTitle: 'Change deadline',
     extendDeadlineLabel: 'New close date',
     extendDeadlineButton: 'Save',

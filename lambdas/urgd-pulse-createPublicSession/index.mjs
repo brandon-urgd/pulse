@@ -260,17 +260,28 @@ export const handler = async (event) => {
     // Activate item if still draft + increment sessionCount
     const isFirstSession = itemStatus === 'draft'
     if (isFirstSession) {
-      await dynamo.send(new UpdateItemCommand({
-        TableName: process.env.ITEMS_TABLE,
-        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-        UpdateExpression: 'SET #status = :active, lockedAt = :now, updatedAt = :now ADD sessionCount :n',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':active': { S: 'active' },
-          ':now': { S: now },
-          ':n': { N: '1' },
-        },
-      }))
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: process.env.ITEMS_TABLE,
+          Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+          UpdateExpression: 'SET #status = :active, lockedAt = :now, updatedAt = :now ADD sessionCount :n',
+          ConditionExpression: '#status = :draft',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':active': { S: 'active' },
+            ':draft': { S: 'draft' },
+            ':now': { S: now },
+            ':n': { N: '1' },
+          },
+        }))
+      } catch (err) {
+        if (err.name === 'ConditionalCheckFailedException') {
+          // Item was already activated by a concurrent request — safe to continue
+          log('info', 'CreatePublicSession: item already activated concurrently', { requestId, tenantId, itemId })
+        } else {
+          throw err
+        }
+      }
     } else {
       await dynamo.send(new UpdateItemCommand({
         TableName: process.env.ITEMS_TABLE,

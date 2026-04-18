@@ -57,6 +57,7 @@ export default defineConfig({
       'scripts/__tests__/**/*.test.mjs',
       'apps/session-ui/src/__tests__/**/*.test.ts',
       'apps/session-ui/src/__tests__/**/*.test.tsx',
+      'cloudformation/__tests__/**/*.test.mjs',
     ],
     coverage: {
       provider: 'v8',

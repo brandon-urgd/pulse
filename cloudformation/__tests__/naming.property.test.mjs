@@ -6,7 +6,7 @@ import * as fc from 'fast-check';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { loadCfnTemplate } from './cfn-yaml.js';
+import { loadCfnTemplate } from './cfn-yaml.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatePath = join(__dirname, '..', 'pulse-stack.yaml');

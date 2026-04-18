@@ -49,7 +49,7 @@ const revisionRecordArb = fc.record({
   revisionId: fc.uuid(),
   itemId: fc.uuid(),
   status: statusArb,
-  createdAt: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') }).map(d => d.toISOString()),
+  createdAt: fc.integer({ min: new Date('2020-01-01').getTime(), max: new Date('2030-01-01').getTime() }).map(ts => new Date(ts).toISOString()),
   decisionsApplied: fc.integer({ min: 0, max: 100 }),
 }).chain(record =>
   record.status === 'complete'

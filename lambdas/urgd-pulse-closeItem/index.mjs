@@ -38,17 +38,28 @@ export const handler = async (event) => {
 
     const now = new Date().toISOString()
 
-    // Set item status → closed
-    await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.ITEMS_TABLE,
-      Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
-      UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: {
-        ':closed': { S: 'closed' },
-        ':now': { S: now },
-      },
-    }))
+    // Set item status → closed (atomic guard against concurrent state changes)
+    try {
+      await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: { tenantId: { S: tenantId }, itemId: { S: itemId } },
+        UpdateExpression: 'SET #status = :closed, closedAt = :now, updatedAt = :now',
+        ConditionExpression: '#status IN (:draft, :active)',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':closed': { S: 'closed' },
+          ':now': { S: now },
+          ':draft': { S: 'draft' },
+          ':active': { S: 'active' },
+        },
+      }))
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        log('warn', 'CloseItem: item status has changed, cannot close', { requestId, tenantId, itemId })
+        return errorResponse(409, 'Item status has changed, cannot close', {}, origin)
+      }
+      throw err
+    }
 
     // Batch-expire all not_started sessions for this item
     // in_progress sessions are left to finish naturally; the pulse check re-run banner

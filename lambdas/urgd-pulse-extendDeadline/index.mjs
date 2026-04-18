@@ -98,23 +98,36 @@ export const handler = async (event) => {
 
     const nowIso = now.toISOString()
 
-    const updateResult = await dynamo.send(new UpdateItemCommand({
-      TableName: process.env.ITEMS_TABLE,
-      Key: {
-        tenantId: { S: tenantId },
-        itemId: { S: itemId },
-      },
-      UpdateExpression: 'SET #closeDate = :closeDate, #updatedAt = :updatedAt',
-      ExpressionAttributeNames: {
-        '#closeDate': 'closeDate',
-        '#updatedAt': 'updatedAt',
-      },
-      ExpressionAttributeValues: {
-        ':closeDate': { S: closeDateUTC },
-        ':updatedAt': { S: nowIso },
-      },
-      ReturnValues: 'ALL_NEW',
-    }))
+    let updateResult
+    try {
+      updateResult = await dynamo.send(new UpdateItemCommand({
+        TableName: process.env.ITEMS_TABLE,
+        Key: {
+          tenantId: { S: tenantId },
+          itemId: { S: itemId },
+        },
+        UpdateExpression: 'SET #closeDate = :closeDate, #updatedAt = :updatedAt',
+        ConditionExpression: '#status IN (:draft, :active)',
+        ExpressionAttributeNames: {
+          '#closeDate': 'closeDate',
+          '#updatedAt': 'updatedAt',
+          '#status': 'status',
+        },
+        ExpressionAttributeValues: {
+          ':closeDate': { S: closeDateUTC },
+          ':updatedAt': { S: nowIso },
+          ':draft': { S: 'draft' },
+          ':active': { S: 'active' },
+        },
+        ReturnValues: 'ALL_NEW',
+      }))
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        log('warn', 'ExtendDeadline: item status has changed, cannot extend deadline', { requestId, tenantId, itemId })
+        return errorResponse(409, 'Item status has changed, cannot extend deadline', {}, origin)
+      }
+      throw err
+    }
 
     const updatedItem = unmarshal(updateResult.Attributes)
 
