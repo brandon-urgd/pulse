@@ -449,7 +449,7 @@ export default function InviteModal({ itemId, itemName, itemStatus, hasCompleted
             {/* Private sessions list */}
             {privateSessions.length > 0 && (
               <>
-                <h4 className={styles.subHeading}>{labels.invitation.reviewerSessionsSectionTitle ?? 'Reviewer Sessions'}</h4>
+                <h4 className={styles.subHeading}>Reviewer Sessions</h4>
                 <ul className={styles.sessionList} aria-label="Reviewer sessions">
                 {privateSessions.map(session => (
                   <li key={session.sessionId} className={styles.sessionRow}>

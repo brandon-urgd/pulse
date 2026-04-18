@@ -216,12 +216,15 @@ export default function Plan() {
             ))}
           </div>
         ) : (() => {
+          // System-level flags hidden from the Plan page — not relevant to end users
+          const HIDDEN_FLAGS: Set<string> = new Set(['REVISION_DELIVERY_MODE']);
+
           const trackable = Object.entries(enriched)
-            .filter(([flag, f]) => f.limit !== null && TRACKABLE.has(flag))
+            .filter(([flag, f]) => f.limit !== null && TRACKABLE.has(flag) && !HIDDEN_FLAGS.has(flag))
             .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
 
           const caps = Object.entries(enriched)
-            .filter(([flag, f]) => f.limit !== null && !TRACKABLE.has(flag))
+            .filter(([flag, f]) => f.limit !== null && !TRACKABLE.has(flag) && !HIDDEN_FLAGS.has(flag))
             .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
 
           return (
@@ -272,8 +275,9 @@ export default function Plan() {
             ))}
           </div>
         ) : (() => {
+          const HIDDEN_FLAGS: Set<string> = new Set(['REVISION_DELIVERY_MODE']);
           const boolean_ = Object.entries(enriched)
-            .filter(([, f]) => f.limit === null)
+            .filter(([flag, f]) => f.limit === null && !HIDDEN_FLAGS.has(flag))
             .sort(([a], [b]) => (FEATURE_LABELS[a] ?? a).localeCompare(FEATURE_LABELS[b] ?? b));
 
           return (
