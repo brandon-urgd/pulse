@@ -114,12 +114,18 @@ export const handler = async (event) => {
       return errorResponse(409, 'A self-review session already exists for this item.', { existingSessionId }, origin)
     }
 
-    // Count all sessions for limit check
+    // Count active sessions for limit check (excludes cancelled/discarded)
     const allSessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :iid',
-      ExpressionAttributeValues: { ':iid': { S: itemId } },
+      FilterExpression: '#st <> :cancelled AND #st <> :discarded',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: {
+        ':iid': { S: itemId },
+        ':cancelled': { S: 'cancelled' },
+        ':discarded': { S: 'discarded' },
+      },
       Select: 'COUNT',
     }))
 

@@ -161,15 +161,18 @@ export const handler = async (event) => {
       return errorResponse(409, 'Item is not accepting new invitations', {}, origin)
     }
 
-    // Get existing session count for this item (excluding self-review sessions)
+    // Get existing session count for this item (excluding self-review and cancelled/discarded sessions)
     const existingSessionsResult = await dynamo.send(new QueryCommand({
       TableName: process.env.SESSIONS_TABLE,
       IndexName: 'item-index',
       KeyConditionExpression: 'itemId = :iid',
-      FilterExpression: 'attribute_not_exists(sessionType) OR sessionType <> :selfType',
+      FilterExpression: '(attribute_not_exists(sessionType) OR sessionType <> :selfType) AND #st <> :cancelled AND #st <> :discarded',
+      ExpressionAttributeNames: { '#st': 'status' },
       ExpressionAttributeValues: {
         ':iid': { S: itemId },
         ':selfType': { S: 'self' },
+        ':cancelled': { S: 'cancelled' },
+        ':discarded': { S: 'discarded' },
       },
       Select: 'COUNT',
     }))
