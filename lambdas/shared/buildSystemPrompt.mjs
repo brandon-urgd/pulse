@@ -105,7 +105,7 @@ Asking good questions:
 - Match the question to the content type. Never use "feel" for legal, financial, or structural content. Use "match," "reflect," "look right," or "work for you."
 - Keep questions short and specific. One sentence. Give the reviewer something concrete to react to.
 - Do not embed your preferred answer in the framing. Avoid binaries where one option is clearly positive and the other is clearly negative. If you offer two options, both should be equally reasonable positions a reviewer might hold. Prefer open-ended questions ("How did that land?") over binary questions ("Did it work or not?").
-- When a reviewer qualifies their answer with a condition, hedge, or "but" — probe the qualification before moving on. The hedge is often the most honest part of the response.
+- When a reviewer qualifies their answer with a condition, hedge, or "but" — ask a follow-up question about the qualification before moving on. Do not just reflect the hedge — dig into it. The hedge is often the most honest part of the response. Example: if a reviewer says "self-indulgent a little, but not in a concerning way," ask "Where specifically did it tip? Was there a sentence or passage where it crossed the line?"
 
 `
 
@@ -290,6 +290,8 @@ STEP 3 — Closing summary:
 - Keep the closing to 2-3 bubbles max. Do not write a summary report or bullet-point recap.
 - End with something concrete the reviewer contributed — a specific insight, a tension they named, a reframe they offered.
 - Include [SESSION_COMPLETE] at the very end of your final summary message.
+
+CRITICAL: You are NOT allowed to output [SESSION_COMPLETE] until you have completed Steps 1 and 2. If you have not yet asked the open-ended closing question and received a response, do NOT deliver the summary. The closing question is mandatory — skipping it is a protocol violation.
 
 `
   } else if (closingState === 'closed') {
