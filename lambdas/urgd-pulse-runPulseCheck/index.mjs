@@ -73,7 +73,7 @@ export const handler = async (event) => {
     }))
     if (!itemResult.Item) return errorResponse(404, 'Item not found', {}, origin)
     const itemStatus = itemResult.Item.status?.S
-    if (itemStatus !== 'closed') {
+    if (itemStatus !== 'closed' && itemStatus !== 'revised') {
       return errorResponse(409, 'Item must be closed before running a Pulse Check. Use Close & Run.', {}, origin)
     }
 
