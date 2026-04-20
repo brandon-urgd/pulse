@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ur/gd Pulse — AI-guided feedback platform. 64 Lambda functions, 7 DynamoDB tables, 18 feature flags, Bedrock Claude AI, Stripe billing.'
+Description: 'ur/gd Pulse - AI-guided feedback platform. 64 Lambda functions, 7 DynamoDB tables, 18 feature flags, Bedrock Claude AI, Stripe billing.'
 
 # ─── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
@@ -7006,7 +7006,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                Resource: !GetAtt PulsePulseChecksTable.Arn
+                Resource:
+                  - !GetAtt PulsePulseChecksTable.Arn
+                  - !GetAtt PulseTenantsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:Query
@@ -7323,6 +7325,7 @@ Resources:
         Variables:
           PULSE_CHECKS_TABLE: !Ref PulsePulseChecksTable
           SESSIONS_TABLE: !Ref PulseSessionsTable
+          TENANTS_TABLE: !Ref PulseTenantsTable
           CORS_ALLOWED_ORIGINS: !Sub 'https://${FrontendDomainName}'
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
       Tags:

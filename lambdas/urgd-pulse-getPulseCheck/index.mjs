@@ -3,9 +3,9 @@
 // Returns pulse check results including verdict, themes, decisions
 
 import { DynamoDBClient, GetItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
-import { createResponse, errorResponse, log, requireEnv } from './shared/utils.mjs'
+import { createResponse, errorResponse, log, requireEnv, unmarshalFeatures } from './shared/utils.mjs'
 
-requireEnv(['PULSE_CHECKS_TABLE', 'SESSIONS_TABLE', 'CORS_ALLOWED_ORIGINS'])
+requireEnv(['PULSE_CHECKS_TABLE', 'SESSIONS_TABLE', 'TENANTS_TABLE', 'CORS_ALLOWED_ORIGINS'])
 
 const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' })
 
@@ -113,6 +113,20 @@ export const handler = async (event) => {
       } catch { /* non-fatal */ }
     }
 
+    // Check SYSTEM record for alwaysAllowPulseRerun service flag
+    let rerunAlwaysEnabled = false
+    try {
+      const systemResult = await dynamo.send(new GetItemCommand({
+        TableName: process.env.TENANTS_TABLE,
+        Key: { tenantId: { S: 'SYSTEM' } },
+        ProjectionExpression: 'serviceFlags',
+      }))
+      const serviceFlags = unmarshalFeatures(systemResult.Item?.serviceFlags?.M)
+      rerunAlwaysEnabled = serviceFlags?.alwaysAllowPulseRerun?.status === 'active'
+    } catch {
+      log('warn', 'GetPulseCheck: failed to read SYSTEM record for rerun flag, defaulting to false', { requestId, tenantId })
+    }
+
     const pulseCheck = {
       itemId: item.itemId?.S,
       verdict: item.verdict?.S,
@@ -129,6 +143,7 @@ export const handler = async (event) => {
       generatedAt,
       status: item.status?.S,
       newSessionsSinceLastRun,
+      rerunAlwaysEnabled,
       pulseCheckFeedback: item.pulseCheckFeedback?.M ? {
         rating: item.pulseCheckFeedback.M.rating?.S,
         reason: item.pulseCheckFeedback.M.reason?.S,

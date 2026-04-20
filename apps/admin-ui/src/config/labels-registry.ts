@@ -510,6 +510,7 @@ export const labels = {
     rerunNote: 'Re-running will incorporate any sessions that completed since the last run.',
     rerunError: 'Failed to re-run pulse check. Please try again.',
     newSessionsNotice: '{count} reviewer(s) finished after this was generated — re-run to include their feedback.',
+    rerunAvailableNotice: 'Re-run available — regenerate this Pulse Check with the current prompt and logic.',
     downloadPdf: 'Download PDF',
     downloadingPdf: 'Generating PDF…',
     // Index empty state

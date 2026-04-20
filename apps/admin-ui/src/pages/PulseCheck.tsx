@@ -66,6 +66,7 @@ interface PulseCheck {
   generatedAt: string;
   status: 'generating' | 'complete' | 'failed';
   newSessionsSinceLastRun?: number;
+  rerunAlwaysEnabled?: boolean;
 }
 
 interface PulseCheckResponse {
@@ -338,6 +339,7 @@ export default function PulseCheck() {
     { enabled: Boolean(itemId) && Boolean(pcResp) }
   );
   const newlyCompletedCount = pc?.newSessionsSinceLastRun ?? 0;
+  const rerunAlwaysEnabled = pc?.rerunAlwaysEnabled === true;
 
   useEffect(() => {
     if (pc?.decisions) {
@@ -592,10 +594,12 @@ export default function PulseCheck() {
     </p>
   ) : null;
 
-  const NewSessionsBanner = newlyCompletedCount > 0 ? (
+  const NewSessionsBanner = (newlyCompletedCount > 0 || rerunAlwaysEnabled) ? (
     <div className={styles.rerunBanner} role="status">
       <p className={styles.rerunBannerText}>
-        {labels.pulseCheck.newSessionsNotice.replace('{count}', String(newlyCompletedCount))}
+        {newlyCompletedCount > 0
+          ? labels.pulseCheck.newSessionsNotice.replace('{count}', String(newlyCompletedCount))
+          : labels.pulseCheck.rerunAvailableNotice}
       </p>
       <button
         type="button"
