@@ -65,6 +65,9 @@ export const handler = async (event) => {
   // e.g. "2026-04-15T23:59:00-07:00" → "2026-04-16T06:59:00.000Z"
   const closeDateUTC = new Date(closeDate).toISOString()
 
+  // Capture sender's IANA timezone for email display (e.g. "America/Los_Angeles")
+  const timezone = (body.timezone && typeof body.timezone === 'string') ? body.timezone : null
+
   try {
     // Fetch tenant record to get feature flags
     const tenantResult = await dynamo.send(new GetItemCommand({
@@ -175,6 +178,7 @@ export const handler = async (event) => {
       itemName: { S: itemName.trim() },
       description: { S: description.trim() },
       closeDate: { S: closeDateUTC },
+      ...(timezone ? { timezone: { S: timezone } } : {}),
       status: { S: 'draft' },
       createdAt: { S: now },
       updatedAt: { S: now },

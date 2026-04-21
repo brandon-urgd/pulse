@@ -319,30 +319,20 @@ export const handler = async (event) => {
       const inviterDisplay = inviterName ?? 'Someone'
       const replyTo = inviterEmail ?? FROM_ADDRESS
 
-      // Format close date with time in the sender's timezone (from ISO offset)
+      // Format close date with time in the sender's timezone (from item.timezone or fallback to UTC)
       let closeDateFormatted = null
       let closeTimeFormatted = ''
       if (closeDate) {
+        const tz = item.timezone?.S || 'UTC'
         const closeDateObj = new Date(closeDate)
-        closeDateFormatted = closeDateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
-        // Extract timezone offset — handle Z (UTC), ±HH:MM, or no offset (treat as UTC)
-        const isUTC = closeDate.endsWith('Z')
-        const offsetMatch = closeDate.match(/([+-]\d{2}):?(\d{2})$/)
-        if (isUTC || offsetMatch) {
-          const offsetHours = isUTC ? 0 : parseInt(offsetMatch[1], 10)
-          const offsetMinutes = isUTC ? 0 : parseInt(offsetMatch[2], 10)
-          const totalOffsetMs = (offsetHours * 60 + (offsetHours < 0 ? -offsetMinutes : offsetMinutes)) * 60000
-          const localDate = new Date(closeDateObj.getTime() + totalOffsetMs)
-          const hours = localDate.getUTCHours()
-          const ampm = hours >= 12 ? 'PM' : 'AM'
-          const h12 = hours % 12 || 12
-          const mins = String(localDate.getUTCMinutes()).padStart(2, '0')
-          // Skip time display for midnight UTC (date-only close dates stored as T00:00:00.000Z)
-          if (!(hours === 0 && localDate.getUTCMinutes() === 0 && isUTC)) {
-            const sign = offsetHours >= 0 ? '+' : ''
-            const offsetLabel = isUTC ? 'UTC' : (offsetMinutes === 0 ? `UTC${sign}${offsetHours}` : `UTC${sign}${offsetHours}:${String(Math.abs(offsetMinutes)).padStart(2, '0')}`)
-            closeTimeFormatted = ` at ${h12}:${mins} ${ampm} (${offsetLabel})`
-          }
+        closeDateFormatted = closeDateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })
+        const hours = closeDateObj.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })
+        // Skip time display for midnight UTC (date-only close dates)
+        const utcHours = closeDateObj.getUTCHours()
+        const utcMins = closeDateObj.getUTCMinutes()
+        if (!(utcHours === 0 && utcMins === 0 && closeDate.endsWith('Z'))) {
+          const tzAbbr = closeDateObj.toLocaleString('en-US', { timeZoneName: 'short', timeZone: tz }).split(' ').pop()
+          closeTimeFormatted = ` at ${hours} (${tzAbbr})`
         }
       }
 
