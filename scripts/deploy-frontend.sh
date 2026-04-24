@@ -75,6 +75,7 @@ aws s3 sync "$DIST_DIR" "$s3_dest" \
   --include "*.ico" \
   --include "*.webp" \
   --include "*.avif" \
+  --include "*.json" \
   --exclude "*.html" \
   --no-progress
 echo "   ✅ Pass 1 complete"
