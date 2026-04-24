@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!--
+    Pulse Chat Avatar — P + Pulse Wave only
+    No scope rings, crosshairs, sweep, or border. Just the mark.
+    Designed for 24–32px display in chat bubbles and thinking indicators.
+    Sage green (#7a9e87) on transparent background.
+  -->
+  <defs>
+    <filter id="avatarGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- P stem -->
+  <line x1="18" y1="14" x2="18" y2="92" stroke="#7a9e87" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- P bowl -->
+  <path
+    d="M 18 14 L 41 14 C 55 14, 66 19, 66 30 C 66 41, 55 46, 41 46 L 18 46"
+    fill="none" stroke="#7a9e87" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Pulse wave — detached, at lowercase baseline -->
+  <path
+    d="M 36 72 L 43 72 L 48 75 L 57 56 L 66 88 L 75 54 L 83 86 L 89 66 L 95 72 L 112 72"
+    fill="none" stroke="#7a9e87" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"
+    filter="url(#avatarGlow)"/>
+</svg>
