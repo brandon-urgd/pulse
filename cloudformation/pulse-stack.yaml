@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'ur/gd Pulse - AI-guided feedback platform. 64 Lambda functions, 7 DynamoDB tables, 18 feature flags, Bedrock Claude AI, Stripe billing.'
 
+Metadata:
+  urgd:
+    version: '1.2.0'
+    application: pulse
+    owner: 'ur/gd Studios'
+
 # ─── Parameters ───────────────────────────────────────────────────────────────
 Parameters:
   Environment:
