@@ -423,7 +423,7 @@ export function useItemForm({ itemId, onClose }: UseItemFormOptions) {
         const createdResp = await createMutation.mutateAsync({
           itemName: itemName.trim() || 'Untitled',
           description: description.trim() || '(no description)',
-          closeDate: appendTimezoneOffset(closeDate) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          closeDate: appendTimezoneOffset(closeDate),
           ...(content.trim() ? { content: content.trim() } : {}),
         });
         uploadingCreate.current = false;

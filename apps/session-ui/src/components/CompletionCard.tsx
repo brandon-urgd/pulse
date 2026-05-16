@@ -64,7 +64,7 @@ export default function CompletionCard({ sessionId, observation }: Props) {
         <p style={styles.body}>{observation}</p>
       )}
       <p style={styles.body}>
-        Your responses have been shared with the team.
+        Your responses have been shared with the item owner.
       </p>
       <div style={styles.actions}>
         <a href={`/s/${sessionId}/summary`} style={styles.link}>

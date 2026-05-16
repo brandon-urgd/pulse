@@ -9280,8 +9280,8 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'urgd-pulse-closeExpiredItems-${Environment}'
-      Description: Safety sweep — scans for items past close date every 12 hours
-      ScheduleExpression: rate(12 hours)
+      Description: Safety sweep — scans for items past close date 4x daily (midnight, 6am, noon, 6pm UTC)
+      ScheduleExpression: 'cron(0 0,6,12,18 * * ? *)'
       State: ENABLED
       Targets:
         - Id: PulseCloseExpiredItemsTarget
