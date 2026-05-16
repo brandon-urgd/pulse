@@ -102,6 +102,23 @@ See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and S
 
 ## Version History
 
+### v1.2.1 — May 2026
+
+Beta audit fixes — prompt quality, scheduling reliability, reviewer-facing text.
+
+- **Prompt guardrails (beta audit)** — 7 new behavioral constraints added to `buildSystemPrompt.mjs`:
+  - No interpretation-first pattern: model must ask before naming, reflect before expanding
+  - Visual hedging: image descriptions use "appears to", "reads as"; model defers immediately if corrected
+  - Terse-reviewer adaptation: after 3+ short/negative responses, model pivots to open-ended redirect or offers exit
+  - Mandatory final-word turn: model must ask "anything else?" before every `[SESSION_COMPLETE]`
+  - No ur/gd Studios mention: model never references its creator to reviewers
+  - No leading questions with embedded preferred answers
+  - No value-laden framing before reviewer signals their own read
+- **CompletionCard text fix** — changed "Your responses have been shared with the team" to "the item owner" (previously leaked tenant identity or showed generic text)
+- **Close scheduling reliability** — batch sweep changed from `rate(12 hours)` to `cron(0 0,6,12,18 * * ? *)` (4x daily: midnight, 6am, noon, 6pm UTC). Items now close within 6 hours max even if per-item EventBridge schedule fails
+- **Removed silent closeDate fallback** — file-upload path no longer silently sets `closeDate` to `Date.now() + 30 days` when the field is empty. Requires explicit user input
+- **Backfill script** — `scripts/backfill-close-schedules.mjs` creates EventBridge schedules for active items that predate the scheduler deployment
+
 ### v1.2 — April 2026
 
 Async revision delivery + counter accuracy + UX improvements.
@@ -145,4 +162,4 @@ Session start redesign + platform hardening.
 Initial release. AI-guided feedback sessions, Pulse Check synthesis, proposed revisions, tiered billing, public session links, QR codes, PDF export.
 
 ---
-*Pulse v1.2 — ur/gd Studios — us-west-2*
+*Pulse v1.2.1 — ur/gd Studios — us-west-2*
