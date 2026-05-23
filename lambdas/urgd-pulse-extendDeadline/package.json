@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-extenddeadline",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "type": "module",
   "description": "ur/gd Pulse — Extend Deadline Lambda",
   "main": "index.mjs"

@@ -102,6 +102,15 @@ See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and S
 
 ## Version History
 
+### v1.2.2 — 22MAY2026
+
+Security patch — dependency vulnerabilities + defensive hardening.
+
+- Fixed `js-cookie` ≤3.0.5 prototype hijack (GHSA-qjx8-664m-686j) via npm override
+- Fixed `fast-xml-builder` ≤1.1.6 attribute filtering bypass (GHSA-5wm8-gmm8-39j9) via npm override
+- Hardened `extractField()` RegExp against ReDoS by escaping interpolated field names
+- Fixed Dockerfile `RUN cd` anti-pattern → proper `WORKDIR` directive
+
 ### v1.2.1 — May 2026
 
 Beta audit fixes — prompt quality, scheduling reliability, reviewer-facing text.
@@ -162,4 +171,4 @@ Session start redesign + platform hardening.
 Initial release. AI-guided feedback sessions, Pulse Check synthesis, proposed revisions, tiered billing, public session links, QR codes, PDF export.
 
 ---
-*Pulse v1.2.1 — ur/gd Studios — us-west-2*
+*Pulse v1.2.2 — ur/gd Studios — us-west-2*

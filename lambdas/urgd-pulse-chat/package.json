@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-chat",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "type": "module",
   "dependencies": {
     "ulid": "^2.3.0"

@@ -72,8 +72,9 @@ export function parseChangeList(markdown: string): ChangeItem[] {
  */
 function extractField(block: string, fieldName: string): string {
   // Match the field pattern: - **FieldName:** value (possibly quoted)
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(
-    `-\\s*\\*\\*${fieldName}:\\*\\*\\s*(.+?)(?=\\n-\\s*\\*\\*|\\n###|$)`,
+    `-\\s*\\*\\*${escaped}:\\*\\*\\s*(.+?)(?=\\n-\\s*\\*\\*|\\n###|$)`,
     'is'
   );
   const match = block.match(regex);

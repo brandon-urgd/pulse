@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-renderPages",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "description": "Renders PDF/DOCX pages as PNG images for ur/gd Pulse visual document context",
   "main": "index.mjs",
   "type": "module",

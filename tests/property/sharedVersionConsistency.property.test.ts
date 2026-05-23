@@ -75,7 +75,7 @@ describe('Feature: phased-cache-priming, Property 10: shared version consistency
           const adminVersion = sharedVersion
           const sessionVersion = sharedIndexVersion
           expect(adminVersion).toBe(sessionVersion)
-          expect(adminVersion).toBe('1.1')
+          expect(adminVersion).toBe('1.2.2')
         },
       ),
       { numRuns: 100 },
