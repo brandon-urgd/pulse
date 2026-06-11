@@ -5,8 +5,8 @@ import { describe, it, expect } from 'vitest'
 import { APP_VERSION, ABOUT_CONTENT } from '../../apps/shared/src/index'
 
 describe('Shared About modal content', () => {
-  it('APP_VERSION equals 1.2.2', () => {
-    expect(APP_VERSION).toBe('1.2.2')
+  it('APP_VERSION equals 1.2.3', () => {
+    expect(APP_VERSION).toBe('1.2.3')
   })
 
   it('ABOUT_CONTENT.wordmark is "pulse"', () => {

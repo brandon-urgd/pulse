@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-resendinvite",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "description": "ur/gd Pulse — Resend Invite Lambda",
   "main": "index.mjs",

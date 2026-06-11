@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-getdocumenturl",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "description": "ur/gd Pulse — Get Document URL Lambda",
   "main": "index.mjs",

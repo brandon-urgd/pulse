@@ -3,7 +3,7 @@ Description: 'ur/gd Pulse - AI-guided feedback platform. 64 Lambda functions, 7 
 
 Metadata:
   urgd:
-    version: '1.2.2'
+    version: '1.2.3'
     application: pulse
     owner: 'ur/gd Studios'
 

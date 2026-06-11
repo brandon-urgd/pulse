@@ -1,10 +1,13 @@
 {
   "name": "urgd-pulse-createTenant",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "type": "module",
   "dependencies": {
     "stripe": "^17.0.0",
     "ulid": "^2.3.0"
+  },
+  "overrides": {
+    "qs": "^6.15.2"
   }
 }

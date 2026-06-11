@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { APP_VERSION } from '../../apps/shared/src/version'
 
 describe('APP_VERSION', () => {
-  it('equals 1.2.2', () => {
-    expect(APP_VERSION).toBe('1.2.2')
+  it('equals 1.2.3', () => {
+    expect(APP_VERSION).toBe('1.2.3')
   })
 })

@@ -1,6 +1,6 @@
 {
   "name": "urgd-pulse-createpublicsession",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "description": "ur/gd Pulse — Create Public Session Lambda",
   "main": "index.mjs",

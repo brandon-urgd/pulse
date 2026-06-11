@@ -102,6 +102,15 @@ See `urgd_library/standards/` for Lambda, CloudFormation, CI/CD, Frontend, and S
 
 ## Version History
 
+### v1.2.3 — 10JUN2026
+
+Security patches — CVE round 2.
+
+- Fixed react-router 7.13.1 in admin-ui + session-ui (6 CVEs: RCE, XSS, DoS, open redirect — bumped to 7.15.0)
+- Fixed fast-xml-builder 1.1.x + fast-xml-parser 5.6.x across 8 lambdas via @aws-sdk/* updates (3 CVEs)
+- Fixed @xmldom/xmldom 0.8.12 in extractText lambda (4 CVEs — mammoth bumped, override 0.8.13)
+- Fixed qs 6.15.0 DoS in 5 Stripe-touching lambdas (CVE-2026-8723) via overrides
+
 ### v1.2.2 — 22MAY2026
 
 Security patch — dependency vulnerabilities + defensive hardening.
@@ -171,4 +180,4 @@ Session start redesign + platform hardening.
 Initial release. AI-guided feedback sessions, Pulse Check synthesis, proposed revisions, tiered billing, public session links, QR codes, PDF export.
 
 ---
-*Pulse v1.2.2 — ur/gd Studios — us-west-2*
+*Pulse v1.2.3 — ur/gd Studios — us-west-2*

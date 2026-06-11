@@ -1,13 +1,13 @@
 {
   "name": "urgd-pulse-extractText",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "type": "module",
   "dependencies": {
-    "mammoth": "^1.8.0",
+    "mammoth": "^1.9.0",
     "pdf-parse": "^1.1.1"
   },
   "overrides": {
-    "@xmldom/xmldom": "^0.8.12"
+    "@xmldom/xmldom": "^0.8.13"
   }
 }
